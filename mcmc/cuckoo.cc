@@ -15,6 +15,7 @@ const CuckooSet::Element CuckooSet::KEY_INVALID =
 CuckooSet::CuckooSet(size_t n, size_t num_slots)
     : N_(static_cast<size_t>(1 +
                              std::ceil((1.2 * n) / (NUM_BUCKETS * num_slots)))),
+      num_slots_per_bin_(num_slots),
       seed_(42),
       displacements_max_(n / 2 + 1) {
   for (auto& bucket : buckets_) {
@@ -98,7 +99,7 @@ CuckooSet::Element CuckooSet::InsertKeyInSlot(CuckooSet::Element k,
 }
 
 size_t CuckooSet::Hash(CuckooSet::Element k, size_t bidx) const {
-  assert(0 <= bidx && bidx < NUM_BUCKETS);
+  assert(bidx < NUM_BUCKETS);
   switch (bidx) {
     case 0:
       return (1003 * k) % N_;
@@ -107,6 +108,17 @@ size_t CuckooSet::Hash(CuckooSet::Element k, size_t bidx) const {
     default:
       abort();
   }
+}
+
+thrust::host_vector<CuckooSet::Element> CuckooSet::Serialize() const {
+  thrust::host_vector<Element> vals(NUM_BUCKETS * BinsPerBucket() * SlotsPerBin());
+  auto it = vals.begin();
+  for (auto& bucket : buckets_) {
+    for (auto& slot : bucket) {
+      it = thrust::copy(slot.begin(), slot.end(), it);
+    }
+  }
+  return vals;
 }
 
 bool GenerateCuckooSetsFromFile(const std::string& filename,
@@ -156,7 +168,6 @@ bool GenerateCuckooSetsFromFile(const std::string& filename,
     if (!(*training)->Insert(*it)) {
       LOG(ERROR) << "Failed to insert into training set, data from " << filename;
       training->reset();
-      *training = nullptr;
       if (heldout_len > 0) {
         heldout->reset();
       }

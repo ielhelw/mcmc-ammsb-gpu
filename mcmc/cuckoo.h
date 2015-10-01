@@ -1,10 +1,11 @@
-#ifndef __CUCKOO_H__
-#define __CUCKOO_H__
+#ifndef __MCMC_CUCKOO_H__
+#define __MCMC_CUCKOO_H__
 
 #include <array>
 #include <limits>
 #include <memory>
 #include <vector>
+#include <thrust/host_vector.h>
 
 namespace mcmc {
 
@@ -25,6 +26,12 @@ class CuckooSet {
 
   bool Has(Element k) const;
 
+  inline size_t SlotsPerBin() const { return num_slots_per_bin_; }
+
+  inline size_t BinsPerBucket() const { return N_; }
+
+  thrust::host_vector<Element> Serialize() const;
+
  private:
   bool IsSlotNotFullAndKeyNotInIt(Element k, const Slot& slot) const;
 
@@ -36,7 +43,8 @@ class CuckooSet {
 
   size_t Hash(Element k, size_t bidx) const;
 
-  size_t N_;
+  const size_t N_;
+  const size_t num_slots_per_bin_;
   Buckets buckets_;
   uint32_t seed_;
   const size_t displacements_max_;
@@ -48,4 +56,4 @@ bool GenerateCuckooSetsFromFile(const std::string& filename,
 
 }  // namespace mcmc
 
-#endif  // __CUCKOO_H__
+#endif  // __MCMC_CUCKOO_H__
