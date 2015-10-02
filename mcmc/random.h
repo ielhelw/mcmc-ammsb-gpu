@@ -1,10 +1,6 @@
 #ifndef __MCMC_RANDOM_H__
 #define __MCMC_RANDOM_H__
 
-#include <thrust/host_vector.h>
-#include <thrust/device_vector.h>
-#include <thrust/sequence.h>
-
 namespace mcmc {
 
 typedef ulong2	gsl_rng;
