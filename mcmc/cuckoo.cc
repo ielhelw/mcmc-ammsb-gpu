@@ -9,19 +9,16 @@
 
 namespace mcmc {
 
-const Edge CuckooSet::KEY_INVALID =
-    std::numeric_limits<Edge>::max();
+const Edge CuckooSet::KEY_INVALID = std::numeric_limits<Edge>::max();
 
-CuckooSet::CuckooSet(size_t n, size_t num_slots)
+CuckooSet::CuckooSet(size_t n)
     : N_(static_cast<size_t>(1 +
-                             std::ceil((1.3 * n) / (NUM_BUCKETS * num_slots)))),
-      num_slots_per_bin_(num_slots),
+                             std::ceil((1.3 * n) / (NUM_BUCKETS * NUM_SLOTS)))),
       seed_(42),
       displacements_max_(n / 2 + 1) {
   for (auto& bucket : buckets_) {
     bucket.resize(N_);
     for (auto& slot : bucket) {
-      slot = Slot(num_slots);
       for (auto& val : slot) {
         val = KEY_INVALID;
       }
@@ -29,8 +26,7 @@ CuckooSet::CuckooSet(size_t n, size_t num_slots)
   }
 }
 
-bool CuckooSet::IsSlotNotFullAndKeyNotInIt(Edge k,
-                                           const Slot& slot) const {
+bool CuckooSet::IsSlotNotFullAndKeyNotInIt(Edge k, const Slot& slot) const {
   bool slotFull = true;
   for (auto& v : slot) {
     if (v == KEY_INVALID) slotFull = false;
@@ -84,8 +80,7 @@ bool CuckooSet::IsKeyInSlot(Edge k, const Slot& slot) const {
   return false;
 }
 
-Edge CuckooSet::InsertKeyInSlot(Edge k,
-                                              Slot* slot) {
+Edge CuckooSet::InsertKeyInSlot(Edge k, Slot* slot) {
   for (auto& v : *slot) {
     if (v == KEY_INVALID) {
       v = k;
@@ -111,7 +106,7 @@ size_t CuckooSet::Hash(Edge k, size_t bidx) const {
 }
 
 std::vector<Edge> CuckooSet::Serialize() const {
-  std::vector<Edge> vals(NUM_BUCKETS * BinsPerBucket() * SlotsPerBin());
+  std::vector<Edge> vals(NUM_BUCKETS * BinsPerBucket() * NUM_SLOTS);
   auto it = vals.begin();
   for (auto& bucket : buckets_) {
     for (auto& slot : bucket) {
@@ -121,7 +116,8 @@ std::vector<Edge> CuckooSet::Serialize() const {
   return vals;
 }
 
-bool GetUniqueEdgesFromFile(const std::string& filename, std::vector<Edge>* vals) {
+bool GetUniqueEdgesFromFile(const std::string& filename,
+                            std::vector<Edge>* vals) {
   std::ifstream in(filename);
   std::string line;
   // skip first 4 lines
@@ -149,8 +145,9 @@ bool GetUniqueEdgesFromFile(const std::string& filename, std::vector<Edge>* vals
 }
 
 bool GenerateCuckooSetsFromEdges(const std::vector<Edge>& vals,
-                                double heldout_ratio, std::unique_ptr<CuckooSet>* training,
-                                std::unique_ptr<CuckooSet>* heldout) {
+                                 double heldout_ratio,
+                                 std::unique_ptr<CuckooSet>* training,
+                                 std::unique_ptr<CuckooSet>* heldout) {
   size_t training_len =
       static_cast<size_t>(std::ceil((1 - heldout_ratio) * vals.size()));
   size_t heldout_len = vals.size() - training_len;
@@ -180,13 +177,80 @@ bool GenerateCuckooSetsFromEdges(const std::vector<Edge>& vals,
 
 bool GenerateCuckooSetsFromFile(const std::string& filename,
                                 double heldout_ratio,
-                                std::unique_ptr<CuckooSet>* training, std::unique_ptr<CuckooSet>* heldout
-                                ) {
-  LOG(INFO) << "Going to generate cuckoo sets from " << filename << " with held-out ratio " << heldout_ratio;
+                                std::unique_ptr<CuckooSet>* training,
+                                std::unique_ptr<CuckooSet>* heldout) {
+  LOG(INFO) << "Going to generate cuckoo sets from " << filename
+            << " with held-out ratio " << heldout_ratio;
   std::vector<Edge> vals;
   if (!GetUniqueEdgesFromFile(filename, &vals)) return false;
-  if (!GenerateCuckooSetsFromEdges(vals, heldout_ratio, training, heldout)) return false;
+  if (!GenerateCuckooSetsFromEdges(vals, heldout_ratio, training, heldout))
+    return false;
   return true;
+}
+
+OpenClCuckooSet::OpenClCuckooSet(
+    std::shared_ptr<OpenClCuckooSetFactory> factory, compute::kernel* init,
+    compute::command_queue* queue, uint64_t sizeOfSet,
+    const std::vector<uint64_t>& data)
+    : factory_(factory),
+      queue_(*queue),
+      data_(data, queue_),
+      num_bins_(data_.size() /
+                (mcmc::CuckooSet::NUM_BUCKETS * mcmc::CuckooSet::NUM_SLOTS)),
+      buf_(compute::buffer(queue_.get_context(), sizeOfSet,
+                           compute::memory_object::read_write)) {
+  init->set_arg(0, buf_);
+  init->set_arg(1, data_);
+  init->set_arg(2, num_bins_);
+  auto e = queue_.enqueue_task(*init);
+  e.wait();
+}
+
+const std::string kSource =
+    kTypes +
+    BOOST_COMPUTE_STRINGIZE_SOURCE(
+
+        __kernel void SizeOfSet(__global uint64_t* size) {
+          *size = sizeof(Set);
+        }
+
+        __kernel void SetInit(__global void* vset, __global uint64_t* data,
+                              uint64_t num_bins) {
+          __global Set* set = (__global Set*)vset;
+          set->base_ = data;
+          set->num_bins_ = num_bins;
+        }
+
+        );
+
+std::shared_ptr<OpenClCuckooSetFactory> OpenClCuckooSetFactory::New(
+    compute::command_queue queue) {
+  return std::shared_ptr<OpenClCuckooSetFactory>(
+      new OpenClCuckooSetFactory(queue));
+}
+
+OpenClCuckooSet* OpenClCuckooSetFactory::CreateSet(
+    const std::vector<uint64_t>& data) {
+  return new OpenClCuckooSet(shared_from_this(), &init_kernel_, &queue_,
+                             sizeOfSet_, data);
+}
+
+OpenClCuckooSetFactory::OpenClCuckooSetFactory(compute::command_queue queue)
+    : queue_(queue) {
+  prog_ = compute::program::create_with_source(kSource, queue_.get_context());
+  try {
+    prog_.build();
+  } catch (compute::opencl_error& e) {
+    LOG(FATAL) << prog_.build_log();
+    ;
+  }
+  init_kernel_ = prog_.create_kernel("SetInit");
+  compute::kernel sizeOf_kernel = prog_.create_kernel("SizeOfSet");
+  compute::vector<uint64_t> size(1, (uint64_t)0, queue_);
+  sizeOf_kernel.set_arg(0, size);
+  auto e = queue_.enqueue_task(sizeOf_kernel);
+  e.wait();
+  compute::copy(size.begin(), size.end(), &sizeOfSet_, queue_);
 }
 
 }  // namespace mcmc
