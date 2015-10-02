@@ -14,7 +14,7 @@ const Edge CuckooSet::KEY_INVALID =
 
 CuckooSet::CuckooSet(size_t n, size_t num_slots)
     : N_(static_cast<size_t>(1 +
-                             std::ceil((1.2 * n) / (NUM_BUCKETS * num_slots)))),
+                             std::ceil((1.3 * n) / (NUM_BUCKETS * num_slots)))),
       num_slots_per_bin_(num_slots),
       seed_(42),
       displacements_max_(n / 2 + 1) {

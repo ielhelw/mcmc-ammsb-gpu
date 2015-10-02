@@ -31,7 +31,6 @@ uint64_t hash(uint64_t bidx, uint64_t bins_per_bucket, uint64_t k) {
     case 0: return (1003 * k) % bins_per_bucket;
     case 1: return (k ^ 179440147) % bins_per_bucket;
   }
-  printf("HASH IS BAD\n");
   return 0;
 }
 
@@ -58,23 +57,36 @@ bool Set_HasEdge(__global uint64_t* set, SetProperties props, uint64_t k) {
   return false;
 }
 
-__kernel void testFind(__global uint64_t* set, __global SetProperties* props, __global uint64_t* in, uint64_t len, __global uint64_t* out) {
+__kernel void testFind(__global uint64_t* set, __global SetProperties* props, __global uint64_t* in, uint32_t len, __global uint64_t* out) {
   size_t id = get_global_id(0);
   if (id < len) {
     out[id] = Set_HasEdge(set, *props, in[id]) ? 1 : 0;
   }
 }
-
 );
 
 int main(int argc, char** argv) {
+  FLAGS_logtostderr = 1;
+  google::InitGoogleLogging(argv[0]);  
   if (argc != 2) {
-    LOG(FATAL) << "Usage: " << argv[0] << " [filename]";
+    LOG(FATAL) << "Usage: " << argv[0] << "[filename]";
   }
+  
+  auto devices = compute::system::devices();
+  for (uint32_t i = 0; i < devices.size(); ++i) {
+    cout << i << ": " << devices[i].platform().name() << " | " << devices[i].name() << endl;
+  }
+  cout << "Select device: ";
+  cout.flush();
+  uint32_t choice;
+  cin >> choice;
 
-  compute::device dev = compute::system::default_device();
+  compute::device dev = devices[choice];
   compute::context context(dev);
   compute::command_queue queue(context, dev, compute::command_queue::enable_profiling);
+
+  LOG(INFO) << dev.platform().name();
+  LOG(INFO) << dev.name();
 
   std::unique_ptr<mcmc::CuckooSet> training;
   std::unique_ptr<mcmc::CuckooSet> heldout;
@@ -86,14 +98,17 @@ int main(int argc, char** argv) {
   std::vector<mcmc::Edge> training_set = training->Serialize();
   std::vector<mcmc::Edge> heldout_set = heldout->Serialize();
   
-  compute::vector<mcmc::Edge> dev_training_set(training_set);
-  compute::vector<mcmc::Edge> dev_heldout_set(heldout_set);
+  compute::vector<mcmc::Edge> dev_training_set(training_set, queue);
+  compute::vector<mcmc::Edge> dev_heldout_set(heldout_set, queue);
 
-  const int NUM = 1e6;
-  const int WG_SIZE = 32;
+  const int NUM = static_cast<int>(ceil(0.8 * unique_edges.size()));
+  const int WG_SIZE = 64;
+  const int GLOBAL = static_cast<int>(std::ceil(static_cast<double>(NUM)/WG_SIZE)*WG_SIZE);
+  LOG(INFO) << "NUM=" << NUM << ", GLOBAL=" << GLOBAL;
+  LOG_IF(FATAL, GLOBAL < NUM) << "Shape is incorrect";
 
-  compute::vector<mcmc::Edge> dev_input(unique_edges.rbegin(), unique_edges.rbegin() + NUM);
-  compute::vector<mcmc::Edge> dev_output(dev_input.size(), 0);
+  compute::vector<mcmc::Edge> dev_input(unique_edges.rbegin(), unique_edges.rbegin() + NUM, queue);
+  compute::vector<mcmc::Edge> dev_output(dev_input.size(), 0, queue);
   SetProperties props = {
     training->BinsPerBucket(),
     training->SlotsPerBin(),
@@ -102,29 +117,31 @@ int main(int argc, char** argv) {
   compute::buffer dev_props(context, sizeof(props),
       compute::memory_object::read_write | compute::memory_object::copy_host_ptr,
       &props);
-
   compute::program prog = compute::program::create_with_source(source, context);
   try {
     prog.build();
   } catch(compute::opencl_error &e){
-    LOG(ERROR) << prog.build_log();;
+    LOG(FATAL) << prog.build_log();;
   }
   compute::kernel kernel = prog.create_kernel("testFind");
   int arg = 0;
-  kernel.set_arg(arg++, dev_training_set);
+  kernel.set_arg(arg++, dev_training_set.get_buffer());
   kernel.set_arg(arg++, dev_props.get());
   kernel.set_arg(arg++, dev_input);
-  kernel.set_arg(arg++, dev_input.size());
+  kernel.set_arg(arg++, static_cast<uint32_t>(dev_input.size()));
   kernel.set_arg(arg++, dev_output);
-  compute::event e = queue.enqueue_1d_range_kernel(kernel, 0, (NUM/WG_SIZE)*WG_SIZE, WG_SIZE);
+  compute::event e = queue.enqueue_1d_range_kernel(kernel, 0, GLOBAL, WG_SIZE);
+  LOG(INFO) << "Waiting";
   e.wait();
-
-  std::vector<uint64_t> ret(dev_output.size());
-  compute::copy(dev_output.begin(), dev_output.end(), ret.begin());
-  for (auto v : ret) {
-    if (!v) LOG(INFO) << "missing: " << v;
-  }
   LOG(INFO) << "DONE IN " << e.duration<boost::chrono::nanoseconds>().count();
+  LOG(INFO) << "Verifying";
+  std::vector<mcmc::Edge> ret(dev_output.size());
+  compute::copy(dev_output.begin(), dev_output.end(), ret.begin(), queue);
+  uint64_t count = 0;
+  for (auto v : ret) {
+    if (!v) ++count;
+  }
+  LOG_IF(ERROR, count != 0) << "Failed: missed " << count << " elements";
   return 0;
 }
 
