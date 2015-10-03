@@ -2,31 +2,35 @@
 #include <memory>
 #include <glog/logging.h>
 #include <boost/compute/system.hpp>
+#include <boost/program_options.hpp>
+#include <boost/filesystem.hpp>
 
-#include "mcmc/cuckoo.h"
+#include "mcmc/data.h"
 //#include "mcmc/random.h"
 
 using namespace std;
 namespace compute = boost::compute;
+namespace po = boost::program_options;
+namespace fs = boost::filesystem;
 
-std::string kSource = BOOST_COMPUTE_STRINGIZE_SOURCE(
+struct Config {
+  std::string filename;
 
-    __kernel void testFind(__global void *vset, __global uint64_t *in,
-                           uint32_t len, __global uint64_t *out) {
-      size_t id = get_global_id(0);
-      if (id < len) {
-        __global Set *set = (__global Set *)vset;
-        out[id] = Set_HasEdge(set, in[id]) ? 1 : 0;
-      }
-    });
-
-int main(int argc, char **argv) {
-  FLAGS_logtostderr = 1;
-  google::InitGoogleLogging(argv[0]);
-  if (argc != 2) {
-    LOG(FATAL) << "Usage: " << argv[0] << "[filename]";
+  void Setup(po::options_description *desc) {
+    desc->add_options()("file,f", po::value<std::string>(&filename)->required(),
+                        "Graph data file");
   }
+};
 
+ostream &operator<<(ostream &out, const Config &cfg) {
+  out << "Config:" << endl << "  Filename: " << cfg.filename;
+  return out;
+}
+
+struct State {
+};
+
+compute::device ChooseDevice() {
   auto devices = compute::system::devices();
   for (uint32_t i = 0; i < devices.size(); ++i) {
     cout << i << ": " << devices[i].platform().name() << " | "
@@ -36,63 +40,41 @@ int main(int argc, char **argv) {
   cout.flush();
   uint32_t choice;
   cin >> choice;
+  return devices[choice];
+}
 
-  compute::device dev = devices[choice];
+int main(int argc, char **argv) {
+  FLAGS_logtostderr = 1;
+  google::InitGoogleLogging(argv[0]);
+  po::options_description options;
+  options.add_options()("help,h", "Show usage");
+  Config cfg;
+  cfg.Setup(&options);
+  po::variables_map options_vm;
+  po::store(po::parse_command_line(argc, argv, options), options_vm);
+  if (options_vm.count("help")) {
+    std::cout << options << std::endl;
+    return 1;
+  }
+  po::notify(options_vm);
+  LOG(INFO) << cfg;
+  LOG_IF(FATAL, !fs::exists(cfg.filename) || fs::is_directory(cfg.filename))
+      << "Failed to detect file: " << cfg.filename;
+
+  compute::device dev = ChooseDevice();
   compute::context context(dev);
   compute::command_queue queue(context, dev,
                                compute::command_queue::enable_profiling);
-
-  LOG(INFO) << dev.platform().name();
-  LOG(INFO) << dev.name();
-
-  std::unique_ptr<mcmc::CuckooSet> training;
-  std::unique_ptr<mcmc::CuckooSet> heldout;
+  LOG(INFO) << "OpenCL:" << endl << "  Platform: " << dev.platform().name()
+            << endl << "  Device: " << dev.name() << endl
+            << "  Device Driver: " << dev.driver_version();
+  std::unique_ptr<mcmc::Set> training;
+  std::unique_ptr<mcmc::Set> heldout;
   std::vector<mcmc::Edge> unique_edges;
-  if (!mcmc::GetUniqueEdgesFromFile(argv[1], &unique_edges) ||
-      !mcmc::GenerateCuckooSetsFromEdges(unique_edges, 0.1, &training,
-                                         &heldout)) {
-    LOG(FATAL) << "Failed to generate cuckoo sets from file " << argv[1];
+  if (!mcmc::GetUniqueEdgesFromFile(cfg.filename, &unique_edges) ||
+      !mcmc::GenerateSetsFromEdges(unique_edges, 0.1, &training,
+                                           &heldout)) {
+    LOG(FATAL) << "Failed to generate sets from file " << cfg.filename;
   }
-  std::vector<mcmc::Edge> training_set = training->Serialize();
-
-  const int NUM = static_cast<int>(ceil(0.8 * unique_edges.size()));
-  const int WG_SIZE = 64;
-  const int GLOBAL =
-      static_cast<int>(std::ceil(static_cast<double>(NUM) / WG_SIZE) * WG_SIZE);
-  LOG(INFO) << "NUM=" << NUM << ", GLOBAL=" << GLOBAL;
-  LOG_IF(FATAL, GLOBAL < NUM) << "Shape is incorrect";
-
-  compute::vector<mcmc::Edge> dev_input(unique_edges.rbegin(),
-                                        unique_edges.rbegin() + NUM, queue);
-  compute::vector<mcmc::Edge> dev_output(dev_input.size(), 0, queue);
-  compute::program prog =
-      compute::program::create_with_source(mcmc::kHeader + kSource, context);
-  try {
-    prog.build();
-  } catch (compute::opencl_error &e) {
-    LOG(FATAL) << prog.build_log();
-    ;
-  }
-  auto set_factory = mcmc::OpenClCuckooSetFactory::New(queue);
-  std::unique_ptr<mcmc::OpenClCuckooSet> dev_set(
-      set_factory->CreateSet(training_set));
-  compute::kernel kernel = prog.create_kernel("testFind");
-  int arg = 0;
-  kernel.set_arg(arg++, dev_set->Get());
-  kernel.set_arg(arg++, dev_input);
-  kernel.set_arg(arg++, static_cast<uint32_t>(dev_input.size()));
-  kernel.set_arg(arg++, dev_output);
-  compute::event e = queue.enqueue_1d_range_kernel(kernel, 0, GLOBAL, WG_SIZE);
-  LOG(INFO) << "Waiting";
-  e.wait();
-  LOG(INFO) << "DONE IN " << e.duration<boost::chrono::nanoseconds>().count();
-  LOG(INFO) << "Verifying";
-  std::vector<mcmc::Edge> ret(dev_output.size());
-  compute::copy(dev_output.begin(), dev_output.end(), ret.begin(), queue);
-  uint64_t count = 0;
-  for (auto v : ret) {
-    if (!v) ++count;
-  }
-  LOG_IF(ERROR, count != 0) << "Failed: missed " << count << " elements";
   return 0;
 }
