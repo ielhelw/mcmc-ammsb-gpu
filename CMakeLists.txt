@@ -33,6 +33,7 @@ link_libraries(
 add_library(mcmc SHARED
   mcmc/cuckoo.cc
   mcmc/data.cc
+  mcmc/random.cc
 )
 
 add_executable(cuckoo-test mcmc/cuckoo-test.cc)
