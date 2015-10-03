@@ -5,21 +5,26 @@ namespace mcmc {
 namespace random {
 
 const std::string kClRandomSource =
-    kClRandomTypes + BOOST_COMPUTE_STRINGIZE_SOURCE(
+    kClRandomTypes +
+    BOOST_COMPUTE_STRINGIZE_SOURCE(
+        __kernel void SizeOfRandom(__global ulong* size) {
+          *size = sizeof(Random);
+        }
 
-                         __kernel void SizeOfRandom(__global ulong* size) {
-                           *size = sizeof(Random);
-                         }
-
-                         __kernel void RandomInit(
-                             int num_random_seeds, random_seed_t random_seed,
-                             __global random_seed_t* thread_random_seed) {
-                           for (size_t i = get_gobal_id(0);
-                                i < num_random_seeds; i += get_global_size(0)) {
-                             thread_random_seed[i].x = random_seed.x++;
-                             thread_random_seed[i].y = random_seed.y++;
-                           }
-                         });
+        __kernel void RandomInit(__global void* base, int num_random_seeds,
+                                 random_seed_t random_seed,
+                                 __global random_seed_t* thread_random_seed) {
+          size_t id = get_global_id(0);
+          for (size_t i = id; i < num_random_seeds; i += get_global_size(0)) {
+            thread_random_seed[i].x = random_seed.x + i;
+            thread_random_seed[i].y = random_seed.y + i;
+          }
+          if (id == 0) {
+            __global Random* random = (__global Random*)base;
+            random->base_ = thread_random_seed;
+            random->num_seeds = num_random_seeds;
+          }
+        });
 
 OpenClRandom::OpenClRandom(std::shared_ptr<OpenClRandomFactory> factory,
                            compute::kernel* init, compute::command_queue* queue,
@@ -28,11 +33,12 @@ OpenClRandom::OpenClRandom(std::shared_ptr<OpenClRandomFactory> factory,
     : factory_(factory),
       queue_(*queue),
       data_(size, queue_.get_context()),
-      buf_(compute::buffer(queue_.get_context(), sizeOfRandom,
-                           compute::memory_object::read_write)) {
-  init->set_arg(0, static_cast<compute::int_>(size));
-  init->set_arg(1, seed);
-  init->set_arg(2, data_);
+      buf_(queue_.get_context(), sizeOfRandom,
+           compute::memory_object::read_write) {
+  init->set_arg(0, buf_);
+  init->set_arg(1, static_cast<compute::int_>(size));
+  init->set_arg(2, seed);
+  init->set_arg(3, data_);
   auto e = queue_.enqueue_task(*init);
   e.wait();
 }

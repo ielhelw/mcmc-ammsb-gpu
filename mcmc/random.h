@@ -32,6 +32,7 @@ class OpenClRandomFactory;
 class OpenClRandom {
  public:
   inline compute::buffer& Get() { return buf_; }
+  inline compute::vector<random_seed_t>& GetSeeds() { return data_; }
 
  private:
   OpenClRandom(std::shared_ptr<OpenClRandomFactory> factory,

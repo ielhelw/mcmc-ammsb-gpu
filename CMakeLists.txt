@@ -39,3 +39,7 @@ add_library(mcmc SHARED
 add_executable(cuckoo-test mcmc/cuckoo-test.cc)
 target_link_libraries(cuckoo-test mcmc ${GTEST_BOTH_LIBRARIES})
 add_test(cuckoo-test cuckoo-test)
+
+add_executable(random-test mcmc/random-test.cc)
+target_link_libraries(random-test mcmc ${GTEST_BOTH_LIBRARIES})
+add_test(random-test random-test)
