@@ -36,6 +36,8 @@ add_library(mcmc SHARED
   mcmc/random.cc
 )
 
+enable_testing()
+
 add_executable(cuckoo-test mcmc/cuckoo-test.cc)
 target_link_libraries(cuckoo-test mcmc ${GTEST_BOTH_LIBRARIES})
 add_test(cuckoo-test cuckoo-test)
@@ -43,6 +45,10 @@ add_test(cuckoo-test cuckoo-test)
 add_executable(random-test mcmc/random-test.cc)
 target_link_libraries(random-test mcmc ${GTEST_BOTH_LIBRARIES})
 add_test(random-test random-test)
+
+add_executable(data-test mcmc/data-test.cc)
+target_link_libraries(data-test mcmc ${GTEST_BOTH_LIBRARIES})
+add_test(data-test data-test)
 
 add_executable(wg-sort-test mcmc/wg-sort-test.cc)
 target_link_libraries(wg-sort-test mcmc ${GTEST_BOTH_LIBRARIES})

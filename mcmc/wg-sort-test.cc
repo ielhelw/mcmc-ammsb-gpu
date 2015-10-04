@@ -68,10 +68,10 @@ TEST(WorkGroup, Sort) {
     LOG(FATAL) << prog.build_log();
   }
   compute::kernel kernel = prog.create_kernel("sort");
-  LOG(INFO) << "LOCAL MEM" << dev.local_memory_size() << ", local in kerel " << kernel.get_work_group_info<size_t>(dev, (cl_kernel_work_group_info)CL_KERNEL_LOCAL_MEM_SIZE);
-  compute::vector<compute::uint_> in(
-      (dev.local_memory_size() / sizeof(compute::uint_)),
-      queue.get_context());
+  LOG(INFO) << "LOCAL MEM" << dev.local_memory_size() << ", local in kerel "
+            << kernel.get_work_group_info<size_t>(
+                   dev, (cl_kernel_work_group_info)CL_KERNEL_LOCAL_MEM_SIZE);
+  compute::vector<compute::uint_> in(256, queue.get_context());
   LOG(INFO) << "USING NAX SIZE = " << in.size();
   compute::vector<compute::uint_> out(in.size(), queue.get_context());
   compute::mersenne_twister_engine<compute::uint_> rand(queue);
@@ -84,7 +84,9 @@ TEST(WorkGroup, Sort) {
   kernel.set_arg(1, out);
   kernel.set_arg(2, static_cast<compute::uint_>(in.size()));
   kernel.set_arg(3, in.size() * sizeof(compute::uint_), nullptr);
-  LOG(INFO) << "LOCAL MEM" << dev.local_memory_size() << ", local in kerel " << kernel.get_work_group_info<size_t>(dev, (cl_kernel_work_group_info)CL_KERNEL_LOCAL_MEM_SIZE);
+  LOG(INFO) << "LOCAL MEM" << dev.local_memory_size() << ", local in kerel "
+            << kernel.get_work_group_info<size_t>(
+                   dev, (cl_kernel_work_group_info)CL_KERNEL_LOCAL_MEM_SIZE);
   compute::event e =
       queue.enqueue_1d_range_kernel(kernel, 0, in.size(), in.size());
   e.wait();

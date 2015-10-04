@@ -10,6 +10,8 @@
 #include <boost/compute/types.hpp>
 #include <boost/compute/utility/source.hpp>
 
+#include "mcmc/types.h"
+
 namespace mcmc {
 namespace cuckoo {
 
@@ -60,8 +62,6 @@ const std::string kClSetHeader =
         }
 
         );
-
-typedef uint64_t Edge;
 
 class Set {
  public:

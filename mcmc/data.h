@@ -2,6 +2,8 @@
 #define __MCMC_DATA_H__
 
 #include <memory>
+#include <set>
+#include <tuple>
 #include <vector>
 
 #include "mcmc/cuckoo.h"
@@ -10,6 +12,24 @@ namespace mcmc {
 
 // Drop in mcmc::cuckoo set implementation
 using namespace mcmc::cuckoo;
+
+class Graph {
+ public:
+  Graph(uint32_t num_nodes, std::vector<Edge> unique_edges);
+
+  Edge GetRandomEdge() const;
+
+  inline const std::vector<Vertex>& NeighborsOf(Vertex u) const {
+    return adjacency_[u];
+  }
+
+  inline const std::vector<Edge>& UniqueEdges() const { return unique_edges_; }
+
+ private:
+  uint32_t num_nodes_;
+  std::vector<Edge> unique_edges_;
+  std::vector<std::vector<Vertex>> adjacency_;
+};
 
 bool GetUniqueEdgesFromFile(const std::string& filename,
                             std::vector<Edge>* vals);

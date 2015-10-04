@@ -7,6 +7,27 @@
 
 namespace mcmc {
 
+Graph::Graph(uint32_t num_nodes, std::vector<Edge> unique_edges)
+    : num_nodes_(num_nodes),
+      unique_edges_(unique_edges),
+      adjacency_(num_nodes) {
+  for (auto e : unique_edges_) {
+    Vertex u, v;
+    std::tie(u, v) = Vertices(e);
+    adjacency_[u].push_back(v);
+    adjacency_[v].push_back(u);
+  }
+}
+
+Edge Graph::GetRandomEdge() const {
+  Vertex u;
+  do {
+    u = rand() % num_nodes_;
+  } while (adjacency_[u].empty());
+  Vertex v = *(adjacency_[u].begin() + rand() % adjacency_[u].size());
+  return MakeEdge(u, v);
+}
+
 bool GetUniqueEdgesFromFile(const std::string& filename,
                             std::vector<Edge>* vals) {
   std::ifstream in(filename);
@@ -19,7 +40,7 @@ bool GetUniqueEdgesFromFile(const std::string& filename,
     if (!in.eof()) {
       x = std::min(a, b);
       y = std::max(a, b);
-      vals->push_back((x << 32) | y);
+      vals->push_back(MakeEdge(x, y));
     }
   } while (in.good());
   if (in.bad()) {
