@@ -55,14 +55,14 @@ const std::string kSource = BOOST_COMPUTE_STRINGIZE_SOURCE(
       if (stride     < plen) aux[lid] += in[stride];
       if (stride + 1 < plen) aux[lid] += in[stride + 1];
       barrier(CLK_LOCAL_MEM_FENCE);
-      for (uint s = lsize; s > 0; s >>= 1) {
+      for (uint s = lsize>>1; s > 0; s >>= 1) {
         if (lid < s) {
           aux[lid] += aux[lid + s];
         }
         barrier(CLK_LOCAL_MEM_FENCE);
       }
       if (lid == 0) *out = aux[0];
-      barrier(CLK_LOCAL_MEM_FENCE);
+      barrier(CLK_GLOBAL_MEM_FENCE);
     }
 
     // Sums values of in[i:i+2*wg_size] in out[i(/2*wg_size)]
