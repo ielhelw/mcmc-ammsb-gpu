@@ -2,6 +2,7 @@
 #include <glog/logging.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <vector>
 #include <random>
@@ -47,9 +48,9 @@ const std::string kSource = BOOST_COMPUTE_STRINGIZE_SOURCE(
     // Sums first 2*wg_size elements from in and stores result in out[0]
     void sum_wg(__global uint* in, __global uint* out, __local uint* aux,
                 uint plen) {
-      uint lid = get_local_id(0);
-      uint lsize = get_local_size(0);
-      uint stride = 2 * lid;
+      size_t lid = get_local_id(0);
+      size_t lsize = get_local_size(0);
+      size_t stride = 2 * lid;
       aux[lid] = 0;
       if (stride     < plen) aux[lid] += in[stride];
       if (stride + 1 < plen) aux[lid] += in[stride + 1];
@@ -61,14 +62,15 @@ const std::string kSource = BOOST_COMPUTE_STRINGIZE_SOURCE(
         barrier(CLK_LOCAL_MEM_FENCE);
       }
       if (lid == 0) *out = aux[0];
+      barrier(CLK_LOCAL_MEM_FENCE);
     }
 
     // Sums values of in[i:i+2*wg_size] in out[i(/2*wg_size)]
     uint sum_partial(__global uint* in, __global uint* out, __local uint* aux,
                      uint len) {
-      uint lid = get_local_id(0);
-      uint stride = 2 * get_local_size(0);
-      uint i;
+      size_t lid = get_local_id(0);
+      size_t stride = 2 * get_local_size(0);
+      size_t i;
       for (i = 0; i < len; i += stride) {
         uint plen = stride;
         if (i + plen > len) {
@@ -84,8 +86,11 @@ const std::string kSource = BOOST_COMPUTE_STRINGIZE_SOURCE(
     // Sums the in[0:len] to out[0]. Out size at least ceil(len/wg_size)
     __kernel void sum(__global uint* in, __global uint* out, __local uint* aux,
                       uint len) {
-      uint lid = get_local_id(0);
-      uint stride = 2 * get_local_size(0);
+      size_t lid = get_local_id(0);
+      size_t stride = 2 * get_local_size(0);
+      size_t offset = len * get_group_id(0);
+      in += offset;
+      out += offset;
       len = sum_partial(in, out, aux, len);
       while (len > 1) {
         len = sum_partial(out, out, aux, len);
@@ -103,24 +108,25 @@ std::ostream& operator<<(std::ostream& out, const std::vector<T>& vals) {
   return out;
 }
 
-#define SETUP()                                                             \
-    compute::device dev = compute::system::default_device();                \
-    compute::context context(dev);                                          \
-    compute::command_queue queue(context, dev,                              \
-                                 compute::command_queue::enable_profiling); \
-    compute::program prog =                                                 \
-        compute::program::create_with_source(kSource, context);             \
-    try {                                                                   \
-      prog.build();                                                         \
-    } catch (compute::opencl_error & e) {                                   \
-      LOG(FATAL) << prog.build_log();                                       \
-    }                                                                       \
+#define SETUP()                                                            \
+  compute::device dev = compute::system::default_device();                 \
+  LOG(INFO) << "DEVICE: " << dev.name() << " | " << dev.platform().name(); \
+  compute::context context(dev);                                           \
+  compute::command_queue queue(context, dev,                               \
+                               compute::command_queue::enable_profiling);  \
+  compute::program prog =                                                  \
+      compute::program::create_with_source(kSource, context);              \
+  try {                                                                    \
+    prog.build();                                                          \
+  } catch (compute::opencl_error & e) {                                    \
+    LOG(FATAL) << prog.build_log();                                        \
+  }
 
 TEST(WorkGroup, Sum) {
   SETUP()
   std::vector<uint32_t> vals = {1,  2,  3,  4,   5,   6,    7,
                                 11, 31, 32, 33,  47,  48,   49,
-                                63, 64, 65, 127, 128, 1023, 11331};
+                                63, 64, 65, 127, 128, 1023, 1024, 11331};
   std::vector<uint32_t> work_groups = {2, 4, 16, 32, 64};
   compute::kernel kernel = prog.create_kernel("sum");
   for (auto wg : work_groups) {
@@ -140,6 +146,54 @@ TEST(WorkGroup, Sum) {
       EXPECT_EQ((v*(v+1))/2, host[0]);
     }
   }
+}
+
+const uint32_t N = 1024;
+const uint32_t K = 1024;
+
+TEST(WorkGroup, CustomSumPerformance) {
+  SETUP()
+  std::vector<uint32_t> host(K);
+  for (uint32_t i = 0; i < host.size(); ++i) host[i] = i + 1;
+  compute::vector<compute::uint_> in(N*K, context);
+  for (uint32_t i = 0; i < N; ++i) {
+    compute::copy(host.begin(), host.end(), in.begin() + i * K, queue);
+  }
+  compute::vector<compute::uint_> out(in.size(), context);
+  uint32_t wg = 32;
+  auto t1 = std::chrono::high_resolution_clock::now();
+  compute::kernel kernel = prog.create_kernel("sum");
+  kernel.set_arg(0, in);
+  kernel.set_arg(1, out);
+  kernel.set_arg(2, wg * sizeof(uint32_t), 0);
+  kernel.set_arg(3, static_cast<compute::uint_>(K));
+  auto e = queue.enqueue_1d_range_kernel(kernel, 0, N*wg, wg);
+  e.wait();
+  for (uint32_t i = 0; i < N; ++i) {
+    compute::copy(out.begin() + i * K, out.begin() + i * K + 1, host.begin(), queue);
+    EXPECT_EQ((K*(K+1))/2, host[0]);
+  }
+  auto t2 = std::chrono::high_resolution_clock::now();
+  LOG(INFO) << "custom: " << (t2-t1).count();
+}
+
+TEST(WorkGroup, SumPerformance) {
+  SETUP()
+  std::vector<uint32_t> host(K);
+  for (uint32_t i = 0; i < host.size(); ++i) host[i] = i + 1;
+  compute::vector<compute::uint_> in(N*K, context);
+  for (uint32_t i = 0; i < N; ++i) {
+    compute::copy(host.begin(), host.end(), in.begin() + i * K, queue);
+  }
+  compute::vector<compute::uint_> out(1, context);
+  auto t1 = std::chrono::high_resolution_clock::now();
+  for (uint32_t i = 0; i < N; ++i) {
+    compute::reduce(in.begin() + i * K, in.begin() + (i+1) * K, out.begin(), queue);
+    compute::copy(out.begin(), out.end(), host.begin(), queue);
+    EXPECT_EQ((K*(K+1))/2, host[0]);
+  }
+  auto t2 = std::chrono::high_resolution_clock::now();
+  LOG(INFO) << "compute: " << (t2-t1).count();
 }
 
 TEST(WorkGroup, Sort) {
