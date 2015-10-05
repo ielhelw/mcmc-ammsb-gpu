@@ -11,18 +11,25 @@ namespace algorithm {
 static const std::string kNormalizeSourceTemplate =
     BOOST_COMPUTE_STRINGIZE_SOURCE(
 
-        __kernel void WG_NORMALIZE_TT(__global TT* in, __global TT* out,
-                                      __local TT* aux, uint len) {
-          size_t lid = get_local_id(0);
-          size_t stride = get_local_size(0);
-          size_t offset = len * get_group_id(0);
-          WG_SUM_TT(in, out, aux, len);
-          in += offset;
-          out += offset;
-          TT sum = out[0];
+        void WG_NORMALIZE_TT(__global TT* in, __global TT* scratch,
+                             __local TT* aux, uint len) {
+          uint lid = get_local_id(0);
+          uint stride = get_local_size(0);
+          WG_SUM_TT(in, scratch, aux, len);
+          TT sum = scratch[0];
           for (; lid < len; lid += stride) {
             in[lid] = in[lid] / sum;
           }
+        }
+
+        __kernel void WG_NORMALIZE_KERNEL_TT(
+            __global TT* in, __global TT* scratch, __local TT* aux, uint len) {
+          uint gid = get_group_id(0);
+          uint stride = get_local_size(0);
+          uint scratch_per_wg = len / stride + (len % stride ? 1 : 0);
+          in += gid * len;
+          scratch += gid * scratch_per_wg;
+          WG_NORMALIZE_TT(in, scratch, aux, len);
         }
 
         );

@@ -8,31 +8,28 @@ namespace mcmc {
 namespace algorithm {
 
 static const std::string kSumSourceTemplate = BOOST_COMPUTE_STRINGIZE_SOURCE(
-    // Sums first 2*wg_size elements from in and stores result in out[0]
-    void WG_SUM_TT_BLOCK_(__global TT* in, __global TT* out, __local TT* aux,
-                          uint plen) {
-      size_t lid = get_local_id(0);
-      size_t lsize = get_local_size(0);
-      size_t stride = 2 * lid;
+    
+    void WG_SUM_TT_BLOCK_(__global TT* in, __global TT* scratch,
+                          __local TT* aux, uint len) {
+      uint lid = get_local_id(0);
+      uint stride = lid << 1;
       aux[lid] = 0;
-      if (stride < plen) aux[lid] += in[stride];
-      if (stride + 1 < plen) aux[lid] += in[stride + 1];
+      if (stride < len) aux[lid] += in[stride];
+      if (stride + 1 < len) aux[lid] += in[stride + 1];
       barrier(CLK_LOCAL_MEM_FENCE);
-      for (uint s = lsize >> 1; s > 0; s >>= 1) {
+      for (uint s = get_local_size(0) >> 1; s > 0; s >>= 1) {
         if (lid < s) {
           aux[lid] += aux[lid + s];
         }
         barrier(CLK_LOCAL_MEM_FENCE);
       }
-      if (lid == 0) *out = aux[0];
+      if (lid == 0) *scratch = aux[0];
       barrier(CLK_GLOBAL_MEM_FENCE);
     }
 
-    // Sums values of in[i:i+2*wg_size] in out[i(/2*wg_size)]
-    uint WG_SUM_TT_PARTIAL_(__global TT* in, __global TT* out, __local TT* aux,
-                            uint len) {
-      size_t lid = get_local_id(0);
-      size_t stride = 2 * get_local_size(0);
+    void WG_SUM_TT_PARTIAL_(__global TT* in, __global TT* scratch,
+                            __local TT* aux, uint len) {
+      size_t stride = get_local_size(0) << 1;
       size_t i;
       for (i = 0; i < len; i += stride) {
         uint plen = stride;
@@ -40,24 +37,31 @@ static const std::string kSumSourceTemplate = BOOST_COMPUTE_STRINGIZE_SOURCE(
           plen = len - i;
         }
         uint offset = i / stride;
-        WG_SUM_TT_BLOCK_(in + i, out + offset, aux, plen);
+        WG_SUM_TT_BLOCK_(in + i, scratch + offset, aux, plen);
       }
-      barrier(CLK_LOCAL_MEM_FENCE);
-      return i / stride;
     }
 
-    // Sums the in[0:len] to out[0]. Out size at least ceil(len/wg_size)
-    __kernel void WG_SUM_TT(__global TT* in, __global TT* out, __local TT* aux,
-                            uint len) {
-      size_t lid = get_local_id(0);
-      size_t stride = 2 * get_local_size(0);
-      size_t offset = len * get_group_id(0);
-      in += offset;
-      out += offset;
-      len = WG_SUM_TT_PARTIAL_(in, out, aux, len);
+    void WG_SUM_TT(__global TT* in, __global TT* scratch, __local TT* aux,
+                 uint len) {
+      uint lsizex2 = get_local_size(0) << 1;
+      WG_SUM_TT_PARTIAL_(in, scratch, aux, len);
+      len = len / lsizex2 + (len % lsizex2 ? 1 : 0);
       while (len > 1) {
-        len = WG_SUM_TT_PARTIAL_(out, out, aux, len);
+        WG_SUM_TT_PARTIAL_(scratch, scratch, aux, len);
+        len = len / lsizex2 + (len % lsizex2 ? 1 : 0);
       }
+    }
+
+    __kernel void WG_SUM_KERNEL_TT(__global TT* in, __global TT* out,
+                                   __global TT* scratch, __local TT* aux,
+                                   uint len) {
+      uint lsize = get_local_size(0);
+      uint gid = get_group_id(0);
+      uint scratch_per_wg = len / lsize + (len % lsize ? 1 : 0);
+      in += len * gid;
+      scratch += gid * scratch_per_wg;
+      WG_SUM_TT(in, scratch, aux, len);
+      if (get_local_id(0) == 0) out[gid] = *scratch;
     }
 
     );
