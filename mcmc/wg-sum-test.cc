@@ -22,7 +22,7 @@ class WgSumParameterizedTest : public WgSumTest,
                                public ::testing::WithParamInterface<uint32_t> {
 };
 
-TEST_P(WgSumParameterizedTest, Sum) {
+TEST_P(WgSumParameterizedTest, VaryLength) {
   uint32_t wg = GetParam();
   std::vector<uint32_t> vals = {1,  2,   3,   4,    5,    6,    7,  11,
                                 31, 32,  33,  47,   48,   49,   63, 64,
@@ -77,7 +77,7 @@ TEST_F(WgSumTest, CustomSumPerformance) {
   LOG(INFO) << "custom: " << (t2 - t1).count();
 }
 
-TEST_F(ContextTest, SumPerformance) {
+TEST_F(ContextTest, BoostSumPerformance) {
   std::vector<uint32_t> host(K);
   for (uint32_t i = 0; i < host.size(); ++i) host[i] = i + 1;
   compute::vector<compute::uint_> in(N * K, context_);

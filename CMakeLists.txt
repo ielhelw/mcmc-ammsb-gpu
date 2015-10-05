@@ -37,6 +37,7 @@ add_library(mcmc SHARED
   mcmc/gen-util.cc
   mcmc/algorithm/sort.cc
   mcmc/algorithm/sum.cc
+  mcmc/algorithm/normalize.cc
   mcmc/learner.cc
 )
 
@@ -64,3 +65,7 @@ add_test(wg-sort-test wg-sort-test)
 add_executable(wg-sum-test mcmc/wg-sum-test.cc)
 target_link_libraries(wg-sum-test mcmc ${GTEST_BOTH_LIBRARIES})
 add_test(wg-sum-test wg-sum-test)
+
+add_executable(wg-normalize-test mcmc/wg-normalize-test.cc)
+target_link_libraries(wg-normalize-test mcmc ${GTEST_BOTH_LIBRARIES})
+add_test(wg-normalize-test wg-normalize-test)
