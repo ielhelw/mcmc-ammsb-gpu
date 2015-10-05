@@ -34,6 +34,9 @@ add_library(mcmc SHARED
   mcmc/cuckoo.cc
   mcmc/data.cc
   mcmc/random.cc
+  mcmc/gen-util.cc
+  mcmc/algorithm/sort.cc
+  mcmc/algorithm/sum.cc
 )
 
 enable_testing()
@@ -53,3 +56,7 @@ add_test(data-test data-test)
 add_executable(wg-sort-test mcmc/wg-sort-test.cc)
 target_link_libraries(wg-sort-test mcmc ${GTEST_BOTH_LIBRARIES})
 add_test(wg-sort-test wg-sort-test)
+
+add_executable(wg-sum-test mcmc/wg-sum-test.cc)
+target_link_libraries(wg-sum-test mcmc ${GTEST_BOTH_LIBRARIES})
+add_test(wg-sum-test wg-sum-test)
