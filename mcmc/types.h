@@ -3,8 +3,11 @@
 
 #include <limits>
 
+namespace mcmc {
+
 typedef uint64_t Edge;
 typedef uint32_t Vertex;
+typedef float Float;
 
 inline std::tuple<Vertex, Vertex> Vertices(Edge e) {
   return std::make_tuple<Vertex, Vertex>(
@@ -16,5 +19,6 @@ inline Edge MakeEdge(Vertex u, Vertex v) {
   return Edge((static_cast<Edge>(u) << 32) | static_cast<Edge>(v));
 }
 
+}  // namespace mcmc
 
 #endif  // __MCMC_TYPES_H__

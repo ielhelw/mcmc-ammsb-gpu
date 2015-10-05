@@ -37,7 +37,11 @@ add_library(mcmc SHARED
   mcmc/gen-util.cc
   mcmc/algorithm/sort.cc
   mcmc/algorithm/sum.cc
+  mcmc/learner.cc
 )
+
+add_executable(main main.cc)
+target_link_libraries(main mcmc)
 
 enable_testing()
 

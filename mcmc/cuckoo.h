@@ -63,6 +63,8 @@ const std::string kClSetHeader =
 
         );
 
+using mcmc::Edge;
+
 class Set {
  public:
   static const size_t NUM_BUCKETS = 2;
@@ -82,6 +84,10 @@ class Set {
 
   inline size_t BinsPerBucket() const { return N_; }
 
+  inline size_t Capacity() const { return N_ * NUM_SLOTS * NUM_BUCKETS; }
+  
+  inline size_t Size() const { return count_; }
+
   std::vector<Edge> Serialize() const;
 
  private:
@@ -95,6 +101,7 @@ class Set {
 
   size_t Hash(Edge k, size_t bidx) const;
 
+  size_t count_;
   const size_t N_;
   Buckets buckets_;
   uint32_t seed_;

@@ -12,8 +12,9 @@ namespace cuckoo {
 const Edge Set::KEY_INVALID = std::numeric_limits<Edge>::max();
 
 Set::Set(size_t n)
-    : N_(static_cast<size_t>(1 +
-                             std::ceil((1.3 * n) / (NUM_BUCKETS * NUM_SLOTS)))),
+    : count_(0),
+      N_(static_cast<size_t>(1 +
+                             std::ceil((1.1 * n) / (NUM_BUCKETS * NUM_SLOTS)))),
       seed_(42),
       displacements_max_(n / 2 + 1) {
   for (auto& bucket : buckets_) {
@@ -46,6 +47,7 @@ bool Set::Insert(Edge k) {
 #endif
             InsertKeyInSlot(k, &buckets_[i][h]);
         assert(ret == KEY_INVALID);
+        ++count_;
         return true;
       }
     }
