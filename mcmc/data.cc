@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <fstream>
+#include <unordered_map>
 
 #include <glog/logging.h>
 
@@ -29,7 +30,9 @@ Edge Graph::GetRandomEdge() const {
 }
 
 bool GetUniqueEdgesFromFile(const std::string& filename,
-                            std::vector<Edge>* vals) {
+                            uint64_t* count_vertices, std::vector<Edge>* vals) {
+  std::set<Vertex> unique_vertices;
+  std::vector<Edge> edges;
   std::ifstream in(filename);
   std::string line;
   // skip first 4 lines
@@ -40,12 +43,26 @@ bool GetUniqueEdgesFromFile(const std::string& filename,
     if (!in.eof()) {
       x = std::min(a, b);
       y = std::max(a, b);
-      vals->push_back(MakeEdge(x, y));
+      edges.push_back(MakeEdge(x, y));
+      unique_vertices.insert(x);
+      unique_vertices.insert(y);
     }
   } while (in.good());
   if (in.bad()) {
     LOG(ERROR) << "Error reading file " << filename;
     return false;
+  }
+  // rename vertices in range [0, N-1]
+  std::unordered_map<Vertex, Vertex> map;
+  Vertex i = 0;
+  for (auto v : unique_vertices) {
+    map[v] = i++;
+  }
+  *count_vertices = map.size();
+  for (auto e : edges) {
+    Vertex u, v;
+    std::tie(u, v) = Vertices(e);
+    vals->push_back(MakeEdge(map[u], map[v]));
   }
   std::sort(vals->begin(), vals->end());
   // squeeze out duplicates
@@ -87,12 +104,13 @@ bool GenerateSetsFromEdges(const std::vector<Edge>& vals, double heldout_ratio,
 }
 
 bool GenerateSetsFromFile(const std::string& filename, double heldout_ratio,
+                          uint64_t* count_vertices,
                           std::unique_ptr<Set>* training,
                           std::unique_ptr<Set>* heldout) {
   LOG(INFO) << "Going to generate sets from " << filename
             << " with held-out ratio " << heldout_ratio;
   std::vector<Edge> vals;
-  if (!GetUniqueEdgesFromFile(filename, &vals)) return false;
+  if (!GetUniqueEdgesFromFile(filename, count_vertices, &vals)) return false;
   if (!GenerateSetsFromEdges(vals, heldout_ratio, training, heldout))
     return false;
   return true;
