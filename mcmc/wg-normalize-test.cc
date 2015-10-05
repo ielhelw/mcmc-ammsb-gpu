@@ -45,7 +45,7 @@ TEST_P(WgNormalizeParameterizedTest, VaryLength) {
     compute::copy(in.begin(), in.end(), host.begin(), queue_);
     float sum = (v * (v + 1)) / 2.0;
     for (uint32_t i = 0; i < host.size(); ++i) {
-      EXPECT_EQ((i + 1) / sum, host[i]);
+      EXPECT_FLOAT_EQ((i + 1) / sum, host[i]);
     }
   }
 }
@@ -80,11 +80,11 @@ TEST_F(WgNormalizeTest, CustomNormalizePerformance) {
     compute::copy(scratch.begin() + i * scratch_per_wg,
                   scratch.begin() + i * scratch_per_wg + 1, host.begin(),
                   queue_);
-    EXPECT_EQ(sum, host[0]);
+    EXPECT_FLOAT_EQ(sum, host[0]);
     compute::copy(in.begin() + i * K, in.begin() + (i + 1) * K, host.begin(),
                   queue_);
     for (uint32_t i = 0; i < K; ++i) {
-      EXPECT_EQ((i + 1) / sum, host[i]);
+      EXPECT_FLOAT_EQ((i + 1) / sum, host[i]);
     }
   }
   auto t2 = std::chrono::high_resolution_clock::now();
@@ -103,13 +103,13 @@ TEST_F(ContextTest, BoostNormalizePerformance) {
   for (uint32_t i = 0; i < N; ++i) {
     compute::reduce(in.begin() + i * K, in.begin() + (i + 1) * K, host.begin(),
                     queue_);
-    EXPECT_EQ(sum, host[0]);
+    EXPECT_FLOAT_EQ(sum, host[0]);
     compute::transform(in.begin() + i * K, in.begin() + (i + 1) * K,
                        in.begin() + i * K, compute::_1 / sum, queue_);
     compute::copy(in.begin() + i * K, in.begin() + (i + 1) * K, host.begin(),
                   queue_);
     for (uint32_t i = 0; i < K; ++i) {
-      EXPECT_EQ((i + 1) / sum, host[i]);
+      EXPECT_FLOAT_EQ((i + 1) / sum, host[i]);
     }
   }
   auto t2 = std::chrono::high_resolution_clock::now();
