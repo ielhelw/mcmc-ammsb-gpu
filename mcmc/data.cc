@@ -74,6 +74,8 @@ bool GetUniqueEdgesFromFile(const std::string& filename,
 }
 
 bool GenerateSetsFromEdges(const std::vector<Edge>& vals, double heldout_ratio,
+                           std::vector<Edge>* training_edges,
+                           std::vector<Edge>* heldout_edges,
                            std::unique_ptr<Set>* training,
                            std::unique_ptr<Set>* heldout) {
   size_t training_len =
@@ -87,6 +89,7 @@ bool GenerateSetsFromEdges(const std::vector<Edge>& vals, double heldout_ratio,
         heldout->reset();
         return false;
       }
+      heldout_edges->push_back(*it);
     }
   }
   training->reset(new Set(training_len));
@@ -99,19 +102,23 @@ bool GenerateSetsFromEdges(const std::vector<Edge>& vals, double heldout_ratio,
       }
       return false;
     }
+    training_edges->push_back(*it);
   }
   return true;
 }
 
 bool GenerateSetsFromFile(const std::string& filename, double heldout_ratio,
                           uint64_t* count_vertices,
+                          std::vector<Edge>* training_edges,
+                          std::vector<Edge>* heldout_edges,
                           std::unique_ptr<Set>* training,
                           std::unique_ptr<Set>* heldout) {
   LOG(INFO) << "Going to generate sets from " << filename
             << " with held-out ratio " << heldout_ratio;
   std::vector<Edge> vals;
   if (!GetUniqueEdgesFromFile(filename, count_vertices, &vals)) return false;
-  if (!GenerateSetsFromEdges(vals, heldout_ratio, training, heldout))
+  if (!GenerateSetsFromEdges(vals, heldout_ratio, training_edges, heldout_edges,
+                             training, heldout))
     return false;
   return true;
 }

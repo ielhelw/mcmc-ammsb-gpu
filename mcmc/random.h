@@ -6,10 +6,10 @@
 #include <boost/compute/types.hpp>
 #include <boost/compute/utility/source.hpp>
 
+#include "mcmc/types.h"
+
 namespace mcmc {
 namespace random {
-
-namespace compute = boost::compute;
 
 typedef compute::ulong2_ gsl_rng;
 typedef gsl_rng random_seed_t;

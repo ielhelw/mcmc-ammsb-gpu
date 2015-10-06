@@ -10,6 +10,7 @@
 #include <limits>
 
 using namespace mcmc::random;
+namespace compute = boost::compute;
 
 const std::string kSource =
     kClRandomTypes +

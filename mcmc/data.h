@@ -35,11 +35,15 @@ bool GetUniqueEdgesFromFile(const std::string& filename,
                             uint64_t* count_vertices, std::vector<Edge>* vals);
 
 bool GenerateSetsFromEdges(const std::vector<Edge>& vals, double heldout_ratio,
+                           std::vector<Edge>* training_edges,
+                           std::vector<Edge>* heldout_edges,
                            std::unique_ptr<Set>* training,
                            std::unique_ptr<Set>* heldout);
 
 bool GenerateSetsFromFile(const std::string& filename, double heldout_ratio,
                           uint64_t* count_vertices,
+                          std::vector<Edge>* training_edges,
+                          std::vector<Edge>* heldout_edges,
                           std::unique_ptr<Set>* training,
                           std::unique_ptr<Set>* heldout);
 

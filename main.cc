@@ -43,6 +43,8 @@ int main(int argc, char **argv) {
     ("b,b", po::value(&cfg.b)->default_value(1024))
     ("c,c", po::value(&cfg.c)->default_value(0.5))
     ("epsilon,e", po::value(&cfg.epsilon)->default_value(1e-7))
+    ("eta0", po::value(&cfg.eta0)->default_value(1))
+    ("eta1", po::value(&cfg.eta1)->default_value(1))
     ("k,k", po::value(&cfg.K)->default_value(32))
     ("mini_batch,m", po::value(&cfg.mini_batch_size)->default_value(32))
     ("neighbors,n", po::value(&cfg.num_node_sample)->default_value(32))
@@ -67,13 +69,16 @@ int main(int argc, char **argv) {
     << "  Device Driver: " << dev.driver_version();
   std::vector<mcmc::Edge> unique_edges;
   if (!mcmc::GetUniqueEdgesFromFile(filename, &cfg.N, &unique_edges) ||
-      !mcmc::GenerateSetsFromEdges(unique_edges, cfg.heldout_ratio, &cfg.training,
-                                   &cfg.heldout)) {
+      !mcmc::GenerateSetsFromEdges(unique_edges, cfg.heldout_ratio,
+                                   &cfg.training_edges, &cfg.heldout_edges,
+                                   &cfg.training, &cfg.heldout)) {
     LOG(FATAL) << "Failed to generate sets from file " << filename;
   }
   if (cfg.alpha == 0) cfg.alpha = static_cast<mcmc::Float>(1)/cfg.K;
   cfg.E = unique_edges.size();
-  LOG(INFO) << cfg;
   LOG(INFO) << "Loaded file " << filename;
+  LOG(INFO) << cfg;
+  mcmc::Learner learner(cfg, queue);
+  learner.run();
   return 0;
 }

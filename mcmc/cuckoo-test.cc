@@ -10,6 +10,7 @@
 #include <limits>
 
 using namespace mcmc::cuckoo;
+namespace compute = boost::compute;
 
 std::vector<uint64_t> GenerateRandom() {
   std::vector<Edge> edges(2 * 1024 * 1024);

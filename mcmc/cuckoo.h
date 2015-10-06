@@ -6,6 +6,7 @@
 #include <memory>
 #include <vector>
 
+#include <boost/compute/buffer.hpp>
 #include <boost/compute/container/vector.hpp>
 #include <boost/compute/types.hpp>
 #include <boost/compute/utility/source.hpp>
@@ -15,9 +16,8 @@
 namespace mcmc {
 namespace cuckoo {
 
-namespace compute = boost::compute;
-
 const std::string kClSetTypes = BOOST_COMPUTE_STRINGIZE_SOURCE(
+
     typedef ulong uint64_t; typedef uint uint32_t;
 
     typedef struct {

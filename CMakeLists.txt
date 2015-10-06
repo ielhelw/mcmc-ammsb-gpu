@@ -38,6 +38,7 @@ add_library(mcmc SHARED
   mcmc/algorithm/sort.cc
   mcmc/algorithm/sum.cc
   mcmc/algorithm/normalize.cc
+  mcmc/perplexity.cc
   mcmc/learner.cc
 )
 

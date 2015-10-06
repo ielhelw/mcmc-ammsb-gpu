@@ -5,6 +5,8 @@
 
 namespace mcmc {
 
+namespace compute = boost::compute;
+
 typedef uint64_t Edge;
 typedef uint32_t Vertex;
 typedef float Float;

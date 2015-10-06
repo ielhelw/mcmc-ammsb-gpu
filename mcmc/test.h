@@ -2,11 +2,10 @@
 #define __MCMC_TEST_H__
 
 #include <boost/compute/system.hpp>
+#include "mcmc/types.h"
 
 namespace mcmc {
 namespace test {
-
-namespace compute = boost::compute;
 
 class ContextTest : public ::testing::Test {
  protected:
