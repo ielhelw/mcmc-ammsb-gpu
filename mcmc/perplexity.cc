@@ -158,7 +158,7 @@ const std::string kSourcePerplexityWg =
         }
 
         );
-uint32_t WG = 1;
+
 PerplexityCalculator::PerplexityCalculator(
     Mode mode, const Config& cfg, compute::command_queue queue,
     compute::vector<Float>& beta, compute::vector<Float>& pi,
@@ -180,14 +180,17 @@ PerplexityCalculator::PerplexityCalculator(
       non_link_count_(1),
       link_likelihood_(1),
       non_link_likelihood_(1),
-      count_calls_(0) {
+      count_calls_(0),
+      local_(cfg.ppx_wg_size){
   const std::string* src = nullptr;
   switch (mode) {
     case EDGE_PER_THREAD:
       src = &kSourcePerplexity;
+      global_ = (edges_.size() / local_ + (edges_.size() % local_ ? 1 : 0)) * local_;
       break;
     case EDGE_PER_WORKGROUP:
       src = &kSourcePerplexityWg;
+      global_ = edges.size() * local_;
       break;
     default:
       LOG(FATAL) << "Cannot recognize mode: " << mode;
@@ -215,14 +218,14 @@ PerplexityCalculator::PerplexityCalculator(
   if (mode == EDGE_PER_WORKGROUP) {
     scratch_ = compute::vector<Float>(edges_.size() * cfg.K, queue_.get_context()),
     kernel_.set_arg(11, scratch_);
-    kernel_.set_arg(12, WG * sizeof(Float), 0);
+    kernel_.set_arg(12, local_ * sizeof(Float), 0);
   }
 }
 
 Float PerplexityCalculator::operator()() {
   count_calls_++;
   kernel_.set_arg(10, count_calls_);
-  auto e = queue_.enqueue_1d_range_kernel(kernel_, 0, edges_.size()*WG, WG);
+  auto e = queue_.enqueue_1d_range_kernel(kernel_, 0, global_, local_);
   e.wait();
   LOG(INFO) << e.duration<boost::chrono::nanoseconds>().count();
   compute::reduce(ppx_per_edge_link_count_.begin(),

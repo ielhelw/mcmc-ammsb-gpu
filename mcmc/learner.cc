@@ -108,7 +108,7 @@ Learner::Learner(const Config& cfg, compute::command_queue queue)
       heldoutEdges_(cfg_.heldout_edges.begin(), cfg_.heldout_edges.end(),
                     queue_),
       compileFlags_(MakeCompileFlags(cfg_)),
-      heldoutPerplexity_(PerplexityCalculator::EDGE_PER_THREAD, cfg_, queue_,
+      heldoutPerplexity_(PerplexityCalculator::EDGE_PER_WORKGROUP, cfg_, queue_,
                          beta_, pi_, heldoutEdges_, heldoutSet_.get(),
                          compileFlags_, kSourceBaseFuncs) {
   // gamma generator

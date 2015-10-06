@@ -24,6 +24,8 @@ struct Config {
   std::vector<Edge> heldout_edges;
   std::unique_ptr<mcmc::Set> training;
   std::unique_ptr<mcmc::Set> heldout;
+
+  uint32_t ppx_wg_size;
 };
 
 }  // namespace mcmc

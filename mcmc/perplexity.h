@@ -45,6 +45,7 @@ class PerplexityCalculator {
   compute::kernel kernel_;
 
   uint32_t count_calls_;
+  uint32_t global_, local_;
 };
 
 }  // namespace mcmc
