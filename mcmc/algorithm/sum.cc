@@ -40,16 +40,22 @@ static const std::string kSumSourceTemplate = BOOST_COMPUTE_STRINGIZE_SOURCE(
         WG_SUM_TT_BLOCK_(in + i, scratch + offset, aux, plen);
       }
     }
+ 
+    void WG_SUM_FOLD_TT(__global TT* scratch, __local TT* aux,
+                 uint len) {
+      uint lsizex2 = get_local_size(0) << 1;
+      while (len > 1) {
+        WG_SUM_TT_PARTIAL_(scratch, scratch, aux, len);
+        len = len / lsizex2 + (len % lsizex2 ? 1 : 0);
+      }
+    }
 
     void WG_SUM_TT(__global TT* in, __global TT* scratch, __local TT* aux,
                  uint len) {
       uint lsizex2 = get_local_size(0) << 1;
       WG_SUM_TT_PARTIAL_(in, scratch, aux, len);
       len = len / lsizex2 + (len % lsizex2 ? 1 : 0);
-      while (len > 1) {
-        WG_SUM_TT_PARTIAL_(scratch, scratch, aux, len);
-        len = len / lsizex2 + (len % lsizex2 ? 1 : 0);
-      }
+      WG_SUM_FOLD_TT(scratch, aux, len);
     }
 
     __kernel void WG_SUM_KERNEL_TT(__global TT* in, __global TT* out,
