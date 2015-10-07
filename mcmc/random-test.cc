@@ -13,7 +13,7 @@ using namespace mcmc::random;
 namespace compute = boost::compute;
 
 const std::string kSource =
-    kClRandomTypes +
+    ::mcmc::random::internal::GetRandomTypes() +
     BOOST_COMPUTE_STRINGIZE_SOURCE(
         __kernel void test(__global void* vrand, __global ulong* ok) {
           __global Random* rand = (__global Random*)vrand;

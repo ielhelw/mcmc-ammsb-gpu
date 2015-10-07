@@ -70,7 +70,7 @@ TEST(OpenClCuckooSetTest, RandomMembership) {
   compute::command_queue queue(context, dev,
                                compute::command_queue::enable_profiling);
   compute::program prog =
-      compute::program::create_with_source(kClSetHeader + kSource, context);
+      compute::program::create_with_source(OpenClSetFactory::GetHeader() + kSource, context);
   try {
     prog.build();
   } catch (compute::opencl_error &e) {

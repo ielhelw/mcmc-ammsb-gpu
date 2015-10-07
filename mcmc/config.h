@@ -28,6 +28,12 @@ struct Config {
   uint32_t ppx_wg_size;
 };
 
+std::ostream& operator<<(std::ostream& out, const Config& cfg);
+
+std::string MakeCompileFlags(const Config& cfg);
+
+const std::string& GetSourceGuard();
+
 }  // namespace mcmc
 
 #endif  // __MCMC_CONFIG_H__

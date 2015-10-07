@@ -16,53 +16,6 @@
 namespace mcmc {
 namespace cuckoo {
 
-const std::string kClSetTypes = BOOST_COMPUTE_STRINGIZE_SOURCE(
-
-    typedef ulong uint64_t; typedef uint uint32_t;
-
-    typedef struct {
-      __global uint64_t* base_;
-      uint64_t num_bins_;
-    } Set;
-
-    );
-
-const std::string kClSetHeader =
-    kClSetTypes +
-    BOOST_COMPUTE_STRINGIZE_SOURCE(
-
-        __constant uint64_t NUM_BUCKETS = 2; __constant uint64_t NUM_SLOTS = 4;
-
-        uint64_t hash1(uint64_t num_bins,
-                       uint64_t k) { return (1003 * k) % num_bins; }
-
-        uint64_t hash2(uint64_t num_bins,
-                       uint64_t k) { return (k ^ 179440147) % num_bins; }
-
-        bool Set_SlotHasEdge_(__global uint64_t* slot, uint64_t k) {
-          if (k == slot[0]) return true;
-          if (k == slot[1]) return true;
-          if (k == slot[2]) return true;
-          if (k == slot[3]) return true;
-          return false;
-        }
-
-        bool Set_HasEdge(__global Set* set, uint64_t k) {
-          uint64_t h1 = hash1(set->num_bins_, k);
-          if (Set_SlotHasEdge_(
-                  set->base_ + 0 * set->num_bins_ * NUM_SLOTS + h1 * NUM_SLOTS,
-                  k))
-            return true;
-          uint64_t h2 = hash2(set->num_bins_, k);
-          if (Set_SlotHasEdge_(
-                  set->base_ + 1 * set->num_bins_ * NUM_SLOTS + h2 * NUM_SLOTS,
-                  k))
-            return true;
-          return false;
-        }
-
-        );
-
 using mcmc::Edge;
 
 class Set {
@@ -130,6 +83,8 @@ class OpenClSet {
 
 class OpenClSetFactory : public std::enable_shared_from_this<OpenClSetFactory> {
  public:
+  static const std::string& GetHeader();
+  
   static std::shared_ptr<OpenClSetFactory> New(compute::command_queue queue);
 
   OpenClSet* CreateSet(const std::vector<uint64_t>& data);

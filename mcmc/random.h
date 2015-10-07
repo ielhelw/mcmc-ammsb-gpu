@@ -14,19 +14,6 @@ namespace random {
 typedef compute::ulong2_ gsl_rng;
 typedef gsl_rng random_seed_t;
 
-const std::string kClRandomTypes = BOOST_COMPUTE_STRINGIZE_SOURCE(
-
-    typedef ulong2 gsl_rng; typedef gsl_rng random_seed_t;
-
-    typedef struct {
-      __global random_seed_t* base_;
-      ulong num_seeds;
-    } Random;
-
-    );
-
-#include "mcmc/random.cl.inc"
-
 class OpenClRandomFactory;
 
 class OpenClRandom {
@@ -62,6 +49,10 @@ class OpenClRandomFactory
   compute::kernel init_kernel_;
   uint64_t sizeOfRandom_;
 };
+
+namespace internal {
+const std::string& GetRandomTypes();
+}
 
 }  // namespapce random
 }  // namespace mcmc

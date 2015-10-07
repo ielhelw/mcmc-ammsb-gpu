@@ -16,6 +16,7 @@ namespace mcmc {
 
 class Learner {
  public:
+  static const std::string kSourceBaseFuncs;
 
   Learner(const Config& cfg, compute::command_queue queue);
 
@@ -44,8 +45,6 @@ class Learner {
   
   PerplexityCalculator heldoutPerplexity_;
 };
-
-std::ostream& operator<<(std::ostream& out, const Config& cfg);
 
 }  // namespace mcmc
 

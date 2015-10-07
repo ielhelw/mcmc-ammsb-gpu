@@ -1,4 +1,7 @@
-const std::string kClRandomHeader = kClRandomTypes + BOOST_COMPUTE_STRINGIZE_SOURCE(
+namespace internal {
+
+const std::string& GetRandomHeader() {
+  static const std::string kClRandomHeader = GetRandomTypes() + BOOST_COMPUTE_STRINGIZE_SOURCE(
 
 // PSEUDORANDOM GENERATOR
 inline ulong xorshift_128plus(ulong2 *s) {
@@ -335,3 +338,8 @@ inline double rand_gamma(gsl_rng *r, double a, double b) {
   return gsl_ran_gamma(r, a, b);
 }
 );
+
+return kClRandomHeader;
+}
+
+}  // namespace internal

@@ -9,6 +9,83 @@
 namespace mcmc {
 namespace cuckoo {
 
+namespace internal {
+
+const std::string& GetSetTypes() {
+  static const std::string kClSetTypes = BOOST_COMPUTE_STRINGIZE_SOURCE(
+
+    typedef ulong uint64_t; typedef uint uint32_t;
+
+    typedef struct {
+      __global uint64_t* base_;
+      uint64_t num_bins_;
+    } Set;
+
+    );
+  return kClSetTypes;
+}
+
+const std::string& GetSetHeader() {
+  static const std::string kClSetHeader =
+    GetSetTypes() +
+    BOOST_COMPUTE_STRINGIZE_SOURCE(
+
+        __constant uint64_t NUM_BUCKETS = 2; __constant uint64_t NUM_SLOTS = 4;
+
+        uint64_t hash1(uint64_t num_bins,
+                       uint64_t k) { return (1003 * k) % num_bins; }
+
+        uint64_t hash2(uint64_t num_bins,
+                       uint64_t k) { return (k ^ 179440147) % num_bins; }
+
+        bool Set_SlotHasEdge_(__global uint64_t* slot, uint64_t k) {
+          if (k == slot[0]) return true;
+          if (k == slot[1]) return true;
+          if (k == slot[2]) return true;
+          if (k == slot[3]) return true;
+          return false;
+        }
+
+        bool Set_HasEdge(__global Set* set, uint64_t k) {
+          uint64_t h1 = hash1(set->num_bins_, k);
+          if (Set_SlotHasEdge_(
+                  set->base_ + 0 * set->num_bins_ * NUM_SLOTS + h1 * NUM_SLOTS,
+                  k))
+            return true;
+          uint64_t h2 = hash2(set->num_bins_, k);
+          if (Set_SlotHasEdge_(
+                  set->base_ + 1 * set->num_bins_ * NUM_SLOTS + h2 * NUM_SLOTS,
+                  k))
+            return true;
+          return false;
+        }
+
+        );
+  return kClSetHeader;
+}
+
+const std::string& GetSetSource() {
+  static const std::string kClSetSource =
+    GetSetTypes() +
+    BOOST_COMPUTE_STRINGIZE_SOURCE(
+
+        __kernel void SizeOfSet(__global uint64_t* size) {
+          *size = sizeof(Set);
+        }
+
+        __kernel void SetInit(__global void* vset, __global uint64_t* data,
+                              uint64_t num_bins) {
+          __global Set* set = (__global Set*)vset;
+          set->base_ = data;
+          set->num_bins_ = num_bins;
+        }
+
+        );
+  return kClSetSource;
+}
+
+}  // namespace internal
+
 const Edge Set::KEY_INVALID = std::numeric_limits<Edge>::max();
 
 Set::Set(size_t n)
@@ -134,22 +211,9 @@ OpenClSet::OpenClSet(std::shared_ptr<OpenClSetFactory> factory,
   e.wait();
 }
 
-const std::string kClSetSource =
-    kClSetTypes +
-    BOOST_COMPUTE_STRINGIZE_SOURCE(
-
-        __kernel void SizeOfSet(__global uint64_t* size) {
-          *size = sizeof(Set);
-        }
-
-        __kernel void SetInit(__global void* vset, __global uint64_t* data,
-                              uint64_t num_bins) {
-          __global Set* set = (__global Set*)vset;
-          set->base_ = data;
-          set->num_bins_ = num_bins;
-        }
-
-        );
+const std::string& OpenClSetFactory::GetHeader() {
+  return internal::GetSetHeader();
+}
 
 std::shared_ptr<OpenClSetFactory> OpenClSetFactory::New(
     compute::command_queue queue) {
@@ -164,7 +228,7 @@ OpenClSet* OpenClSetFactory::CreateSet(const std::vector<uint64_t>& data) {
 OpenClSetFactory::OpenClSetFactory(compute::command_queue queue)
     : queue_(queue) {
   prog_ =
-      compute::program::create_with_source(kClSetSource, queue_.get_context());
+      compute::program::create_with_source(internal::GetSetSource(), queue_.get_context());
   try {
     prog_.build();
   } catch (compute::opencl_error& e) {

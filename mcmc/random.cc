@@ -4,8 +4,25 @@
 namespace mcmc {
 namespace random {
 
-const std::string kClRandomSource =
-    kClRandomTypes +
+namespace internal {
+
+const std::string& GetRandomTypes() {
+  static const std::string kClRandomTypes = BOOST_COMPUTE_STRINGIZE_SOURCE(
+
+    typedef ulong2 gsl_rng; typedef gsl_rng random_seed_t;
+
+    typedef struct {
+      __global random_seed_t* base_;
+      ulong num_seeds;
+    } Random;
+
+    );
+  return kClRandomTypes;
+}
+
+const std::string& GetRandomSource() {
+  static const std::string kClRandomSource =
+    GetRandomTypes() +
     BOOST_COMPUTE_STRINGIZE_SOURCE(
         __kernel void SizeOfRandom(__global ulong* size) {
           *size = sizeof(Random);
@@ -25,6 +42,12 @@ const std::string kClRandomSource =
             random->num_seeds = num_random_seeds;
           }
         });
+  return kClRandomSource;
+}
+
+}  // namespace internal
+
+#include "mcmc/random.cl.inc"
 
 OpenClRandom::OpenClRandom(std::shared_ptr<OpenClRandomFactory> factory,
                            compute::kernel* init, compute::command_queue* queue,
@@ -56,7 +79,7 @@ OpenClRandom* OpenClRandomFactory::CreateRandom(uint64_t size,
 
 OpenClRandomFactory::OpenClRandomFactory(compute::command_queue queue)
     : queue_(queue) {
-  prog_ = compute::program::create_with_source(kClRandomSource,
+  prog_ = compute::program::create_with_source(internal::GetRandomSource(),
                                                queue_.get_context());
   try {
     prog_.build();

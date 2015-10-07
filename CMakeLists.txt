@@ -40,6 +40,7 @@ add_library(mcmc SHARED
   mcmc/algorithm/normalize.cc
   mcmc/perplexity.cc
   mcmc/learner.cc
+  mcmc/config.cc
 )
 
 add_executable(main main.cc)
