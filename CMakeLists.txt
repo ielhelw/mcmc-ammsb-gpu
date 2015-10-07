@@ -71,3 +71,7 @@ add_test(wg-sum-test wg-sum-test)
 add_executable(wg-normalize-test mcmc/wg-normalize-test.cc)
 target_link_libraries(wg-normalize-test mcmc ${GTEST_BOTH_LIBRARIES})
 add_test(wg-normalize-test wg-normalize-test)
+
+add_executable(wg-perplexity-test mcmc/wg-perplexity-test.cc)
+target_link_libraries(wg-perplexity-test mcmc ${GTEST_BOTH_LIBRARIES})
+add_test(wg-perplexity-test wg-perplexity-test)

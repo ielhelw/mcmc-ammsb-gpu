@@ -20,8 +20,11 @@ class PerplexityCalculator {
 
   Float operator()();
 
+  uint64_t LastInvocationTime() const;
+
  private:
   compute::command_queue queue_;
+  compute::event event_;
 
   compute::vector<Float>& beta_;  // [K]
   compute::vector<Float>& pi_;    // [N,K]

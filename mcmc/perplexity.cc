@@ -222,12 +222,15 @@ PerplexityCalculator::PerplexityCalculator(
   }
 }
 
+uint64_t PerplexityCalculator::LastInvocationTime() const {
+  return event_.duration<boost::chrono::nanoseconds>().count();
+}
+
 Float PerplexityCalculator::operator()() {
   count_calls_++;
   kernel_.set_arg(10, count_calls_);
-  auto e = queue_.enqueue_1d_range_kernel(kernel_, 0, global_, local_);
-  e.wait();
-  LOG(INFO) << e.duration<boost::chrono::nanoseconds>().count();
+  event_ = queue_.enqueue_1d_range_kernel(kernel_, 0, global_, local_);
+  event_.wait();
   compute::reduce(ppx_per_edge_link_count_.begin(),
                   ppx_per_edge_link_count_.end(), link_count_.begin(), queue_);
   compute::reduce(ppx_per_edge_non_link_count_.begin(),
