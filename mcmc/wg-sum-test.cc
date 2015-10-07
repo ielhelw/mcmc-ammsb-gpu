@@ -45,7 +45,7 @@ TEST_P(WgSumParameterizedTest, VaryLength) {
     auto e = queue_.enqueue_1d_range_kernel(kernel, 0, wg, wg);
     e.wait();
     compute::copy(out.begin(), out.begin() + 1, host.begin(), queue_);
-    EXPECT_EQ((v * (v + 1)) / 2, host[0]);
+    ASSERT_EQ((v * (v + 1)) / 2, host[0]);
   }
 }
 INSTANTIATE_TEST_CASE_P(WorkGroups, WgSumParameterizedTest,
@@ -79,7 +79,7 @@ TEST_F(WgSumTest, CustomSumPerformance) {
   for (uint32_t i = 0; i < N; ++i) {
     compute::copy(out.begin() + i,
                   out.begin() + i + 1, host.begin(), queue_);
-    EXPECT_EQ((K * (K + 1)) / 2, host[0]);
+    ASSERT_EQ((K * (K + 1)) / 2, host[0]);
   }
   auto t2 = std::chrono::high_resolution_clock::now();
   LOG(INFO) << "custom: " << (t2 - t1).count();
@@ -98,7 +98,7 @@ TEST_F(ContextTest, BoostSumPerformance) {
     compute::reduce(in.begin() + i * K, in.begin() + (i + 1) * K, out.begin(),
                     queue_);
     compute::copy(out.begin(), out.begin() + 1, host.begin(), queue_);
-    EXPECT_EQ((K * (K + 1)) / 2, host[0]);
+    ASSERT_EQ((K * (K + 1)) / 2, host[0]);
   }
   auto t2 = std::chrono::high_resolution_clock::now();
   LOG(INFO) << "compute: " << (t2 - t1).count();

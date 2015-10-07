@@ -33,9 +33,9 @@ TEST(DataTest, RandomEdge) {
     Vertex u, v;
     std::tie(u, v) = Vertices(e);
     auto& u_adj = g.NeighborsOf(u);
-    EXPECT_NE(std::find(u_adj.begin(), u_adj.end(), v), u_adj.end());
+    ASSERT_NE(std::find(u_adj.begin(), u_adj.end(), v), u_adj.end());
     auto& v_adj = g.NeighborsOf(v);
-    EXPECT_NE(std::find(v_adj.begin(), v_adj.end(), u), v_adj.end());
+    ASSERT_NE(std::find(v_adj.begin(), v_adj.end(), u), v_adj.end());
   }
   for (uint32_t i = 0; i < N; ++i) {
     Vertex u, v;
@@ -46,8 +46,8 @@ TEST(DataTest, RandomEdge) {
       e = MakeEdge(u, v);
     } while (std::find(edges.begin(), edges.end(), e) != edges.end());
     auto& u_adj = g.NeighborsOf(u);
-    EXPECT_EQ(std::find(u_adj.begin(), u_adj.end(), v), u_adj.end());
+    ASSERT_EQ(std::find(u_adj.begin(), u_adj.end(), v), u_adj.end());
     auto& v_adj = g.NeighborsOf(v);
-    EXPECT_EQ(std::find(v_adj.begin(), v_adj.end(), u), v_adj.end());
+    ASSERT_EQ(std::find(v_adj.begin(), v_adj.end(), u), v_adj.end());
   }
 }

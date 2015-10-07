@@ -30,17 +30,17 @@ TEST(CuckooSetTest, RandomMembership) {
   std::vector<Edge> edges = GenerateRandom();
   uint64_t in_len = static_cast<uint64_t>(1 + ceil(edges.size() / 2.0));
   uint64_t out_len = edges.size() - in_len;
-  EXPECT_GT(in_len, 0);
-  EXPECT_GT(out_len, 0);
+  ASSERT_GT(in_len, 0);
+  ASSERT_GT(out_len, 0);
   Set set(in_len);
   for (auto it = edges.begin(); it != edges.begin() + in_len; ++it) {
-    EXPECT_TRUE(set.Insert(*it));
+    ASSERT_TRUE(set.Insert(*it));
   }
   for (auto it = edges.begin(); it != edges.begin() + in_len; ++it) {
-    EXPECT_TRUE(set.Has(*it));
+    ASSERT_TRUE(set.Has(*it));
   }
   for (auto it = edges.begin() + in_len; it != edges.end(); ++it) {
-    EXPECT_FALSE(set.Has(*it));
+    ASSERT_FALSE(set.Has(*it));
   }
 }
 
@@ -58,11 +58,11 @@ TEST(OpenClCuckooSetTest, RandomMembership) {
   std::vector<Edge> edges = GenerateRandom();
   uint64_t in_len = static_cast<uint64_t>(1 + ceil(edges.size() / 2.0));
   uint64_t out_len = edges.size() - in_len;
-  EXPECT_GT(in_len, 0);
-  EXPECT_GT(out_len, 0);
+  ASSERT_GT(in_len, 0);
+  ASSERT_GT(out_len, 0);
   Set set(in_len);
   for (auto it = edges.begin(); it != edges.begin() + in_len; ++it) {
-    EXPECT_TRUE(set.Insert(*it));
+    ASSERT_TRUE(set.Insert(*it));
   }
   std::vector<Edge> serialized_set = set.Serialize();
   compute::device dev = compute::system::default_device();
@@ -97,7 +97,7 @@ TEST(OpenClCuckooSetTest, RandomMembership) {
   for (auto v : output) {
     if (v != 1) ++count;
   }
-  EXPECT_EQ(count, 0);
+  ASSERT_EQ(count, 0);
   dev_input.resize(out_len);
   dev_output.resize(dev_input.size());
   compute::copy(edges.begin() + in_len, edges.end(), dev_input.begin(), queue);
@@ -116,5 +116,5 @@ TEST(OpenClCuckooSetTest, RandomMembership) {
   for (auto v : output) {
     if (v != 0) ++count;
   }
-  EXPECT_EQ(count, 0);
+  ASSERT_EQ(count, 0);
 }

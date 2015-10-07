@@ -44,7 +44,7 @@ TEST_F(WgSortTest, Sort) {
       queue_.enqueue_1d_range_kernel(kernel, 0, in.size(), in.size());
   e.wait();
   compute::copy(out.begin(), out.end(), host.begin(), queue_);
-  EXPECT_EQ(host_sorted, host);
+  ASSERT_EQ(host_sorted, host);
 }
 
 }  // namespace test

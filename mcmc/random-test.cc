@@ -49,8 +49,8 @@ TEST(RandomTest, Check) {
   compute::copy(random->GetSeeds().begin(), random->GetSeeds().end(),
                 host.begin(), queue);
   for (size_t i = 0; i < host.size(); ++i) {
-    EXPECT_EQ(seed[0] + i, host[i][0]);
-    EXPECT_EQ(seed[1] + i, host[i][1]);
+    ASSERT_EQ(seed[0] + i, host[i][0]);
+    ASSERT_EQ(seed[1] + i, host[i][1]);
   }
 
   compute::program prog =
@@ -68,5 +68,5 @@ TEST(RandomTest, Check) {
   e.wait();
   std::vector<uint64_t> ok(dev_ok.size(), 0);
   compute::copy(dev_ok.begin(), dev_ok.end(), ok.begin(), queue);
-  EXPECT_EQ(1, ok[0]);
+  ASSERT_EQ(1, ok[0]);
 }
