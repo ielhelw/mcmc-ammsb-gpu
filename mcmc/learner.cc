@@ -9,8 +9,7 @@
 namespace mcmc {
 
 const std::string Learner::kSourceBaseFuncs =
-    GetSourceGuard() + "\n" +
-    OpenClSetFactory::GetHeader() + "\n" +
+    GetSourceGuard() + "\n" + OpenClSetFactory::GetHeader() + "\n" +
     BOOST_COMPUTE_STRINGIZE_SOURCE(
 
         typedef FLOAT_TYPE Float; typedef VERTEX_TYPE Vertex;
@@ -21,6 +20,9 @@ const std::string Learner::kSourceBaseFuncs =
         }
 
             inline Vertex Vertex1(Edge e) { return (Vertex)((e & 0x0000ffff)); }
+
+            inline Edge MakeEdge(Vertex u,
+                                 Vertex v) { return (((Edge)u) << 32) | v; }
 
             inline __global Float *
             Pi(__global Float * pi, Vertex u) { return pi + u * K; }
@@ -49,7 +51,9 @@ Learner::Learner(const Config& cfg, compute::command_queue queue)
       compileFlags_(MakeCompileFlags(cfg_)),
       heldoutPerplexity_(PerplexityCalculator::EDGE_PER_WORKGROUP, cfg_, queue_,
                          beta_, pi_, heldoutEdges_, heldoutSet_.get(),
-                         compileFlags_, kSourceBaseFuncs) {
+                         compileFlags_, kSourceBaseFuncs),
+      phiUpdater_(cfg_, queue_, beta_, pi_, phi_, trainingSet_.get(),
+                  compileFlags_, kSourceBaseFuncs) {
   // gamma generator
   std::mt19937 mt19937;
   std::gamma_distribution<Float> gamma_distribution(cfg_.eta0, cfg_.eta1);
@@ -72,6 +76,15 @@ void Learner::run() {
   uint32_t step_count = 1;
   for (; step_count < 10; ++step_count) {
     LOG(INFO) << "ppx[" << step_count << "] = " << heldoutPerplexity_();
+    uint32_t nn = 0;
+    std::vector<uint> hmbn(cfg_.N);
+    std::generate(hmbn.begin(), hmbn.end(), [&nn]() { return nn++; });
+
+    std::vector<uint> hn(hmbn.size() * cfg_.num_node_sample);
+    std::generate(hn.begin(), hn.end(), [this]() { return rand() % cfg_.N; });
+    compute::vector<uint> mbn(hmbn.begin(), hmbn.end(), queue_);
+    compute::vector<uint> n(hn.begin(), hn.end(), queue_);
+    phiUpdater_(mbn, n, static_cast<uint32_t>(mbn.size()));
   }
 }
 

@@ -11,6 +11,7 @@
 #include "mcmc/config.h"
 #include "mcmc/data.h"
 #include "mcmc/perplexity.h"
+#include "mcmc/phi.h"
 
 namespace mcmc {
 
@@ -44,6 +45,7 @@ class Learner {
   std::string compileFlags_;
   
   PerplexityCalculator heldoutPerplexity_;
+  PhiUpdater phiUpdater_;
 };
 
 }  // namespace mcmc

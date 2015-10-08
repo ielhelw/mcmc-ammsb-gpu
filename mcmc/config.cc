@@ -15,6 +15,9 @@ const std::string& GetSourceGuard() {
     "#ifndef EDGE_TYPE \n"
     "#  error \"EDGE_TYPE is required\" \n"
     "#endif \n"
+    "#ifndef ALPHA_ \n"
+    "#  error \"ALPHA_ is required\" \n"
+    "#endif \n"
     "#ifndef EPS_A_ \n"
     "#  error \"EPS_A_ is required\" \n"
     "#endif \n"
@@ -36,6 +39,10 @@ const std::string& GetSourceGuard() {
     "#ifndef E \n"
     "#  error \"E is required\" \n"
     "#endif \n"
+    "#ifndef NUM_NEIGHBORS \n"
+    "#  error \"NUM_NEIGHBORS is required\" \n"
+    "#endif \n"
+    "#define ALPHA ((Float)ALPHA_) \n"
     "#define EPS_A ((Float)EPS_A_) \n"
     "#define EPS_B ((Float)EPS_B_) \n"
     "#define EPS_C ((Float)EPS_C_) \n"
@@ -53,12 +60,14 @@ std::string MakeCompileFlags(const Config& cfg) {
       << "-DK=" << cfg.K << " "
       << "-DN=" << cfg.N << " "
       << "-DE=" << cfg.E << " "
+      << "-DALPHA_=" << cfg.a << " "
       << "-DEPS_A_=" << cfg.a << " "
       << "-DEPS_B_=" << cfg.b << " "
       << "-DEPS_C_=" << cfg.c << " "
       << "-DEPSILON_=" << cfg.epsilon << " "
       << "-DETA0_=" << cfg.eta0 << " "
-      << "-DETA1_=" << cfg.eta1 << " ";
+      << "-DETA1_=" << cfg.eta1 << " "
+      << "-DNUM_NEIGHBORS=" << cfg.num_node_sample << " ";
   return out.str();
 }
 

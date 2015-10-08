@@ -43,7 +43,6 @@ class PerplexityCalculator {
   std::vector<Float> non_link_likelihood_;
   
   compute::vector<Float> scratch_;
-
   compute::program prog_;
   compute::kernel kernel_;
 
