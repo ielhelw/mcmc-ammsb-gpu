@@ -77,7 +77,8 @@ const std::string kSourcePerplexity = BOOST_COMPUTE_STRINGIZE_SOURCE(
     );
 
 const std::string kSourcePerplexityWg =
-    mcmc::algorithm::WorkGroupSum("float") + "\n" +
+    mcmc::algorithm::WorkGroupSum(compute::type_name<Float>()) + "\n" +
+    "#define WG_SUM_FOLD_Float WG_SUM_FOLD_" + compute::type_name<Float>() + "\n"
     BOOST_COMPUTE_STRINGIZE_SOURCE(
 
         Float calculate_edge_likelihood_WG(
@@ -90,7 +91,7 @@ const std::string kSourcePerplexityWg =
               scratch[i] = pi_a[i] * pi_b[i] * beta[i];
             }
             barrier(CLK_GLOBAL_MEM_FENCE);
-            WG_SUM_FOLD_float(scratch, aux, K);
+            WG_SUM_FOLD_Float(scratch, aux, K);
             s = scratch[0];
           } else {
             Float sum = 0;
@@ -98,14 +99,14 @@ const std::string kSourcePerplexityWg =
               scratch[i] = pi_a[i] * pi_b[i];
             }
             barrier(CLK_GLOBAL_MEM_FENCE);
-            WG_SUM_FOLD_float(scratch, aux, K);
+            WG_SUM_FOLD_Float(scratch, aux, K);
             sum = scratch[0];
             barrier(CLK_LOCAL_MEM_FENCE);
             for (uint i = lid; i < K; i += get_local_size(0)) {
               scratch[i] = pi_a[i] * pi_b[i] * (1.0 - beta[i]);
             }
             barrier(CLK_GLOBAL_MEM_FENCE);
-            WG_SUM_FOLD_float(scratch, aux, K);
+            WG_SUM_FOLD_Float(scratch, aux, K);
             s = scratch[0];
             s += (1.0 - sum) * (1.0 - EPSILON);
           }

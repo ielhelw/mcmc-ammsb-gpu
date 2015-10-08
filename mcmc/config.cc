@@ -54,7 +54,7 @@ const std::string& GetSourceGuard() {
 
 std::string MakeCompileFlags(const Config& cfg) {
   std::ostringstream out;
-  out << "-DFLOAT_TYPE=" << "float" << " "
+  out << "-DFLOAT_TYPE=" << compute::type_name<Float>() << " "
       << "-DVERTEX_TYPE=" << "uint" << " "
       << "-DEDGE_TYPE=" << "ulong" << " "
       << "-DK=" << cfg.K << " "

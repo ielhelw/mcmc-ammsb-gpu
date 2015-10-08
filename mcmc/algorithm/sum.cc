@@ -73,7 +73,9 @@ static const std::string kSumSourceTemplate = BOOST_COMPUTE_STRINGIZE_SOURCE(
     );
 
 std::string WorkGroupSum(const std::string& type) {
-  return mcmc::gen::MakeHeaderFromTemplate(type + "_WG_SUM", kSumSourceTemplate,
+  return mcmc::gen::MakeHeaderFromTemplate(type + "_WG_SUM",
+      std::string(type == std::string("double") ? "#pragma OPENCL EXTENSION cl_khr_fp64: enable \n" : "") +
+      kSumSourceTemplate,
                                            "TT", type);
 }
 

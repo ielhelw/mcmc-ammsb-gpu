@@ -38,7 +38,10 @@ static const std::string kNormalizeSourceTemplate =
 std::string WorkGroupNormalizeProgram(const std::string& type) {
   return WorkGroupSum(type) +
          mcmc::gen::MakeHeaderFromTemplate(
-             type + "_WG_NORMALIZE", kNormalizeSourceTemplate, "TT", type);
+             type + "_WG_NORMALIZE",
+             std::string(type == std::string("double") ? "#pragma OPENCL EXTENSION cl_khr_fp64: enable \n" : "") +
+             kNormalizeSourceTemplate,
+             "TT", type);
 }
 
 }  // namespace algorithm

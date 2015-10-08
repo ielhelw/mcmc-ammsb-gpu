@@ -47,14 +47,14 @@ class WgPerplexityTest : public ContextTest,
     factory_ = OpenClSetFactory::New(queue_);
     dev_set_.reset(factory_->CreateSet(set.Serialize()));
     std::mt19937 mt19937;
-    std::normal_distribution<float> norm_dist(0, 1);
+    std::normal_distribution<Float> norm_dist(0, 1);
     auto gen = std::bind(norm_dist, mt19937);
-    std::vector<float> pi(N_ * K_);
+    std::vector<Float> pi(N_ * K_);
     std::generate(pi.begin(), pi.end(), gen);
-    std::vector<float> beta(K_);
+    std::vector<Float> beta(K_);
     std::generate(beta.begin(), beta.end(), gen);
-    dev_pi_ = compute::vector<float>(pi.begin(), pi.end(), queue_);
-    dev_beta_ = compute::vector<float>(beta.begin(), beta.end(), queue_);
+    dev_pi_ = compute::vector<Float>(pi.begin(), pi.end(), queue_);
+    dev_beta_ = compute::vector<Float>(beta.begin(), beta.end(), queue_);
     cfg_.K = K_;
   }
   
@@ -62,8 +62,8 @@ class WgPerplexityTest : public ContextTest,
     dev_edges_ = compute::vector<Edge>();
     factory_.reset();
     dev_set_.reset();
-    dev_pi_ = compute::vector<float>();
-    dev_beta_ = compute::vector<float>();
+    dev_pi_ = compute::vector<Float>();
+    dev_beta_ = compute::vector<Float>();
     ContextTest::TearDown();
   }
   
@@ -73,8 +73,8 @@ class WgPerplexityTest : public ContextTest,
   compute::vector<Edge> dev_edges_;
   std::shared_ptr<OpenClSetFactory> factory_;
   std::unique_ptr<OpenClSet> dev_set_;
-  compute::vector<float> dev_pi_;
-  compute::vector<float> dev_beta_;
+  compute::vector<Float> dev_pi_;
+  compute::vector<Float> dev_beta_;
   Config cfg_;
 };
 
@@ -84,8 +84,8 @@ TEST_P(WgPerplexityTest, Equal) {
                                  cfg_, queue_, dev_beta_, dev_pi_, dev_edges_,
                                  dev_set_.get(), MakeCompileFlags(cfg_),
                                  Learner::kSourceBaseFuncs);
-  float error = 0.15;
-  float ppx1 = ppxSimple();
+  Float error = 0.15;
+  Float ppx1 = ppxSimple();
   double ppx1_time = 0;
   double ppx1_total_time = 0;
   for (uint32_t i = 0; i < num_tries_; ++i) {
@@ -99,7 +99,7 @@ TEST_P(WgPerplexityTest, Equal) {
                                  cfg_, queue_, dev_beta_, dev_pi_, dev_edges_,
                                  dev_set_.get(), MakeCompileFlags(cfg_),
                                  Learner::kSourceBaseFuncs);
-  float ppx2 = ppxWg();
+  Float ppx2 = ppxWg();
   double ppx2_time = 0;
   double ppx2_total_time = 0;
   ASSERT_NEAR(ppx1, ppx2, error);
