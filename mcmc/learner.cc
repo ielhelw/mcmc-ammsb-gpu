@@ -58,30 +58,14 @@ Learner::Learner(const Config& cfg, compute::command_queue queue)
   std::vector<Float> host_theta(theta_.size());
   std::generate(host_theta.begin(), host_theta.end(), gamma);
   compute::copy(host_theta.begin(), host_theta.end(), theta_.begin(), queue_);
+  compute::copy(theta_.begin(), theta_.begin() + cfg_.K, beta_.begin(), queue_);
+  mcmc::algorithm::Normalizer<Float>(queue_, &beta_, cfg_.K, 32)();
   // generate phi
   std::vector<Float> host_phi(phi_.size());
   std::generate(host_phi.begin(), host_phi.end(), gamma);
   compute::copy(host_phi.begin(), host_phi.end(), phi_.begin(), queue_);
-  // norm pi
-  for (auto i = 0; i < cfg_.N; ++i) {
-    Float sum = 0;
-    for (auto j = 0; j < cfg_.K; ++j) {
-      sum += host_phi[i * cfg_.K + j];
-    }
-    for (auto j = 0; j < cfg_.K; ++j) {
-      host_phi[i * cfg_.K + j] /= sum;
-    }
-  }
-  compute::copy(host_phi.begin(), host_phi.end(), pi_.begin(), queue_);
-  // norm beta
-    Float sum = 0;
-    for (auto j = 0; j < cfg_.K; ++j) {
-      sum += host_theta[j];
-    }
-    for (auto j = 0; j < cfg_.K; ++j) {
-      host_theta[j] /= sum;
-    }
-  compute::copy(host_theta.begin(), host_theta.begin() + cfg_.K, beta_.begin(), queue_);
+  compute::copy(phi_.begin(), phi_.end(), pi_.begin(), queue_);
+  mcmc::algorithm::Normalizer<Float>(queue_, &pi_, cfg_.K, 32)();
 }
 
 void Learner::run() {

@@ -41,6 +41,7 @@ add_library(mcmc SHARED
   mcmc/perplexity.cc
   mcmc/learner.cc
   mcmc/config.cc
+  mcmc/types.cc
 )
 
 add_executable(main main.cc)

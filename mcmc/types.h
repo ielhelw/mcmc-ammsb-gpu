@@ -1,7 +1,9 @@
 #ifndef __MCMC_TYPES_H__
 #define __MCMC_TYPES_H__
 
+#include <boost/compute/type_traits/type_name.hpp>
 #include <limits>
+#include <tuple>
 
 namespace mcmc {
 

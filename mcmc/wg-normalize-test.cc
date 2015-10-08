@@ -16,7 +16,7 @@ namespace test {
 class WgNormalizeTest : public ContextTest {
  protected:
   WgNormalizeTest()
-      : ContextTest(mcmc::algorithm::WorkGroupNormalize("float")) {}
+      : ContextTest(mcmc::algorithm::WorkGroupNormalizeProgram("float")) {}
 };
 
 class WgNormalizeParameterizedTest
@@ -56,6 +56,29 @@ INSTANTIATE_TEST_CASE_P(WorkGroups, WgNormalizeParameterizedTest,
 const uint32_t N = 64;
 const uint32_t K = 1024;
 
+TEST_F(WgNormalizeTest, NormalizerClassPerformance) {
+  std::vector<float> host(K);
+  for (uint32_t i = 0; i < host.size(); ++i) host[i] = i + 1;
+  compute::vector<compute::float_> in(N * K, context_);
+  for (uint32_t i = 0; i < N; ++i) {
+    compute::copy(host.begin(), host.end(), in.begin() + i * K, queue_);
+  }
+  uint32_t wg = 32;
+  mcmc::algorithm::Normalizer<float> normalizer(queue_, &in, K, wg);
+  auto t1 = std::chrono::high_resolution_clock::now();
+  normalizer();
+  auto t2 = std::chrono::high_resolution_clock::now();
+  float sum = (K * (K + 1)) / 2.0;
+  for (uint32_t i = 0; i < N; ++i) {
+    compute::copy(in.begin() + i * K, in.begin() + (i + 1) * K, host.begin(),
+                  queue_);
+    for (uint32_t i = 0; i < K; ++i) {
+      ASSERT_FLOAT_EQ((i + 1) / sum, host[i]);
+    }
+  }
+  LOG(INFO) << "custom class: " << (t2 - t1).count();
+}
+
 TEST_F(WgNormalizeTest, CustomNormalizePerformance) {
   std::vector<float> host(K);
   for (uint32_t i = 0; i < host.size(); ++i) host[i] = i + 1;
@@ -67,14 +90,15 @@ TEST_F(WgNormalizeTest, CustomNormalizePerformance) {
   uint32_t scratch_per_wg =
       static_cast<uint32_t>(std::ceil(K / static_cast<float>(wg)));
   compute::vector<compute::float_> scratch(N * scratch_per_wg, context_);
-  auto t1 = std::chrono::high_resolution_clock::now();
   compute::kernel kernel = prog_.create_kernel("WG_NORMALIZE_KERNEL_float");
   kernel.set_arg(0, in);
   kernel.set_arg(1, scratch);
   kernel.set_arg(2, wg * sizeof(compute::float_), 0);
   kernel.set_arg(3, static_cast<compute::uint_>(K));
+  auto t1 = std::chrono::high_resolution_clock::now();
   auto e = queue_.enqueue_1d_range_kernel(kernel, 0, N * wg, wg);
   e.wait();
+  auto t2 = std::chrono::high_resolution_clock::now();
   float sum = (K * (K + 1)) / 2.0;
   for (uint32_t i = 0; i < N; ++i) {
     compute::copy(scratch.begin() + i * scratch_per_wg,
@@ -87,7 +111,6 @@ TEST_F(WgNormalizeTest, CustomNormalizePerformance) {
       ASSERT_FLOAT_EQ((i + 1) / sum, host[i]);
     }
   }
-  auto t2 = std::chrono::high_resolution_clock::now();
   LOG(INFO) << "custom: " << (t2 - t1).count();
 }
 
@@ -98,21 +121,22 @@ TEST_F(ContextTest, BoostNormalizePerformance) {
   for (uint32_t i = 0; i < N; ++i) {
     compute::copy(host.begin(), host.end(), in.begin() + i * K, queue_);
   }
-  auto t1 = std::chrono::high_resolution_clock::now();
   float sum = (K * (K + 1)) / 2.0;
+  auto t1 = std::chrono::high_resolution_clock::now();
   for (uint32_t i = 0; i < N; ++i) {
     compute::reduce(in.begin() + i * K, in.begin() + (i + 1) * K, host.begin(),
                     queue_);
-    ASSERT_FLOAT_EQ(sum, host[0]);
     compute::transform(in.begin() + i * K, in.begin() + (i + 1) * K,
                        in.begin() + i * K, compute::_1 / sum, queue_);
+  }
+  auto t2 = std::chrono::high_resolution_clock::now();
+  for (uint32_t i = 0; i < N; ++i) {
     compute::copy(in.begin() + i * K, in.begin() + (i + 1) * K, host.begin(),
                   queue_);
     for (uint32_t i = 0; i < K; ++i) {
       ASSERT_FLOAT_EQ((i + 1) / sum, host[i]);
     }
   }
-  auto t2 = std::chrono::high_resolution_clock::now();
   LOG(INFO) << "compute: " << (t2 - t1).count();
 }
 

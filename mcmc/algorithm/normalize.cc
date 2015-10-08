@@ -6,6 +6,7 @@
 #include "mcmc/gen-util.h"
 
 namespace mcmc {
+
 namespace algorithm {
 
 static const std::string kNormalizeSourceTemplate =
@@ -34,7 +35,7 @@ static const std::string kNormalizeSourceTemplate =
 
         );
 
-std::string WorkGroupNormalize(const std::string& type) {
+std::string WorkGroupNormalizeProgram(const std::string& type) {
   return WorkGroupSum(type) +
          mcmc::gen::MakeHeaderFromTemplate(
              type + "_WG_NORMALIZE", kNormalizeSourceTemplate, "TT", type);
