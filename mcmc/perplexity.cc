@@ -5,7 +5,6 @@
 #include "mcmc/algorithm/sum.h"
 #include "mcmc/algorithm/normalize.h"
 
-
 namespace mcmc {
 
 const std::string kSourcePerplexity = BOOST_COMPUTE_STRINGIZE_SOURCE(
@@ -60,9 +59,12 @@ const std::string kSourcePerplexity = BOOST_COMPUTE_STRINGIZE_SOURCE(
     __kernel void calculate_ppx_partial_for_edge(
         __global Edge* edges, uint num_edges, __global Float* g_pi,
         __global Float* g_beta, __global void* /* Set* */ void_edge_set,
-        __global Float* g_ppx_per_edge, __global Float* g_link_likelihood,
-        __global Float* g_non_link_likelihood, __global uint* g_link_count,
-        __global uint* g_non_link_count, uint avg_count) {
+        __global Float* g_ppx_per_edge,         // [num global threads]
+        __global Float* g_link_likelihood,      // [num global threads]
+        __global Float* g_non_link_likelihood,  // [num global threads]
+        __global uint* g_link_count,            // [num global threads]
+        __global uint* g_non_link_count,        // [num global threads]
+        uint avg_count) {
       size_t i = get_global_id(0);
       for (; i < num_edges; i += get_global_size(0)) {
         calculate_ppx_partial_for_edge_(
@@ -142,18 +144,22 @@ const std::string kSourcePerplexityWg =
         __kernel void calculate_ppx_partial_for_edge(
             __global Edge* edges, uint num_edges, __global Float* g_pi,
             __global Float* g_beta, __global void* /* Set* */ void_edge_set,
-            __global Float* g_ppx_per_edge, __global Float* g_link_likelihood,
-            __global Float* g_non_link_likelihood, __global uint* g_link_count,
-            __global uint* g_non_link_count, uint avg_count,
-            __global Float* scratch, __local Float* aux) {
+            __global Float* g_ppx_per_edge,         // [num work groups]
+            __global Float* g_link_likelihood,      // [num work groups]
+            __global Float* g_non_link_likelihood,  // [num work groups]
+            __global uint* g_link_count,            // [num work groups]
+            __global uint* g_non_link_count,        // [num work groups]
+            uint avg_count,
+            __global Float* scratch,  // [num work groups * K]
+            __local Float* aux) {
           size_t i = get_group_id(0);
-//          scratch += get_group_id(0) * K;
+          scratch += get_group_id(0) * K;
           for (; i < num_edges; i += get_num_groups(0)) {
             calculate_ppx_partial_for_edge_(
                 g_pi, g_beta, void_edge_set, g_ppx_per_edge + i,
                 g_link_likelihood + i, g_non_link_likelihood + i,
                 g_link_count + i, g_non_link_count + i, avg_count, edges[i],
-                scratch + i * K, aux);
+                scratch, aux);
           }
         }
 
@@ -181,12 +187,13 @@ PerplexityCalculator::PerplexityCalculator(
       link_likelihood_(1),
       non_link_likelihood_(1),
       count_calls_(0),
-      local_(cfg.ppx_wg_size){
+      local_(cfg.ppx_wg_size) {
   const std::string* src = nullptr;
   switch (mode) {
     case EDGE_PER_THREAD:
       src = &kSourcePerplexity;
-      global_ = (edges_.size() / local_ + (edges_.size() % local_ ? 1 : 0)) * local_;
+      global_ =
+          (edges_.size() / local_ + (edges_.size() % local_ ? 1 : 0)) * local_;
       break;
     case EDGE_PER_WORKGROUP:
       src = &kSourcePerplexityWg;
@@ -195,8 +202,8 @@ PerplexityCalculator::PerplexityCalculator(
     default:
       LOG(FATAL) << "Cannot recognize mode: " << mode;
   }
-  prog_ = compute::program::create_with_source(
-      baseFuncs + *src, queue_.get_context());
+  prog_ = compute::program::create_with_source(baseFuncs + *src,
+                                               queue_.get_context());
   try {
     prog_.build(compileFlags);
   } catch (compute::opencl_error& e) {
@@ -214,9 +221,10 @@ PerplexityCalculator::PerplexityCalculator(
   kernel_.set_arg(7, ppx_per_edge_non_link_likelihood_);
   kernel_.set_arg(8, ppx_per_edge_link_count_);
   kernel_.set_arg(9, ppx_per_edge_non_link_count_);
-  //kernel_.set_arg(10, count_calls_);
+  // kernel_.set_arg(10, count_calls_);
   if (mode == EDGE_PER_WORKGROUP) {
-    scratch_ = compute::vector<Float>(edges_.size() * cfg.K, queue_.get_context()),
+    scratch_ =
+        compute::vector<Float>(edges_.size() * cfg.K, queue_.get_context()),
     kernel_.set_arg(11, scratch_);
     kernel_.set_arg(12, local_ * sizeof(Float), 0);
   }
