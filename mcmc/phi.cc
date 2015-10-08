@@ -14,8 +14,8 @@ const std::string kSourcePhi = BOOST_COMPUTE_STRINGIZE_SOURCE(
                              Float* grads,  // K
                              Float* probs   // K
                              ) {
-      Float* pi = Pi(g_pi, node);
-      Float* phi = Pi(g_phi, node);
+      __global Float* pi = Pi(g_pi, node);
+      __global Float* phi = Pi(g_phi, node);
       Float eps_t = get_eps_t(step_count);
       Float phi_sum = 0;
       for (uint k = 0; k < K; ++k) {
@@ -25,7 +25,7 @@ const std::string kSourcePhi = BOOST_COMPUTE_STRINGIZE_SOURCE(
       }
       for (uint i = 0; i < NUM_NEIGHBORS; ++i) {
         Vertex neighbor = neighbors[i];
-        Float* pi_neighbor = Pi(g_pi, neighbor);
+        __global Float* pi_neighbor = Pi(g_pi, neighbor);
         Edge edge = MakeEdge(min(node, neighbor), max(node, neighbor));
         bool y = Set_HasEdge(edge_set, edge);
         Float e = (y == 1 ? EPSILON : 1.0 - EPSILON);
@@ -63,7 +63,7 @@ const std::string kSourcePhi = BOOST_COMPUTE_STRINGIZE_SOURCE(
       probs += i * K;
       for (; i < num_mini_batch_nodes; i += gsize) {
         Vertex node = mini_batch_nodes[i];
-        Vertex* node_neighbors = neighbors + i * NUM_NEIGHBORS;
+        __global Vertex* node_neighbors = neighbors + i * NUM_NEIGHBORS;
         update_phi_for_node(g_beta, g_pi, g_phi, training_edge_set, node,
                             node_neighbors, step_count, grads, probs);
       }
@@ -76,8 +76,8 @@ const std::string kSourcePhi = BOOST_COMPUTE_STRINGIZE_SOURCE(
       uint gsize = get_global_size(0);
       for (; i < num_mini_batch_nodes; i += gsize) {
         Vertex n = mini_batch_nodes[i];
-        Float* pi = Pi(g_pi, n);
-        Float* phi = Pi(g_phi, n);
+        __global Float* pi = Pi(g_pi, n);
+        __global Float* phi = Pi(g_phi, n);
         Float sum = 0;
         for (uint k = 0; k < K; ++k) {
           sum += phi[k];
@@ -91,7 +91,7 @@ const std::string kSourcePhi = BOOST_COMPUTE_STRINGIZE_SOURCE(
     );
 
 const std::string kSourcePhiWg =
-    mcmc::algorithm::WorkGroupSum("float") + "\n" +
+    mcmc::algorithm::WorkGroupNormalizeProgram("float") + "\n" +
     BOOST_COMPUTE_STRINGIZE_SOURCE(
 
         void update_phi_for_nodeWG(__global Float* beta, __global Float* g_pi,
@@ -102,8 +102,8 @@ const std::string kSourcePhiWg =
                                    __global Float* probs,    // K
                                    __global Float* scratch,  // K
                                    __local Float* aux) {
-          Float* pi = Pi(g_pi, node);
-          Float* phi = Pi(g_phi, node);
+          __global Float* pi = Pi(g_pi, node);
+          __global Float* phi = Pi(g_phi, node);
           Float eps_t = get_eps_t(step_count);
           uint lid = get_local_id(0);
           uint lsize = get_local_size(0);
@@ -116,7 +116,7 @@ const std::string kSourcePhiWg =
           }
           for (uint i = 0; i < NUM_NEIGHBORS; ++i) {
             Vertex neighbor = neighbors[i];
-            Float* pi_neighbor = Pi(g_pi, neighbor);
+            __global Float* pi_neighbor = Pi(g_pi, neighbor);
             Edge edge = MakeEdge(min(node, neighbor), max(node, neighbor));
             bool y = Set_HasEdge(edge_set, edge);
             Float e = (y == 1 ? EPSILON : 1.0 - EPSILON);
@@ -162,7 +162,7 @@ const std::string kSourcePhiWg =
           scratch += i * K;
           for (; i < num_mini_batch_nodes; i += gsize) {
             Vertex node = mini_batch_nodes[i];
-            Vertex* node_neighbors = neighbors + i * NUM_NEIGHBORS;
+            __global Vertex* node_neighbors = neighbors + i * NUM_NEIGHBORS;
             update_phi_for_nodeWG(g_beta, g_pi, g_phi, training_edge_set, node,
                                   node_neighbors, step_count, grads, probs,
                                   scratch, aux);
@@ -171,20 +171,22 @@ const std::string kSourcePhiWg =
 
         __kernel void update_pi(__global Float* g_pi, __global Float* g_phi,
                                 __global Vertex* mini_batch_nodes,
-                                uint num_mini_batch_nodes) {
-          uint i = get_global_id(0);
-          uint gsize = get_global_size(0);
+                                uint num_mini_batch_nodes,
+                                __global Float* scratch,
+                                __local Float* aux) {
+          uint i = get_group_id(0);
+          uint gsize = get_num_groups(0);
+          uint lid = get_local_id(0);
+          uint lsize = get_local_size(0);
           for (; i < num_mini_batch_nodes; i += gsize) {
             Vertex n = mini_batch_nodes[i];
-            Float* pi = Pi(g_pi, n);
-            Float* phi = Pi(g_phi, n);
-            Float sum = 0;
-            for (uint k = 0; k < K; ++k) {
-              sum += phi[k];
+            __global Float* pi = Pi(g_pi, n);
+            __global Float* phi = Pi(g_phi, n);
+            for (uint k = lid; k < K; k += lsize) {
+              pi[k] = phi[k];
             }
-            for (uint k = 0; k < K; ++k) {
-              pi[k] = phi[k] / sum;
-            }
+            barrier(CLK_GLOBAL_MEM_FENCE);
+            WG_NORMALIZE_float(pi, scratch, aux, K);
           }
         }
 
@@ -203,8 +205,8 @@ PhiUpdater::PhiUpdater(const Config& cfg, compute::command_queue queue,
       phi_(phi),
       trainingSet_(trainingSet),
       count_calls_(0),
-      local_(32),
-      global_(32),
+      local_(256),
+      global_(1024 * local_),
       grads_(global_ * cfg.K, queue_.get_context()),
       probs_(global_ * cfg.K, queue_.get_context()),
       scratch_(global_ * cfg.K, queue_.get_context()) {
@@ -231,6 +233,10 @@ PhiUpdater::PhiUpdater(const Config& cfg, compute::command_queue queue,
   pi_kernel_ = prog_.create_kernel("update_pi");
   pi_kernel_.set_arg(0, pi_);
   pi_kernel_.set_arg(1, phi_);
+  if (1) {
+    pi_kernel_.set_arg(4, scratch_);
+    pi_kernel_.set_arg(5, cfg.K * sizeof(Float), 0);
+  }
 }
 
 void PhiUpdater::operator()(
@@ -244,10 +250,12 @@ void PhiUpdater::operator()(
   phi_kernel_.set_arg(7, count_calls_);
   event_ = queue_.enqueue_1d_range_kernel(phi_kernel_, 0, global_, local_);
   event_.wait();
+  LOG(INFO) << event_.duration<boost::chrono::nanoseconds>().count();
   pi_kernel_.set_arg(2, mini_batch_nodes);
   pi_kernel_.set_arg(3, num_mini_batch_nodes);
   event_ = queue_.enqueue_1d_range_kernel(pi_kernel_, 0, global_, local_);
   event_.wait();
+  LOG(INFO) << event_.duration<boost::chrono::nanoseconds>().count();
 }
 
 }  // namespace mcmc
