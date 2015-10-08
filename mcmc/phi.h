@@ -9,7 +9,9 @@ namespace mcmc {
 
 class PhiUpdater {
  public:
-  PhiUpdater(const Config& cfg, compute::command_queue queue,
+  enum Mode { NODE_PER_THREAD, NODE_PER_WORKGROUP };
+
+  PhiUpdater(Mode mode, const Config& cfg, compute::command_queue queue,
              compute::vector<Float>& beta, compute::vector<Float>& pi,
              compute::vector<Float>& phi, OpenClSet* trainingSet,
              const std::string& compileFlags, const std::string& baseFuncs);
@@ -20,6 +22,7 @@ class PhiUpdater {
       uint32_t num_mini_batch_nodes);
 
  private:
+  Mode mode_;
   compute::command_queue queue_;
   compute::event event_;
 
@@ -33,7 +36,8 @@ class PhiUpdater {
   compute::kernel pi_kernel_;
 
   uint32_t count_calls_;
-  uint32_t local_, global_;  // not used FIXME
+  uint32_t k_;
+  uint32_t local_;
   
   compute::vector<Float> grads_;  // [mini_batch, K]
   compute::vector<Float> probs_;  // [mini_batch, K]

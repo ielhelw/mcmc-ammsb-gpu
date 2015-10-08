@@ -5,14 +5,16 @@
 #include "mcmc/algorithm/sum.h"
 #include "mcmc/algorithm/normalize.h"
 
+namespace mcmc {
+
 const std::string kSourcePhi = BOOST_COMPUTE_STRINGIZE_SOURCE(
 
     void update_phi_for_node(__global Float* beta, __global Float* g_pi,
                              __global Float* g_phi, __global Set* edge_set,
                              Vertex node, __global Vertex* neighbors,
                              uint step_count,
-                             Float* grads,  // K
-                             Float* probs   // K
+                             __global Float* grads,  // K
+                             __global Float* probs   // K
                              ) {
       __global Float* pi = Pi(g_pi, node);
       __global Float* phi = Pi(g_phi, node);
@@ -91,7 +93,9 @@ const std::string kSourcePhi = BOOST_COMPUTE_STRINGIZE_SOURCE(
     );
 
 const std::string kSourcePhiWg =
-    mcmc::algorithm::WorkGroupNormalizeProgram("float") + "\n" +
+    mcmc::algorithm::WorkGroupNormalizeProgram(compute::type_name<Float>()) + "\n" +
+    "#define WG_SUM_Float WG_SUM_" + compute::type_name<Float>() + "\n"
+    "#define WG_NORMALIZE_Float WG_NORMALIZE_" + compute::type_name<Float>() + "\n"
     BOOST_COMPUTE_STRINGIZE_SOURCE(
 
         void update_phi_for_nodeWG(__global Float* beta, __global Float* g_pi,
@@ -108,7 +112,7 @@ const std::string kSourcePhiWg =
           uint lid = get_local_id(0);
           uint lsize = get_local_size(0);
           // phi sum
-          WG_SUM_float(phi, scratch, aux, K);
+          WG_SUM_Float(phi, scratch, aux, K);
           Float phi_sum = scratch[0];
           // reset grads
           for (uint k = lid; k < K; k += lsize) {
@@ -127,14 +131,15 @@ const std::string kSourcePhiWg =
               probs[k] = probs_k;
             }
             // probs sum
-            WG_SUM_float(probs, scratch, aux, K);
+            barrier(CLK_GLOBAL_MEM_FENCE);
+            WG_SUM_Float(probs, scratch, aux, K);
             Float probs_sum = scratch[0];
-
             for (uint k = lid; k < K; k += lsize) {
               grads[k] += (probs[k] / probs_sum) / phi[k] - 1.0 / phi_sum;
             }
           }
           Float Nn = (1.0 * N) / NUM_NEIGHBORS;
+          barrier(CLK_GLOBAL_MEM_FENCE);
           for (uint k = lid; k < K; k += lsize) {
             Float noise = 1;  // randn();  FIXME
             Float phi_k = phi[k];
@@ -178,6 +183,7 @@ const std::string kSourcePhiWg =
           uint gsize = get_num_groups(0);
           uint lid = get_local_id(0);
           uint lsize = get_local_size(0);
+          scratch += i * K;
           for (; i < num_mini_batch_nodes; i += gsize) {
             Vertex n = mini_batch_nodes[i];
             __global Float* pi = Pi(g_pi, n);
@@ -186,31 +192,64 @@ const std::string kSourcePhiWg =
               pi[k] = phi[k];
             }
             barrier(CLK_GLOBAL_MEM_FENCE);
-            WG_NORMALIZE_float(pi, scratch, aux, K);
+            WG_NORMALIZE_Float(pi, scratch, aux, K);
           }
         }
 
         );
 
-namespace mcmc {
+std::ostream& kernel_info(std::ostream& out, compute::kernel& kernel, const compute::device& dev) {
+#if 0
+  std::vector<size_t> global_size = {0, 0, 0};
+  try {
+    kernel.get_work_group_info<std::vector<size_t>>(dev, CL_KERNEL_GLOBAL_WORK_SIZE);
+  } catch (...) {}
+#endif
+  out
+    << "KERNEL INFO: "
+    << kernel.name() << std::endl
+#if 0
+    << "CL_KERNEL_GLOBAL_WORK_SIZE = "
+    << global_size[0] << ", " << global_size[1] << ", " << global_size[2] << std::endl
+#endif
+    << "CL_KERNEL_WORK_GROUP_SIZE = "
+    << kernel.get_work_group_info<size_t>(dev, CL_KERNEL_WORK_GROUP_SIZE) << std::endl
+    << "CL_KERNEL_LOCAL_MEM_SIZE = "
+    << kernel.get_work_group_info<compute::ulong_>(dev, CL_KERNEL_LOCAL_MEM_SIZE) << std::endl
+    << "CL_KERNEL_PRIVATE_MEM_SIZE = "
+    << kernel.get_work_group_info<compute::ulong_>(dev, CL_KERNEL_PRIVATE_MEM_SIZE) << std::endl;
+  return out;
+}
 
-PhiUpdater::PhiUpdater(const Config& cfg, compute::command_queue queue,
+PhiUpdater::PhiUpdater(Mode mode, const Config& cfg, compute::command_queue queue,
                        compute::vector<Float>& beta, compute::vector<Float>& pi,
                        compute::vector<Float>& phi, OpenClSet* trainingSet,
                        const std::string& compileFlags,
                        const std::string& baseFuncs)
-    : queue_(queue),
+    : mode_(mode),
+      queue_(queue),
       beta_(beta),
       pi_(pi),
       phi_(phi),
       trainingSet_(trainingSet),
       count_calls_(0),
-      local_(256),
-      global_(1024 * local_),
-      grads_(global_ * cfg.K, queue_.get_context()),
-      probs_(global_ * cfg.K, queue_.get_context()),
-      scratch_(global_ * cfg.K, queue_.get_context()) {
-  prog_ = compute::program::create_with_source(baseFuncs + kSourcePhiWg,
+      k_(cfg.K),
+      local_(cfg.phi_wg_size),
+      grads_(std::min(cfg.N, 2 * cfg.mini_batch_size) * cfg.K, queue_.get_context()),
+      probs_(grads_.size(), queue_.get_context()) {
+  const std::string* src = nullptr;
+  switch (mode_) {
+    case NODE_PER_THREAD:
+      src = &kSourcePhi;
+      break;
+    case NODE_PER_WORKGROUP:
+      src = &kSourcePhiWg;
+      scratch_ = compute::vector<Float>(grads_.size(), queue_.get_context());
+      break;
+    default:
+     LOG(FATAL) << "Cannot recognize mode";
+  }
+  prog_ = compute::program::create_with_source(baseFuncs + *src,
                                                queue_.get_context());
   try {
     prog_.build(compileFlags);
@@ -225,7 +264,7 @@ PhiUpdater::PhiUpdater(const Config& cfg, compute::command_queue queue,
 
   phi_kernel_.set_arg(8, grads_);
   phi_kernel_.set_arg(9, probs_);
-  if (1) {
+  if (mode_ == NODE_PER_WORKGROUP) {
     phi_kernel_.set_arg(10, scratch_);
     phi_kernel_.set_arg(11, cfg.K * sizeof(Float), 0);
   }
@@ -233,27 +272,34 @@ PhiUpdater::PhiUpdater(const Config& cfg, compute::command_queue queue,
   pi_kernel_ = prog_.create_kernel("update_pi");
   pi_kernel_.set_arg(0, pi_);
   pi_kernel_.set_arg(1, phi_);
-  if (1) {
+  if (mode_ == NODE_PER_WORKGROUP) {
     pi_kernel_.set_arg(4, scratch_);
     pi_kernel_.set_arg(5, cfg.K * sizeof(Float), 0);
   }
+  kernel_info(LOG(INFO), phi_kernel_, queue_.get_device());
+  kernel_info(LOG(INFO), pi_kernel_, queue_.get_device());
 }
 
 void PhiUpdater::operator()(
     compute::vector<Vertex>& mini_batch_nodes,  // [X <= 2*MINI_BATCH_SIZE]
     compute::vector<Vertex>& neighbors,  // [MINI_BATCH_NODES, NUM_NEIGHBORS]
     uint32_t num_mini_batch_nodes) {
+  LOG_IF(FATAL, grads_.size() < num_mini_batch_nodes * k_) << "grads too small";
+  LOG_IF(FATAL, probs_.size() < num_mini_batch_nodes * k_) << "probs too small";
+  LOG_IF(FATAL, mode_ == NODE_PER_WORKGROUP && scratch_.size() < num_mini_batch_nodes * k_) << "scratch too small";
   ++count_calls_;
+  uint32_t global = (num_mini_batch_nodes / local_ +
+    (num_mini_batch_nodes % local_ ? 1 : 0)) * local_;
   phi_kernel_.set_arg(4, mini_batch_nodes);
   phi_kernel_.set_arg(5, neighbors);
   phi_kernel_.set_arg(6, num_mini_batch_nodes);
   phi_kernel_.set_arg(7, count_calls_);
-  event_ = queue_.enqueue_1d_range_kernel(phi_kernel_, 0, global_, local_);
+  event_ = queue_.enqueue_1d_range_kernel(phi_kernel_, 0, global, local_);
   event_.wait();
   LOG(INFO) << event_.duration<boost::chrono::nanoseconds>().count();
   pi_kernel_.set_arg(2, mini_batch_nodes);
   pi_kernel_.set_arg(3, num_mini_batch_nodes);
-  event_ = queue_.enqueue_1d_range_kernel(pi_kernel_, 0, global_, local_);
+  event_ = queue_.enqueue_1d_range_kernel(pi_kernel_, 0, global, local_);
   event_.wait();
   LOG(INFO) << event_.duration<boost::chrono::nanoseconds>().count();
 }

@@ -26,6 +26,7 @@ struct Config {
   std::unique_ptr<mcmc::Set> heldout;
 
   uint32_t ppx_wg_size;
+  uint32_t phi_wg_size;
 };
 
 std::ostream& operator<<(std::ostream& out, const Config& cfg);

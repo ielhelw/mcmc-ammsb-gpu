@@ -49,6 +49,7 @@ int main(int argc, char **argv) {
     ("mini_batch,m", po::value(&cfg.mini_batch_size)->default_value(32))
     ("neighbors,n", po::value(&cfg.num_node_sample)->default_value(32))
     ("ppx-wg", po::value(&cfg.ppx_wg_size)->default_value(32))
+    ("phi-wg", po::value(&cfg.phi_wg_size)->default_value(32))
   ;
   po::variables_map options_vm;
   po::store(po::parse_command_line(argc, argv, options), options_vm);

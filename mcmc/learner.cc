@@ -53,8 +53,8 @@ Learner::Learner(const Config& cfg, compute::command_queue queue)
       heldoutPerplexity_(PerplexityCalculator::EDGE_PER_WORKGROUP, cfg_, queue_,
                          beta_, pi_, heldoutEdges_, heldoutSet_.get(),
                          compileFlags_, kSourceBaseFuncs),
-      phiUpdater_(cfg_, queue_, beta_, pi_, phi_, trainingSet_.get(),
-                  compileFlags_, kSourceBaseFuncs) {
+      phiUpdater_(PhiUpdater::NODE_PER_WORKGROUP, cfg_, queue_, beta_, pi_, phi_,
+                  trainingSet_.get(), compileFlags_, kSourceBaseFuncs) {
   // gamma generator
   std::mt19937 mt19937;
   std::gamma_distribution<Float> gamma_distribution(cfg_.eta0, cfg_.eta1);
@@ -75,12 +75,10 @@ Learner::Learner(const Config& cfg, compute::command_queue queue)
 
 void Learner::run() {
   uint32_t step_count = 1;
-  for (; step_count < 10; ++step_count) {
+  for (; step_count < 3; ++step_count) {
     LOG(INFO) << "ppx[" << step_count << "] = " << heldoutPerplexity_();
-    uint32_t nn = 0;
-    std::vector<uint> hmbn(cfg_.N);
-    std::generate(hmbn.begin(), hmbn.end(), [&nn]() { return nn++; });
-
+    std::vector<uint> hmbn(cfg_.mini_batch_size);
+    std::generate(hmbn.begin(), hmbn.end(), [this]() { return rand() % cfg_.N; });
     std::vector<uint> hn(hmbn.size() * cfg_.num_node_sample);
     std::generate(hn.begin(), hn.end(), [this]() { return rand() % cfg_.N; });
     compute::vector<uint> mbn(hmbn.begin(), hmbn.end(), queue_);
