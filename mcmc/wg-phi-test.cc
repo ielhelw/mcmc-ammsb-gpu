@@ -79,6 +79,7 @@ class WgPhiTest : public ContextTest,
   }
 
   void Run(PhiUpdater::Mode mode) {
+    Float delta = 1.0 / cfg_.K;
     PhiUpdater updater(mode, cfg_, queue_,
         beta_, pi_, phi_, dev_set_.get(),
         MakeCompileFlags(cfg_), Learner::GetBaseFuncs());
@@ -90,11 +91,21 @@ class WgPhiTest : public ContextTest,
     std::generate(hn.begin(), hn.end(), [this]() { return rand() % cfg_.N; });
     compute::vector<uint> mbn(hmbn.begin(), hmbn.end(), queue_);
     compute::vector<uint> n(hn.begin(), hn.end(), queue_);
+    std::vector<Float> host_pi_tmp(pi_.size());
+    std::vector<Float> host_pi(pi_.size());
     double time = 0;
     for (uint32_t i = 0; i < num_tries_; ++i) {
       Reset();
       updater(mbn, n, static_cast<uint32_t>(mbn.size()));
       time += updater.LastInvocationTime();
+      if (i == 0) {
+        compute::copy(pi_.begin(), pi_.end(), host_pi.begin(), queue_);
+      } else {
+        compute::copy(pi_.begin(), pi_.end(), host_pi_tmp.begin(), queue_);
+        for (uint32_t k = 0; k < host_pi.size(); ++k) {
+          ASSERT_NEAR(host_pi[k], host_pi_tmp[k], delta);
+        }
+      }
     }
     LOG(INFO) << "WG=" << cfg_.phi_wg_size << ", nano=" << time / num_tries_;
   }
