@@ -17,13 +17,23 @@ namespace mcmc {
 
 class Learner {
  public:
-  static const std::string kSourceBaseFuncs;
-
   Learner(const Config& cfg, compute::command_queue queue);
 
   Float calculate_perplexity_heldout(uint32_t step_count);
 
   void run();
+
+  // Generate base->size() elements in base. Normalized the first num_rows*K in norm.
+  template <class Generator>
+  static void GenerateAndNormalize(
+      compute::command_queue* queue,
+      Generator* gen,
+      compute::vector<Float>* base,
+      compute::vector<Float>* norm,
+      uint32_t num_rows,
+      uint32_t K);
+
+  static const std::string& GetBaseFuncs();
 
  private:
   const Config& cfg_;
@@ -47,6 +57,21 @@ class Learner {
   PerplexityCalculator heldoutPerplexity_;
   PhiUpdater phiUpdater_;
 };
+
+template <class Generator>
+void Learner::GenerateAndNormalize(
+    compute::command_queue* queue,
+    Generator* gen,
+    compute::vector<Float>* base,
+    compute::vector<Float>* norm,
+    uint32_t num_rows,
+    uint32_t K) {
+  std::vector<Float> host_base(base->size());
+  std::generate(host_base.begin(), host_base.end(), *gen);
+  compute::copy(host_base.begin(), host_base.end(), base->begin(), *queue);
+  compute::copy(base->begin(), base->begin() + K * num_rows, norm->begin(), *queue);
+  mcmc::algorithm::Normalizer<Float>(*queue, norm, K, 32)();
+}
 
 }  // namespace mcmc
 

@@ -276,8 +276,8 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg, compute::command_queue queu
     pi_kernel_.set_arg(4, scratch_);
     pi_kernel_.set_arg(5, cfg.K * sizeof(Float), 0);
   }
-  kernel_info(LOG(INFO), phi_kernel_, queue_.get_device());
-  kernel_info(LOG(INFO), pi_kernel_, queue_.get_device());
+//  kernel_info(LOG(INFO), phi_kernel_, queue_.get_device());
+//  kernel_info(LOG(INFO), pi_kernel_, queue_.get_device());
 }
 
 void PhiUpdater::operator()(
@@ -294,14 +294,19 @@ void PhiUpdater::operator()(
   phi_kernel_.set_arg(5, neighbors);
   phi_kernel_.set_arg(6, num_mini_batch_nodes);
   phi_kernel_.set_arg(7, count_calls_);
-  event_ = queue_.enqueue_1d_range_kernel(phi_kernel_, 0, global, local_);
-  event_.wait();
-  LOG(INFO) << event_.duration<boost::chrono::nanoseconds>().count();
+  phi_event_ = queue_.enqueue_1d_range_kernel(phi_kernel_, 0, global, local_);
+  phi_event_.wait();
+  LOG(INFO) << phi_event_.duration<boost::chrono::nanoseconds>().count();
   pi_kernel_.set_arg(2, mini_batch_nodes);
   pi_kernel_.set_arg(3, num_mini_batch_nodes);
-  event_ = queue_.enqueue_1d_range_kernel(pi_kernel_, 0, global, local_);
-  event_.wait();
-  LOG(INFO) << event_.duration<boost::chrono::nanoseconds>().count();
+  pi_event_ = queue_.enqueue_1d_range_kernel(pi_kernel_, 0, global, local_);
+  pi_event_.wait();
+  LOG(INFO) << pi_event_.duration<boost::chrono::nanoseconds>().count();
+}
+
+uint64_t PhiUpdater::LastInvocationTime() const {
+  return phi_event_.duration<boost::chrono::nanoseconds>().count() +
+         pi_event_.duration<boost::chrono::nanoseconds>().count();
 }
 
 }  // namespace mcmc

@@ -20,11 +20,14 @@ class PhiUpdater {
       compute::vector<Vertex>& mini_batch_nodes,  // [X <= 2*MINI_BATCH_SIZE]
       compute::vector<Vertex>& neighbors,  // [MINI_BATCH_NODES, NUM_NEIGHBORS]
       uint32_t num_mini_batch_nodes);
+  
+  uint64_t LastInvocationTime() const;
 
  private:
   Mode mode_;
   compute::command_queue queue_;
-  compute::event event_;
+  compute::event phi_event_;
+  compute::event pi_event_;
 
   compute::vector<Float>& beta_;  // [K]
   compute::vector<Float>& pi_;    // [N,K]

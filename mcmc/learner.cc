@@ -8,7 +8,8 @@
 
 namespace mcmc {
 
-const std::string Learner::kSourceBaseFuncs =
+const std::string& Learner::GetBaseFuncs() {
+  static const std::string kSourceBaseFuncs =
     GetSourceGuard() + "\n" + OpenClSetFactory::GetHeader() + "\n" +
     std::string(compute::type_name<Float>() == std::string("double") ? "#pragma OPENCL EXTENSION cl_khr_fp64: enable \n" : "") +
     BOOST_COMPUTE_STRINGIZE_SOURCE(
@@ -33,6 +34,8 @@ const std::string Learner::kSourceBaseFuncs =
         }
 
         );
+ return kSourceBaseFuncs;
+}
 
 Learner::Learner(const Config& cfg, compute::command_queue queue)
     : cfg_(cfg),
@@ -52,33 +55,26 @@ Learner::Learner(const Config& cfg, compute::command_queue queue)
       compileFlags_(MakeCompileFlags(cfg_)),
       heldoutPerplexity_(PerplexityCalculator::EDGE_PER_WORKGROUP, cfg_, queue_,
                          beta_, pi_, heldoutEdges_, heldoutSet_.get(),
-                         compileFlags_, kSourceBaseFuncs),
+                         compileFlags_, GetBaseFuncs()),
       phiUpdater_(PhiUpdater::NODE_PER_WORKGROUP, cfg_, queue_, beta_, pi_, phi_,
-                  trainingSet_.get(), compileFlags_, kSourceBaseFuncs) {
+                  trainingSet_.get(), compileFlags_, GetBaseFuncs()) {
   // gamma generator
   std::mt19937 mt19937;
   std::gamma_distribution<Float> gamma_distribution(cfg_.eta0, cfg_.eta1);
   auto gamma = std::bind(gamma_distribution, mt19937);
-  // generate theta
-  std::vector<Float> host_theta(theta_.size());
-  std::generate(host_theta.begin(), host_theta.end(), gamma);
-  compute::copy(host_theta.begin(), host_theta.end(), theta_.begin(), queue_);
-  compute::copy(theta_.begin(), theta_.begin() + cfg_.K, beta_.begin(), queue_);
-  mcmc::algorithm::Normalizer<Float>(queue_, &beta_, cfg_.K, 32)();
-  // generate phi
-  std::vector<Float> host_phi(phi_.size());
-  std::generate(host_phi.begin(), host_phi.end(), gamma);
-  compute::copy(host_phi.begin(), host_phi.end(), phi_.begin(), queue_);
-  compute::copy(phi_.begin(), phi_.end(), pi_.begin(), queue_);
-  mcmc::algorithm::Normalizer<Float>(queue_, &pi_, cfg_.K, 32)();
+  GenerateAndNormalize(&queue_, &gamma, &theta_, &beta_, 1, cfg_.K);
+  GenerateAndNormalize(&queue_, &gamma, &phi_, &pi_, cfg_.N, cfg_.K);
 }
 
 void Learner::run() {
   uint32_t step_count = 1;
   for (; step_count < 3; ++step_count) {
     LOG(INFO) << "ppx[" << step_count << "] = " << heldoutPerplexity_();
-    std::vector<uint> hmbn(cfg_.mini_batch_size);
-    std::generate(hmbn.begin(), hmbn.end(), [this]() { return rand() % cfg_.N; });
+    std::set<uint> set;
+    while (set.size() < cfg_.mini_batch_size) {
+      set.insert(rand() % cfg_.N);
+    }
+    std::vector<uint> hmbn(set.begin(), set.end());
     std::vector<uint> hn(hmbn.size() * cfg_.num_node_sample);
     std::generate(hn.begin(), hn.end(), [this]() { return rand() % cfg_.N; });
     compute::vector<uint> mbn(hmbn.begin(), hmbn.end(), queue_);

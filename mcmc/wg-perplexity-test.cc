@@ -83,7 +83,7 @@ TEST_P(WgPerplexityTest, Equal) {
   mcmc::PerplexityCalculator ppxSimple(mcmc::PerplexityCalculator::EDGE_PER_THREAD,
                                  cfg_, queue_, dev_beta_, dev_pi_, dev_edges_,
                                  dev_set_.get(), MakeCompileFlags(cfg_),
-                                 Learner::kSourceBaseFuncs);
+                                 Learner::GetBaseFuncs());
   Float error = 0.15;
   Float ppx1 = ppxSimple();
   double ppx1_time = 0;
@@ -98,7 +98,7 @@ TEST_P(WgPerplexityTest, Equal) {
   mcmc::PerplexityCalculator ppxWg(mcmc::PerplexityCalculator::EDGE_PER_WORKGROUP,
                                  cfg_, queue_, dev_beta_, dev_pi_, dev_edges_,
                                  dev_set_.get(), MakeCompileFlags(cfg_),
-                                 Learner::kSourceBaseFuncs);
+                                 Learner::GetBaseFuncs());
   Float ppx2 = ppxWg();
   double ppx2_time = 0;
   double ppx2_total_time = 0;
