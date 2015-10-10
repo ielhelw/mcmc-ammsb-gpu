@@ -27,6 +27,7 @@ struct Config {
 
   uint32_t ppx_wg_size;
   uint32_t phi_wg_size;
+  uint32_t beta_wg_size;
 
   Config() {
     heldout_ratio = 0.01;
@@ -42,6 +43,7 @@ struct Config {
     num_node_sample = 32;
     ppx_wg_size = 32;
     phi_wg_size = 32;
+    beta_wg_size = 32;
   }
 };
 

@@ -39,6 +39,7 @@ add_library(mcmc SHARED
   mcmc/algorithm/sum.cc
   mcmc/algorithm/normalize.cc
   mcmc/phi.cc
+  mcmc/beta.cc
   mcmc/perplexity.cc
   mcmc/learner.cc
   mcmc/config.cc
@@ -81,3 +82,7 @@ add_test(wg-perplexity-test wg-perplexity-test)
 add_executable(wg-phi-test mcmc/wg-phi-test.cc)
 target_link_libraries(wg-phi-test mcmc ${GTEST_BOTH_LIBRARIES})
 add_test(wg-phi-test wg-phi-test)
+
+add_executable(wg-beta-test mcmc/wg-beta-test.cc)
+target_link_libraries(wg-beta-test mcmc ${GTEST_BOTH_LIBRARIES})
+add_test(wg-beta-test wg-beta-test)

@@ -93,10 +93,12 @@ const std::string kSourcePhi = BOOST_COMPUTE_STRINGIZE_SOURCE(
     );
 
 const std::string kSourcePhiWg =
-    mcmc::algorithm::WorkGroupNormalizeProgram(compute::type_name<Float>()) + "\n" +
-    "#define WG_SUM_Float WG_SUM_" + compute::type_name<Float>() + "\n"
-    "#define WG_NORMALIZE_Float WG_NORMALIZE_" + compute::type_name<Float>() + "\n"
-    BOOST_COMPUTE_STRINGIZE_SOURCE(
+    mcmc::algorithm::WorkGroupNormalizeProgram(compute::type_name<Float>()) +
+    "\n" + "#define WG_SUM_Float WG_SUM_" + compute::type_name<Float>() +
+    "\n"
+    "#define WG_NORMALIZE_Float WG_NORMALIZE_" +
+    compute::type_name<Float>() +
+    "\n" BOOST_COMPUTE_STRINGIZE_SOURCE(
 
         void update_phi_for_nodeWG(__global Float* beta, __global Float* g_pi,
                                    __global Float* g_phi,
@@ -177,8 +179,7 @@ const std::string kSourcePhiWg =
         __kernel void update_pi(__global Float* g_pi, __global Float* g_phi,
                                 __global Vertex* mini_batch_nodes,
                                 uint num_mini_batch_nodes,
-                                __global Float* scratch,
-                                __local Float* aux) {
+                                __global Float* scratch, __local Float* aux) {
           uint i = get_group_id(0);
           uint gsize = get_num_groups(0);
           uint lid = get_local_id(0);
@@ -198,30 +199,8 @@ const std::string kSourcePhiWg =
 
         );
 
-std::ostream& kernel_info(std::ostream& out, compute::kernel& kernel, const compute::device& dev) {
-#if 0
-  std::vector<size_t> global_size = {0, 0, 0};
-  try {
-    kernel.get_work_group_info<std::vector<size_t>>(dev, CL_KERNEL_GLOBAL_WORK_SIZE);
-  } catch (...) {}
-#endif
-  out
-    << "KERNEL INFO: "
-    << kernel.name() << std::endl
-#if 0
-    << "CL_KERNEL_GLOBAL_WORK_SIZE = "
-    << global_size[0] << ", " << global_size[1] << ", " << global_size[2] << std::endl
-#endif
-    << "CL_KERNEL_WORK_GROUP_SIZE = "
-    << kernel.get_work_group_info<size_t>(dev, CL_KERNEL_WORK_GROUP_SIZE) << std::endl
-    << "CL_KERNEL_LOCAL_MEM_SIZE = "
-    << kernel.get_work_group_info<compute::ulong_>(dev, CL_KERNEL_LOCAL_MEM_SIZE) << std::endl
-    << "CL_KERNEL_PRIVATE_MEM_SIZE = "
-    << kernel.get_work_group_info<compute::ulong_>(dev, CL_KERNEL_PRIVATE_MEM_SIZE) << std::endl;
-  return out;
-}
-
-PhiUpdater::PhiUpdater(Mode mode, const Config& cfg, compute::command_queue queue,
+PhiUpdater::PhiUpdater(Mode mode, const Config& cfg,
+                       compute::command_queue queue,
                        compute::vector<Float>& beta, compute::vector<Float>& pi,
                        compute::vector<Float>& phi, OpenClSet* trainingSet,
                        const std::string& compileFlags,
@@ -235,7 +214,8 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg, compute::command_queue queu
       count_calls_(0),
       k_(cfg.K),
       local_(cfg.phi_wg_size),
-      grads_(std::min(cfg.N, 2 * cfg.mini_batch_size) * cfg.K, queue_.get_context()),
+      grads_(std::min(cfg.N, 2 * cfg.mini_batch_size) * cfg.K,
+             queue_.get_context()),
       probs_(grads_.size(), queue_.get_context()) {
   const std::string* src = nullptr;
   switch (mode_) {
@@ -247,7 +227,7 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg, compute::command_queue queu
       scratch_ = compute::vector<Float>(grads_.size(), queue_.get_context());
       break;
     default:
-     LOG(FATAL) << "Cannot recognize mode";
+      LOG(FATAL) << "Cannot recognize mode";
   }
   prog_ = compute::program::create_with_source(baseFuncs + *src,
                                                queue_.get_context());
@@ -276,8 +256,6 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg, compute::command_queue queu
     pi_kernel_.set_arg(4, scratch_);
     pi_kernel_.set_arg(5, cfg.K * sizeof(Float), 0);
   }
-//  kernel_info(LOG(INFO), phi_kernel_, queue_.get_device());
-//  kernel_info(LOG(INFO), pi_kernel_, queue_.get_device());
 }
 
 void PhiUpdater::operator()(
@@ -286,10 +264,13 @@ void PhiUpdater::operator()(
     uint32_t num_mini_batch_nodes) {
   LOG_IF(FATAL, grads_.size() < num_mini_batch_nodes * k_) << "grads too small";
   LOG_IF(FATAL, probs_.size() < num_mini_batch_nodes * k_) << "probs too small";
-  LOG_IF(FATAL, mode_ == NODE_PER_WORKGROUP && scratch_.size() < num_mini_batch_nodes * k_) << "scratch too small";
+  LOG_IF(FATAL, mode_ == NODE_PER_WORKGROUP &&
+                    scratch_.size() < num_mini_batch_nodes * k_)
+      << "scratch too small";
   ++count_calls_;
   uint32_t global = (num_mini_batch_nodes / local_ +
-    (num_mini_batch_nodes % local_ ? 1 : 0)) * local_;
+                     (num_mini_batch_nodes % local_ ? 1 : 0)) *
+                    local_;
   phi_kernel_.set_arg(4, mini_batch_nodes);
   phi_kernel_.set_arg(5, neighbors);
   phi_kernel_.set_arg(6, num_mini_batch_nodes);
