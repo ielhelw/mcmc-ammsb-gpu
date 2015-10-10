@@ -50,9 +50,8 @@ class OpenClRandomFactory
   uint64_t sizeOfRandom_;
 };
 
-namespace internal {
-const std::string& GetRandomTypes();
-}
+const std::string GetRandomTypes();
+const std::string GetRandomHeader();
 
 }  // namespapce random
 }  // namespace mcmc

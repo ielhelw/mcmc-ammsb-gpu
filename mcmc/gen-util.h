@@ -12,6 +12,8 @@ std::string MakeHeaderFromTemplate(const std::string& guard,
                                    const std::string& pattern,
                                    const std::string& replacement);
 
+std::string MakeHeader(const std::string& guard, const std::string& source);
+
 }  // namespace gen
 }  // namespace mcmc
 

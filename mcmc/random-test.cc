@@ -11,9 +11,11 @@
 
 using namespace mcmc::random;
 namespace compute = boost::compute;
+using mcmc::Float;
 
 const std::string kSource =
-    ::mcmc::random::internal::GetRandomTypes() +
+    ::mcmc::random::GetRandomHeader() +
+
     BOOST_COMPUTE_STRINGIZE_SOURCE(
         __kernel void test(__global void* vrand, __global ulong* ok) {
           __global Random* rand = (__global Random*)vrand;
@@ -21,7 +23,7 @@ const std::string kSource =
             *ok = 0;
             return;
           }
-          if (rand->num_seeds != 10) {
+          if (rand->num_seeds != 1000) {
             *ok = 0;
             return;
           }
@@ -32,6 +34,21 @@ const std::string kSource =
             }
           }
           *ok = 1;
+        }
+
+        __kernel void generate(
+            __global void* vrand,
+            __global Float* data,  // [#threads * K]
+            uint K
+            ) {
+          uint gid = get_global_id(0);
+          data += gid * K;
+          __global Random* rand = (__global Random*)vrand;
+          random_seed_t seed = rand->base_[gid];
+          for (uint i = 0; i < K; ++i) {
+            data[i] = randn(&seed);
+          }
+          rand->base_[gid] = seed;
         });
 
 TEST(RandomTest, Check) {
@@ -42,7 +59,7 @@ TEST(RandomTest, Check) {
   random_seed_t seed;
   seed[0] = 42;
   seed[1] = 43;
-  std::vector<random_seed_t> host(10);
+  std::vector<random_seed_t> host(1000);
   auto factory = OpenClRandomFactory::New(queue);
   std::unique_ptr<OpenClRandom> random(
       factory->CreateRandom(host.size(), seed));
@@ -69,4 +86,23 @@ TEST(RandomTest, Check) {
   std::vector<uint64_t> ok(dev_ok.size(), 0);
   compute::copy(dev_ok.begin(), dev_ok.end(), ok.begin(), queue);
   ASSERT_EQ(1, ok[0]);
+  uint32_t K = 10000;
+  compute::vector<Float> data(host.size() * K, context);
+  compute::kernel generate = prog.create_kernel("generate");
+  generate.set_arg(0, random->Get());
+  generate.set_arg(1, data);
+  generate.set_arg(2, K);
+  e = queue.enqueue_1d_range_kernel(generate, 0, host.size(), 0);
+  e.wait();
+  std::vector<Float> hdata(data.size());
+  compute::copy(data.begin(), data.end(), hdata.begin(), queue);
+  Float sum = 0;
+  for (auto v : hdata) sum += v;
+  Float mean = sum / hdata.size();
+  Float sum_square_diff = 0;
+  for (auto v : hdata) {
+    sum_square_diff += std::pow(v - mean, 2);
+  }
+  Float stdev = std::sqrt(sum_square_diff / hdata.size());
+  LOG(INFO) << "MEAN = " << mean << ", STDEV = " << stdev;
 }

@@ -1,7 +1,11 @@
-namespace internal {
 
-const std::string& GetRandomHeader() {
-  static const std::string kClRandomHeader = GetRandomTypes() + BOOST_COMPUTE_STRINGIZE_SOURCE(
+const std::string GetRandomHeader() {
+  static const std::string kClRandomHeader = GetClTypes() + GetRandomTypes() +
+"#define PARAM_R 3.44428647676 \n"
+"#define gsl_rng_get(randomState) rand(randomState)  \n"
+"#define gsl_rng_uniform(randomState) random(randomState) \n"
+"#define gsl_rng_uniform_int(randomState, n) randint(randomState, 0, n) \n"
+  + ::mcmc::gen::MakeHeader("RANDOM_IMPL", BOOST_COMPUTE_STRINGIZE_SOURCE(
 
 // PSEUDORANDOM GENERATOR
 inline ulong xorshift_128plus(ulong2 *s) {
@@ -23,7 +27,7 @@ inline ulong rand(random_seed_t *s) {
   return r;
 }
 
-inline double random(random_seed_t *s) { return (1.0 * rand(s) / ULONG_MAX); }
+inline Float random(random_seed_t *s) { return (1.0 * rand(s) / ULONG_MAX); }
 
 inline int randint(random_seed_t *s, int from, int upto) {
   return (rand(s) % (upto + 1 - from)) + from;
@@ -48,7 +52,7 @@ inline int randint(random_seed_t *s, int from, int upto) {
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-constant double gsl_ytab[128] = {
+constant Float gsl_ytab[128] = {
     1,               0.963598623011,   0.936280813353,   0.913041104253,
     0.892278506696,  0.873239356919,   0.855496407634,   0.838778928349,
     0.822902083699,  0.807732738234,   0.793171045519,   0.779139726505,
@@ -106,7 +110,7 @@ constant ulong gsl_ktab[128] = {
     15704248, 15472926};
 
 /* tabulated values of 2^{-24}*x[i] */
-constant double gsl_wtab[128] = {
+constant Float gsl_wtab[128] = {
     1.62318314817e-08, 2.16291505214e-08, 2.54246305087e-08, 2.84579525938e-08,
     3.10340022482e-08, 3.33011726243e-08, 3.53439060345e-08, 3.72152672658e-08,
     3.8950989572e-08,  4.05763964764e-08, 4.21101548915e-08, 4.35664624904e-08,
@@ -167,16 +171,11 @@ constant double gsl_wtab[128] = {
  */
 
 /* position of right-most step */
-#define PARAM_R 3.44428647676
 
-#define gsl_rng_get(randomState) rand(randomState)
-#define gsl_rng_uniform(randomState) random(randomState)
-#define gsl_rng_uniform_int(randomState, n) randint(randomState, 0, n)
-
-double gsl_ran_gaussian_ziggurat(gsl_rng *randomState, const double sigma) {
+Float gsl_ran_gaussian_ziggurat(gsl_rng *randomState, const Float sigma) {
   ulong i, j;
   int sign;
-  double x, y;
+  Float x, y;
 
   // const unsigned long int range = r->type->max - r->type->min;
   // const unsigned long int offset = r->type->min;
@@ -206,13 +205,13 @@ double gsl_ran_gaussian_ziggurat(gsl_rng *randomState, const double sigma) {
     if (j < gsl_ktab[i]) break;
 
     if (i < 127) {
-      double y0, y1, U1;
+      Float y0, y1, U1;
       y0 = gsl_ytab[i];
       y1 = gsl_ytab[i + 1];
       U1 = gsl_rng_uniform(randomState);
       y = y1 + (y0 - y1) * U1;
     } else {
-      double U1, U2;
+      Float U1, U2;
       U1 = 1.0 - gsl_rng_uniform(randomState);
       U2 = gsl_rng_uniform(randomState);
       x = PARAM_R - log(U1) / PARAM_R;
@@ -225,7 +224,7 @@ double gsl_ran_gaussian_ziggurat(gsl_rng *randomState, const double sigma) {
   return sign * sigma * x;
 }
 
-inline double randn(gsl_rng *randomSeed) {
+inline Float randn(gsl_rng *randomSeed) {
   // FIXME: width parameter 0.5, or better 0.1?
   return gsl_ran_gaussian_ziggurat(randomSeed, 1.0);
 }
@@ -251,8 +250,8 @@ inline double randn(gsl_rng *randomSeed) {
  *USA.
  */
 
-inline double gsl_rng_uniform_pos(gsl_rng *r) {
-  double x;
+inline Float gsl_rng_uniform_pos(gsl_rng *r) {
+  Float x;
   do {
     x = gsl_rng_uniform(r);
   } while (x == 0);
@@ -289,32 +288,32 @@ inline double gsl_rng_uniform_pos(gsl_rng *r) {
  */
 
 #ifdef UNUSED
-double gsl_ran_gamma_mt(gsl_rng *r, const double a, const double b) {
+Float gsl_ran_gamma_mt(gsl_rng *r, const Float a, const Float b) {
   return gsl_ran_gamma(r, a, b);
 }
 #endif
 
-double gsl_ran_gamma(gsl_rng *r, double a, double b) {
+Float gsl_ran_gamma(gsl_rng *r, Float a, Float b) {
   /* assume a > 0 */
 
-  double f = 1.0;
+  Float f = 1.0;
 #ifdef SUPPORT_RECURSION
   if (a < 1) {
-    double u = gsl_rng_uniform_pos(r);
-    return gsl_ran_gamma(r, 1.0 + a, b) * pow(u, 1.0 / a);
+    Float u = gsl_rng_uniform_pos(r);
+    return gsl_ran_gamma(r, 1.0 + a, b) * pow(u, (Float)1.0 / a);
   }
 #else
   while (a < 1) {
-    double u = gsl_rng_uniform_pos(r);
-    f = f * pow(u, 1.0 / a);
+    Float u = gsl_rng_uniform_pos(r);
+    f = f * pow(u, (Float)1.0 / a);
     a = 1.0 + a;
   }
 #endif
 
   {
-    double x, v, u;
-    double d = a - 1.0 / 3.0;
-    double c = (1.0 / 3.0) / sqrt(d);
+    Float x, v, u;
+    Float d = a - 1.0 / 3.0;
+    Float c = (1.0 / 3.0) / sqrt(d);
 
     while (1) {
       do {
@@ -334,12 +333,11 @@ double gsl_ran_gamma(gsl_rng *r, double a, double b) {
   }
 }
 
-inline double rand_gamma(gsl_rng *r, double a, double b) {
+inline Float rand_gamma(gsl_rng *r, Float a, Float b) {
   return gsl_ran_gamma(r, a, b);
 }
-);
+));
 
 return kClRandomHeader;
 }
 
-}  // namespace internal

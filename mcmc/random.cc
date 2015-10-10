@@ -1,12 +1,14 @@
 #include "mcmc/random.h"
 #include <glog/logging.h>
 
+#include "mcmc/gen-util.h"
+
 namespace mcmc {
 namespace random {
 
-namespace internal {
+#include "mcmc/random.cl.inc"
 
-const std::string& GetRandomTypes() {
+const std::string GetRandomTypes() {
   static const std::string kClRandomTypes = BOOST_COMPUTE_STRINGIZE_SOURCE(
 
     typedef ulong2 gsl_rng; typedef gsl_rng random_seed_t;
@@ -17,10 +19,10 @@ const std::string& GetRandomTypes() {
     } Random;
 
     );
-  return kClRandomTypes;
+  return ::mcmc::gen::MakeHeader("RANDOM_TYPES", kClRandomTypes);
 }
 
-const std::string& GetRandomSource() {
+const std::string GetRandomSource() {
   static const std::string kClRandomSource =
     GetRandomTypes() +
     BOOST_COMPUTE_STRINGIZE_SOURCE(
@@ -42,12 +44,8 @@ const std::string& GetRandomSource() {
             random->num_seeds = num_random_seeds;
           }
         });
-  return kClRandomSource;
+  return ::mcmc::gen::MakeHeader("RANDOM_SOURCE", kClRandomSource);
 }
-
-}  // namespace internal
-
-#include "mcmc/random.cl.inc"
 
 OpenClRandom::OpenClRandom(std::shared_ptr<OpenClRandomFactory> factory,
                            compute::kernel* init, compute::command_queue* queue,
@@ -79,7 +77,7 @@ OpenClRandom* OpenClRandomFactory::CreateRandom(uint64_t size,
 
 OpenClRandomFactory::OpenClRandomFactory(compute::command_queue queue)
     : queue_(queue) {
-  prog_ = compute::program::create_with_source(internal::GetRandomSource(),
+  prog_ = compute::program::create_with_source(GetRandomSource(),
                                                queue_.get_context());
   try {
     prog_.build();

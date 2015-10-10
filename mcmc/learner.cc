@@ -10,11 +10,10 @@ namespace mcmc {
 
 const std::string& Learner::GetBaseFuncs() {
   static const std::string kSourceBaseFuncs =
-    GetSourceGuard() + "\n" + OpenClSetFactory::GetHeader() + "\n" +
-    std::string(compute::type_name<Float>() == std::string("double") ? "#pragma OPENCL EXTENSION cl_khr_fp64: enable \n" : "") +
+    GetSourceGuard() + GetClTypes() + "\n" + OpenClSetFactory::GetHeader() + "\n" +
     BOOST_COMPUTE_STRINGIZE_SOURCE(
 
-        typedef FLOAT_TYPE Float; typedef VERTEX_TYPE Vertex;
+        typedef VERTEX_TYPE Vertex;
         typedef EDGE_TYPE Edge;
 
         inline Vertex Vertex0(Edge e) {

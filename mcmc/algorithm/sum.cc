@@ -3,12 +3,13 @@
 #include <boost/compute/utility/source.hpp>
 
 #include "mcmc/gen-util.h"
+#include "mcmc/types.h"
 
 namespace mcmc {
 namespace algorithm {
 
 static const std::string kSumSourceTemplate = BOOST_COMPUTE_STRINGIZE_SOURCE(
-    
+
     void WG_SUM_TT_BLOCK_(__global TT* in, __global TT* scratch,
                           __local TT* aux, uint len) {
       uint lid = get_local_id(0);
@@ -40,9 +41,8 @@ static const std::string kSumSourceTemplate = BOOST_COMPUTE_STRINGIZE_SOURCE(
         WG_SUM_TT_BLOCK_(in + i, scratch + offset, aux, plen);
       }
     }
- 
-    void WG_SUM_FOLD_TT(__global TT* scratch, __local TT* aux,
-                 uint len) {
+
+    void WG_SUM_FOLD_TT(__global TT* scratch, __local TT* aux, uint len) {
       uint lsizex2 = get_local_size(0) << 1;
       while (len > 1) {
         WG_SUM_TT_PARTIAL_(scratch, scratch, aux, len);
@@ -51,7 +51,7 @@ static const std::string kSumSourceTemplate = BOOST_COMPUTE_STRINGIZE_SOURCE(
     }
 
     void WG_SUM_TT(__global TT* in, __global TT* scratch, __local TT* aux,
-                 uint len) {
+                   uint len) {
       uint lsizex2 = get_local_size(0) << 1;
       WG_SUM_TT_PARTIAL_(in, scratch, aux, len);
       len = len / lsizex2 + (len % lsizex2 ? 1 : 0);
@@ -73,10 +73,8 @@ static const std::string kSumSourceTemplate = BOOST_COMPUTE_STRINGIZE_SOURCE(
     );
 
 std::string WorkGroupSum(const std::string& type) {
-  return mcmc::gen::MakeHeaderFromTemplate(type + "_WG_SUM",
-      std::string(type == std::string("double") ? "#pragma OPENCL EXTENSION cl_khr_fp64: enable \n" : "") +
-      kSumSourceTemplate,
-                                           "TT", type);
+  return mcmc::gen::MakeHeaderFromTemplate(
+      type + "_WG_SUM", GetClTypes() + kSumSourceTemplate, "TT", type);
 }
 
 }  // namespace algorithm
