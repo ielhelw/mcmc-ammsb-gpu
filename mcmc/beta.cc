@@ -6,7 +6,8 @@
 
 namespace mcmc {
 
-const std::string kSourceBeta = BOOST_COMPUTE_STRINGIZE_SOURCE(
+const std::string kSourceBetaBase = random::GetRandomHeader() +
+  BOOST_COMPUTE_STRINGIZE_SOURCE(
     __kernel void sum_theta(__global Float* g_theta,     // [K, 2]
                             __global Float* g_theta_sum  // [K]
                             ) {
@@ -15,7 +16,42 @@ const std::string kSourceBeta = BOOST_COMPUTE_STRINGIZE_SOURCE(
         g_theta_sum[i] = g_theta[i] + g_theta[K + i];
       }
     }
+    __kernel void sum_grads(__global Float* grads, uint num_partial_sums) {
+      uint i = get_global_id(0);
+      uint gsize = get_global_size(0);
+      for (; i < 2 * K; i += gsize) {
+        for (uint p = 1; p < num_partial_sums; ++p) {
+          grads[i] += grads[i + p * 2 * K];
+        }
+      }
+    }
 
+    __kernel void update_theta(__global Float* theta, __global Float* grads,
+                               uint step_count, Float scale, __global void* vrand) {
+      const uint gid = get_global_id(0);
+      const uint gsize = get_global_size(0);
+      __global Random* random = (__global Random*)vrand;
+      if (gid < K) {
+        random_seed_t rseed = random->base_[gid];
+        Float eps_t = get_eps_t(step_count);
+        for (uint k = get_global_id(0); k < K; k += gsize) {
+          Float f0 = sqrt(eps_t * theta[k]);
+          Float f1 = sqrt(eps_t * theta[k + K]);
+          theta[k] =
+              fabs(theta[k] + eps_t / 2.0 * (ETA0 - theta[k] + scale * grads[k]) +
+                   f0 * randn(&rseed));
+          theta[k + K] =
+              fabs(theta[k + K] +
+                   eps_t / 2.0 * (ETA1 - theta[k + K] + scale * grads[k + K]) +
+                   f0 * randn(&rseed));
+        }
+        random->base_[gid] = rseed;
+      }
+    }
+
+    );
+
+const std::string kSourceBeta = kSourceBetaBase + BOOST_COMPUTE_STRINGIZE_SOURCE(
     __kernel void calculate_grads_partial(
         __global Float* theta,      // [K, 2]
         __global Float* theta_sum,  // [K]
@@ -67,34 +103,6 @@ const std::string kSourceBeta = BOOST_COMPUTE_STRINGIZE_SOURCE(
         }
       }
     }
-
-    __kernel void sum_grads(__global Float* grads, uint num_partial_sums) {
-      uint i = get_global_id(0);
-      uint gsize = get_global_size(0);
-      for (; i < 2 * K; i += gsize) {
-        for (uint p = 1; p < num_partial_sums; ++p) {
-          grads[i] += grads[i + p * 2 * K];
-        }
-      }
-    }
-
-    __kernel void update_theta(__global Float* theta, __global Float* grads,
-                               uint step_count, Float scale) {
-      uint gsize = get_global_size(0);
-      Float eps_t = get_eps_t(step_count);
-      for (uint k = get_global_id(0); k < K; k += gsize) {
-        Float f0 = sqrt(eps_t * theta[k]);
-        Float f1 = sqrt(eps_t * theta[k + K]);
-        theta[k] =
-            fabs(theta[k] + eps_t / 2.0 * (ETA0 - theta[k] + scale * grads[k]) +
-                 f0 * 1 /*randn noise*/);
-        theta[k + K] =
-            fabs(theta[k + K] +
-                 eps_t / 2.0 * (ETA1 - theta[k + K] + scale * grads[k + K]) +
-                 f0 * 1 /*randn noise*/);
-      }
-    }
-
     );
 
 const std::string kSourceBetaWg =
@@ -103,16 +111,7 @@ const std::string kSourceBetaWg =
     "\n"
     "#define WG_SUM_Float WG_SUM_" +
     compute::type_name<Float>() + "\n" +
-    BOOST_COMPUTE_STRINGIZE_SOURCE(
-        __kernel void sum_theta(__global Float* g_theta,     // [K, 2]
-                                __global Float* g_theta_sum  // [K]
-                                ) {
-          uint gsize = get_global_size(0);
-          for (uint i = get_global_id(0); i < K; i += gsize) {
-            g_theta_sum[i] = g_theta[i] + g_theta[K + i];
-          }
-        }
-
+    kSourceBetaBase + BOOST_COMPUTE_STRINGIZE_SOURCE(
         __kernel void calculate_grads_partial(
             __global Float* theta,      // [K, 2]
             __global Float* theta_sum,  // [K]
@@ -174,34 +173,6 @@ const std::string kSourceBetaWg =
             }
           }
         }
-
-        __kernel void sum_grads(__global Float* grads, uint num_partial_sums) {
-          uint i = get_global_id(0);
-          uint gsize = get_global_size(0);
-          for (; i < 2 * K; i += gsize) {
-            for (uint p = 1; p < num_partial_sums; ++p) {
-              grads[i] += grads[i + p * 2 * K];
-            }
-          }
-        }
-
-        __kernel void update_theta(__global Float* theta, __global Float* grads,
-                                   uint step_count, Float scale) {
-          uint gsize = get_global_size(0);
-          Float eps_t = get_eps_t(step_count);
-          for (uint k = get_global_id(0); k < K; k += gsize) {
-            Float f0 = sqrt(eps_t * theta[k]);
-            Float f1 = sqrt(eps_t * theta[k + K]);
-            theta[k] = fabs(theta[k] +
-                            eps_t / 2.0 * (ETA0 - theta[k] + scale * grads[k]) +
-                            f0 * 1 /*randn noise*/);
-            theta[k + K] = fabs(
-                theta[k + K] +
-                eps_t / 2.0 * (ETA1 - theta[k + K] + scale * grads[k + K]) +
-                f0 * 1 /*randn noise*/);
-          }
-        }
-
         );
 
 BetaUpdater::BetaUpdater(Mode mode, const Config& cfg,
@@ -217,6 +188,9 @@ BetaUpdater::BetaUpdater(Mode mode, const Config& cfg,
       beta_(beta),
       pi_(pi),
       trainingSet_(trainingSet),
+      normalizer_(queue_, &beta_, cfg.K, 32),
+      randFactory_(random::OpenClRandomFactory::New(queue_)),
+      rand_(randFactory_->CreateRandom(cfg.K, random::random_seed_t{42, 43})),
       count_calls_(0),
       k_(cfg.K),
       local_(cfg.beta_wg_size),
@@ -266,6 +240,7 @@ BetaUpdater::BetaUpdater(Mode mode, const Config& cfg,
   update_theta_kernel_ = prog_.create_kernel("update_theta");
   update_theta_kernel_.set_arg(0, theta_);
   update_theta_kernel_.set_arg(1, grads_);
+  update_theta_kernel_.set_arg(4, rand_->Get());
 }
 
 void BetaUpdater::operator()(compute::vector<Edge>* edges, uint32_t num_edges,
@@ -304,6 +279,13 @@ void BetaUpdater::operator()(compute::vector<Edge>* edges, uint32_t num_edges,
         queue_.enqueue_1d_range_kernel(update_theta_kernel_, 0, k_, 0);
     update_theta_event_.wait();
   }
+  {
+    auto t1 = std::chrono::high_resolution_clock::now();
+    compute::copy(theta_.begin(), theta_.begin() + k_, beta_.begin(), queue_);
+    normalizer_();
+    auto t2 = std::chrono::high_resolution_clock::now();
+    normalize_time_ = std::chrono::duration_cast<std::chrono::nanoseconds>(t1-t2).count();
+  }
   LOG(INFO)
       << "BetaUpdater: "
       << theta_sum_event_.duration<boost::chrono::nanoseconds>().count() / 1e9
@@ -312,8 +294,8 @@ void BetaUpdater::operator()(compute::vector<Edge>* edges, uint32_t num_edges,
              1e9 << ", "
       << grads_sum_event_.duration<boost::chrono::nanoseconds>().count() / 1e9
       << ", "
-      << update_theta_event_.duration<boost::chrono::nanoseconds>().count() /
-             1e9;
+      << update_theta_event_.duration<boost::chrono::nanoseconds>().count() / 1e9
+      << ", " << normalize_time_ / 1e9;
 }
 
 uint64_t BetaUpdater::LastInvocationTime() const {

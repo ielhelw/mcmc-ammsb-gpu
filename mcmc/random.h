@@ -26,10 +26,13 @@ class OpenClRandom {
                compute::kernel* init, compute::command_queue* queue,
                uint64_t sizeOfRandom, uint64_t size, random_seed_t seed);
 
+  void SetSeed(random_seed_t seed);
+
   std::shared_ptr<OpenClRandomFactory> factory_;
   compute::command_queue queue_;
   compute::vector<random_seed_t> data_;
   compute::buffer buf_;
+  compute::kernel init_kernel_;
 
   friend class OpenClRandomFactory;
 };

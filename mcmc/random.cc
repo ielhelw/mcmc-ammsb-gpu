@@ -55,12 +55,17 @@ OpenClRandom::OpenClRandom(std::shared_ptr<OpenClRandomFactory> factory,
       queue_(*queue),
       data_(size, queue_.get_context()),
       buf_(queue_.get_context(), sizeOfRandom,
-           compute::memory_object::read_write) {
-  init->set_arg(0, buf_);
-  init->set_arg(1, static_cast<compute::int_>(size));
-  init->set_arg(2, seed);
-  init->set_arg(3, data_);
-  auto e = queue_.enqueue_task(*init);
+           compute::memory_object::read_write),
+      init_kernel_(*init) {
+  SetSeed(seed);
+}
+
+void OpenClRandom::SetSeed(random_seed_t seed) {
+  init_kernel_.set_arg(0, buf_);
+  init_kernel_.set_arg(1, static_cast<compute::int_>(data_.size()));
+  init_kernel_.set_arg(2, seed);
+  init_kernel_.set_arg(3, data_);
+  auto e = queue_.enqueue_task(init_kernel_);
   e.wait();
 }
 

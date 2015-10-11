@@ -1,9 +1,12 @@
 #ifndef __MCMC_BETA_H__
 #define __MCMC_BETA_H__
 
-#include "mcmc/config.h"
 #include <boost/compute/system.hpp>
 #include <boost/compute/container/vector.hpp>
+
+#include "mcmc/config.h"
+#include "mcmc/random.h"
+#include "mcmc/algorithm/normalize.h"
 
 namespace mcmc {
 
@@ -39,6 +42,11 @@ class BetaUpdater {
   compute::kernel grads_sum_kernel_;
   compute::kernel update_theta_kernel_;
   compute::kernel beta_kernel_;
+  algorithm::Normalizer<Float> normalizer_;
+
+
+  std::shared_ptr<random::OpenClRandomFactory> randFactory_;
+  std::unique_ptr<random::OpenClRandom> rand_;
 
   uint32_t count_calls_;
   uint32_t k_;
@@ -53,6 +61,7 @@ class BetaUpdater {
   compute::event grads_partial_event_;
   compute::event grads_sum_event_;
   compute::event update_theta_event_;
+  uint64_t normalize_time_;
 };
 
 }  // namespace mcmc
