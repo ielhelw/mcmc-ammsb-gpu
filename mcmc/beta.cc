@@ -43,7 +43,7 @@ const std::string kSourceBetaBase = random::GetRandomHeader() +
           theta[k + K] =
               fabs(theta[k + K] +
                    eps_t / 2.0 * (ETA1 - theta[k + K] + scale * grads[k + K]) +
-                   f0 * randn(&rseed));
+                   f1 * randn(&rseed));
         }
         random->base_[gid] = rseed;
       }
