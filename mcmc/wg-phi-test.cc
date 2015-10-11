@@ -88,6 +88,7 @@ class WgPhiTest : public ContextTest,
     uint32_t node = 0;
     std::generate(hmbn.begin(), hmbn.end(), [&node]() { return node++; });
     std::vector<uint> hn(hmbn.size() * cfg_.num_node_sample);
+    srand(42);
     std::generate(hn.begin(), hn.end(), [this]() { return rand() % cfg_.N; });
     compute::vector<uint> mbn(hmbn.begin(), hmbn.end(), queue_);
     compute::vector<uint> n(hn.begin(), hn.end(), queue_);
@@ -120,6 +121,30 @@ class WgPhiTest : public ContextTest,
   Config cfg_;
 };
 
+TEST_P(WgPhiTest, VerifyModes) {
+  num_tries_ = 1;
+  cfg_.phi_wg_size = GetParam();
+  cfg_.phi_disable_noise = true;
+  Run(PhiUpdater::NODE_PER_THREAD);
+  std::vector<Float> host_phi1(phi_.size());
+  compute::copy(phi_.begin(), phi_.end(), host_phi1.begin(), queue_);
+  std::vector<Float> host_pi1(pi_.size());
+  compute::copy(pi_.begin(), pi_.end(), host_pi1.begin(), queue_);
+
+  Run(PhiUpdater::NODE_PER_WORKGROUP);
+  std::vector<Float> host_phi2(phi_.size());
+  compute::copy(phi_.begin(), phi_.end(), host_phi2.begin(), queue_);
+  std::vector<Float> host_pi2(pi_.size());
+  compute::copy(pi_.begin(), pi_.end(), host_pi2.begin(), queue_);
+
+  for (uint32_t k = 0; k < host_phi1.size(); ++k) {
+    ASSERT_NEAR(host_phi1[k], host_phi2[k], std::max(1e-5, 0.02 * std::abs(host_phi1[k])));
+  }
+  for (uint32_t k = 0; k < host_phi1.size(); ++k) {
+    ASSERT_NEAR(host_pi1[k], host_pi2[k], std::max(1e-5, 0.02 * std::abs(host_pi1[k])));
+  }
+}
+
 TEST_P(WgPhiTest, NodePerThread) {
   cfg_.phi_wg_size = GetParam();
   Run(PhiUpdater::NODE_PER_THREAD);
@@ -132,7 +157,8 @@ TEST_P(WgPhiTest, NodePerWorkGroup) {
 
 INSTANTIATE_TEST_CASE_P(WorkGroups, WgPhiTest,
                         ::testing::ValuesIn(std::vector<uint32_t>(
-                            {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024})));
+                            {32, 64, 128, 256})));
+//                            {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024})));
 
 }  // namespace test
 }  // namespace mcmc

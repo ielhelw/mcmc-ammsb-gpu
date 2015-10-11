@@ -7,14 +7,16 @@
 
 namespace mcmc {
 
-const std::string kSourcePhi = BOOST_COMPUTE_STRINGIZE_SOURCE(
+const std::string kSourcePhi = random::GetRandomHeader() +
+  BOOST_COMPUTE_STRINGIZE_SOURCE(
 
     void update_phi_for_node(__global Float* beta, __global Float* g_pi,
                              __global Float* g_phi, __global Set* edge_set,
                              Vertex node, __global Vertex* neighbors,
                              uint step_count,
                              __global Float* grads,  // K
-                             __global Float* probs   // K
+                             __global Float* probs,   // K
+                             random_seed_t* rseed
                              ) {
       __global Float* pi = Pi(g_pi, node);
       __global Float* phi = Pi(g_phi, node);
@@ -44,7 +46,7 @@ const std::string kSourcePhi = BOOST_COMPUTE_STRINGIZE_SOURCE(
       }
       Float Nn = (1.0 * N) / NUM_NEIGHBORS;
       for (uint k = 0; k < K; ++k) {
-        Float noise = 1;  // randn();  FIXME
+        Float noise = PHI_RANDN(rseed);
         Float phi_k = phi[k];
         phi[k] = fabs(phi_k + eps_t / 2 * (ALPHA - phi_k + Nn * grads[k]) +
                       sqrt(eps_t * phi_k) * noise);
@@ -57,17 +59,23 @@ const std::string kSourcePhi = BOOST_COMPUTE_STRINGIZE_SOURCE(
         __global Vertex* neighbors,  // [mini_batch_nodes * num_neighbor_sample]
         uint num_mini_batch_nodes, uint step_count,
         __global Float* grads,  // [num global threads * K]
-        __global Float* probs   // [num global threads * K]
+        __global Float* probs,   // [num global threads * K]
+        __global void* vrand
         ) {
       uint i = get_global_id(0);
       uint gsize = get_global_size(0);
       grads += i * K;
       probs += i * K;
-      for (; i < num_mini_batch_nodes; i += gsize) {
-        Vertex node = mini_batch_nodes[i];
-        __global Vertex* node_neighbors = neighbors + i * NUM_NEIGHBORS;
-        update_phi_for_node(g_beta, g_pi, g_phi, training_edge_set, node,
-                            node_neighbors, step_count, grads, probs);
+      __global Random* rand = (__global Random*)vrand;
+      if (i < num_mini_batch_nodes) {
+        random_seed_t rseed = rand->base_[i];
+        for (; i < num_mini_batch_nodes; i += gsize) {
+          Vertex node = mini_batch_nodes[i];
+          __global Vertex* node_neighbors = neighbors + i * NUM_NEIGHBORS;
+          update_phi_for_node(g_beta, g_pi, g_phi, training_edge_set, node,
+                              node_neighbors, step_count, grads, probs, &rseed);
+        }
+        rand->base_[i] = rseed;
       }
     }
 
@@ -97,8 +105,9 @@ const std::string kSourcePhiWg =
     "\n" + "#define WG_SUM_Float WG_SUM_" + compute::type_name<Float>() +
     "\n"
     "#define WG_NORMALIZE_Float WG_NORMALIZE_" +
-    compute::type_name<Float>() +
-    "\n" BOOST_COMPUTE_STRINGIZE_SOURCE(
+    compute::type_name<Float>() + "\n" +
+    random::GetRandomHeader() +
+    BOOST_COMPUTE_STRINGIZE_SOURCE(
 
         void update_phi_for_nodeWG(__global Float* beta, __global Float* g_pi,
                                    __global Float* g_phi,
@@ -106,6 +115,7 @@ const std::string kSourcePhiWg =
                                    __global Vertex* neighbors, uint step_count,
                                    __global Float* grads,    // K
                                    __global Float* probs,    // K
+                                   random_seed_t* rseed,
                                    __global Float* scratch,  // K
                                    __local Float* aux) {
           __global Float* pi = Pi(g_pi, node);
@@ -143,7 +153,7 @@ const std::string kSourcePhiWg =
           Float Nn = (1.0 * N) / NUM_NEIGHBORS;
           barrier(CLK_GLOBAL_MEM_FENCE);
           for (uint k = lid; k < K; k += lsize) {
-            Float noise = 1;  // randn();  FIXME
+            Float noise =  PHI_RANDN(rseed);
             Float phi_k = phi[k];
             phi[k] = fabs(phi_k + eps_t / 2 * (ALPHA - phi_k + Nn * grads[k]) +
                           sqrt(eps_t * phi_k) * noise);
@@ -159,20 +169,26 @@ const std::string kSourcePhiWg =
             uint step_count,
             __global Float* grads,    // [num local threads * K]
             __global Float* probs,    // [num local threads * K]
+            __global void* vrand,
             __global Float* scratch,  // [num local threads * K]
             __local Float* aux        // [num local threads]
             ) {
           uint i = get_group_id(0);
           uint gsize = get_num_groups(0);
+          __global Random* rand = (__global Random*)vrand;
           grads += i * K;
           probs += i * K;
           scratch += i * K;
-          for (; i < num_mini_batch_nodes; i += gsize) {
-            Vertex node = mini_batch_nodes[i];
-            __global Vertex* node_neighbors = neighbors + i * NUM_NEIGHBORS;
-            update_phi_for_nodeWG(g_beta, g_pi, g_phi, training_edge_set, node,
-                                  node_neighbors, step_count, grads, probs,
-                                  scratch, aux);
+          if (i < num_mini_batch_nodes) {
+            random_seed_t rseed = rand->base_[get_global_id(0)];
+            for (; i < num_mini_batch_nodes; i += gsize) {
+              Vertex node = mini_batch_nodes[i];
+              __global Vertex* node_neighbors = neighbors + i * NUM_NEIGHBORS;
+              update_phi_for_nodeWG(g_beta, g_pi, g_phi, training_edge_set, node,
+                                    node_neighbors, step_count, grads, probs, &rseed,
+                                    scratch, aux);
+            }
+            rand->base_[get_global_id(0)] = rseed;
           }
         }
 
@@ -211,6 +227,10 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg,
       pi_(pi),
       phi_(phi),
       trainingSet_(trainingSet),
+      randFactory_(random::OpenClRandomFactory::New(queue_)),
+      rand_(randFactory_->CreateRandom(
+            2 * cfg.mini_batch_size * (mode == NODE_PER_THREAD? 1 : cfg.phi_wg_size),
+            random::random_seed_t{42, 43})),
       count_calls_(0),
       k_(cfg.K),
       local_(cfg.phi_wg_size),
@@ -229,7 +249,14 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg,
     default:
       LOG(FATAL) << "Cannot recognize mode";
   }
-  prog_ = compute::program::create_with_source(baseFuncs + *src,
+  std::ostringstream out;
+  if (cfg.phi_disable_noise) {
+    out << "#define PHI_RANDN(X) 1" << std::endl;
+  } else {
+    out << "#define PHI_RANDN(X) randn(X)" << std::endl;
+  }
+  out << baseFuncs << std::endl << *src << std::endl;
+  prog_ = compute::program::create_with_source(out.str(),
                                                queue_.get_context());
   try {
     prog_.build(compileFlags);
@@ -244,9 +271,10 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg,
 
   phi_kernel_.set_arg(8, grads_);
   phi_kernel_.set_arg(9, probs_);
+  phi_kernel_.set_arg(10, rand_->Get());
   if (mode_ == NODE_PER_WORKGROUP) {
-    phi_kernel_.set_arg(10, scratch_);
-    phi_kernel_.set_arg(11, cfg.K * sizeof(Float), 0);
+    phi_kernel_.set_arg(11, scratch_);
+    phi_kernel_.set_arg(12, cfg.K * sizeof(Float), 0);
   }
 
   pi_kernel_ = prog_.create_kernel("update_pi");
@@ -268,9 +296,14 @@ void PhiUpdater::operator()(
                     scratch_.size() < num_mini_batch_nodes * k_)
       << "scratch too small";
   ++count_calls_;
-  uint32_t global = (num_mini_batch_nodes / local_ +
-                     (num_mini_batch_nodes % local_ ? 1 : 0)) *
-                    local_;
+  uint32_t global;
+  if (mode_ == NODE_PER_THREAD) {
+    global = (num_mini_batch_nodes / local_ +
+                       (num_mini_batch_nodes % local_ ? 1 : 0)) *
+                      local_;
+  } else {
+    global = num_mini_batch_nodes * local_;
+  }
   phi_kernel_.set_arg(4, mini_batch_nodes);
   phi_kernel_.set_arg(5, neighbors);
   phi_kernel_.set_arg(6, num_mini_batch_nodes);

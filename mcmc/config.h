@@ -29,6 +29,8 @@ struct Config {
   uint32_t phi_wg_size;
   uint32_t beta_wg_size;
 
+  bool phi_disable_noise;
+
   Config() {
     heldout_ratio = 0.01;
     alpha = 0.001;
@@ -44,6 +46,7 @@ struct Config {
     ppx_wg_size = 32;
     phi_wg_size = 32;
     beta_wg_size = 32;
+    phi_disable_noise = false;
   }
 };
 

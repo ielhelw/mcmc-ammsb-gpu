@@ -1,9 +1,11 @@
 #ifndef __MCMC_PHI_H__
 #define __MCMC_PHI_H__
 
-#include "mcmc/config.h"
 #include <boost/compute/system.hpp>
 #include <boost/compute/container/vector.hpp>
+
+#include "mcmc/config.h"
+#include "mcmc/random.h"
 
 namespace mcmc {
 
@@ -33,6 +35,9 @@ class PhiUpdater {
   compute::vector<Float>& pi_;    // [N,K]
   compute::vector<Float>& phi_;   // [N,K]
   OpenClSet* trainingSet_;
+  
+  std::shared_ptr<random::OpenClRandomFactory> randFactory_;
+  std::unique_ptr<random::OpenClRandom> rand_;
 
   compute::program prog_;
   compute::kernel phi_kernel_;
