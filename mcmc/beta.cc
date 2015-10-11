@@ -35,15 +35,21 @@ const std::string kSourceBetaBase = random::GetRandomHeader() +
         random_seed_t rseed = random->base_[gid];
         Float eps_t = get_eps_t(step_count);
         for (uint k = get_global_id(0); k < K; k += gsize) {
-          Float f0 = sqrt(eps_t * theta[k]);
-          Float f1 = sqrt(eps_t * theta[k + K]);
+          Float r0 = randn(&rseed);
+          Float grads_k = grads[k];
+          Float theta_k = theta[k];
+          Float f0 = sqrt(eps_t * theta_k);
           theta[k] =
-              fabs(theta[k] + eps_t / 2.0 * (ETA0 - theta[k] + scale * grads[k]) +
-                   f0 * randn(&rseed));
+              fabs(theta_k + eps_t / 2.0 * (ETA0 - theta_k + scale * grads_k) +
+                   f0 * r0);
+          Float r1 = randn(&rseed);
+          Float grads_2k = grads[k + K];
+          Float theta_2k = theta[k + K];
+          Float f1 = sqrt(eps_t * theta_2k);
           theta[k + K] =
-              fabs(theta[k + K] +
-                   eps_t / 2.0 * (ETA1 - theta[k + K] + scale * grads[k + K]) +
-                   f1 * randn(&rseed));
+              fabs(theta_2k +
+                   eps_t / 2.0 * (ETA1 - theta_2k + scale * grads_2k) +
+                   f1 * r1);
         }
         random->base_[gid] = rseed;
       }
@@ -149,10 +155,11 @@ const std::string kSourceBetaWg =
               Float f = pi_a[k] * pi_b[k];
               scratch[k] = f;
               Float probs_k;
+              Float beta_k = beta[k];
               if (y) {
-                probs_k = beta[k] * f;
+                probs_k = beta_k * f;
               } else {
-                probs_k = (1.0 - beta[k]) * f;
+                probs_k = (1.0 - beta_k) * f;
               }
               probs[k] = probs_k;
             }
