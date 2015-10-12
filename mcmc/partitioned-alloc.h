@@ -9,7 +9,7 @@
 
 namespace mcmc {
 
-std::string GetRowPartitionedMatrixSource() {
+inline std::string GetRowPartitionedMatrixSource() {
   static const std::string kSourceRowPartitionedMatrix =
       BOOST_COMPUTE_STRINGIZE_SOURCE(
           typedef struct {
@@ -56,7 +56,7 @@ std::string GetRowPartitionedMatrixSource() {
   return kSourceRowPartitionedMatrix;
 }
 
-std::string GetRowPartitionedMatrixHeader(const std::string& type) {
+inline std::string GetRowPartitionedMatrixHeader(const std::string& type) {
   return gen::MakeHeaderFromTemplate(type + "RowPartitionedMatrix",
                                      GetRowPartitionedMatrixSource(), "TT", type);
 }
