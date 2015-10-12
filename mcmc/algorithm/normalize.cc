@@ -35,8 +35,7 @@ static const std::string kNormalizeSourceTemplate =
         }
 
         __kernel void WG_NORMALIZE_PARTITIONED_KERNEL_TT(
-            __global void* in, __global TT* scratch,
-            __local TT* aux) {
+            __global void* in, __global TT* scratch, __local TT* aux) {
           uint lsize = get_local_size(0);
           uint gid = get_group_id(0);
           __global TTRowPartitionedMatrix* pm =

@@ -188,5 +188,39 @@ TEST_F(WgNormalizeTest, PartitionedTest) {
   }
 }
 
+TEST_F(WgNormalizeTest, PartitionedNormalizerClassTest) {
+  uint32_t cols = 1e3;
+  uint32_t rows = 1e3;
+  uint32_t num_rows_in_block = rows / 11;
+  uint32_t num_blocks =
+      rows / num_rows_in_block + (rows % num_rows_in_block ? 1 : 0);
+  uint32_t num_elements_in_block = num_rows_in_block * cols;
+  auto factory = RowPartitionedMatrixFactory<Float>::New(queue_);
+  std::unique_ptr<RowPartitionedMatrix<Float>> p(
+      factory->CreateMatrix(rows, cols, num_rows_in_block));
+  std::vector<Float> host(cols);
+  uint32_t n = 0;
+  std::generate(host.begin(), host.end(), [&n]() { return ++n; });
+  for (uint32_t i = 0; i < p->Blocks().size(); ++i) {
+    for (uint32_t j = 0; j < p->Blocks()[i].size() / cols; ++j) {
+      compute::copy(host.begin(), host.end(), p->Blocks()[i].begin() + j * cols,
+                    queue_);
+    }
+  }
+  algorithm::PartitionedNormalizer<Float> normalizer(queue_, p.get(), 32);
+  normalizer();
+  Float sum = (cols * (cols + 1)) / 2;
+  for (uint32_t i = 0; i < p->Blocks().size(); ++i) {
+    for (uint32_t j = 0; j < p->Blocks()[i].size() / cols; ++j) {
+      compute::copy(p->Blocks()[i].begin() + j * cols,
+                    p->Blocks()[i].begin() + j * cols + cols, host.begin(),
+                    queue_);
+      for (uint32_t k = 0; k < cols; ++k) {
+        ASSERT_FLOAT_EQ((k + 1) / static_cast<Float>(sum), host[k]);
+      }
+    }
+  }
+}
+
 }  // namespace test
 }  // namespace mcmc

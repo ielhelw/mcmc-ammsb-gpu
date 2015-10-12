@@ -2,6 +2,7 @@
 #define __MCMC_PARTITIONED_ALLOC_H__
 
 #include <boost/compute/container/vector.hpp>
+#include <boost/compute/utility/source.hpp>
 #include <glog/logging.h>
 
 #include "mcmc/gen-util.h"
@@ -12,6 +13,7 @@ namespace mcmc {
 inline std::string GetRowPartitionedMatrixSource() {
   static const std::string kSourceRowPartitionedMatrix =
       BOOST_COMPUTE_STRINGIZE_SOURCE(
+
           typedef struct {
             __global TT* blocks_[32];
             uint num_rows_in_block_;
@@ -58,7 +60,8 @@ inline std::string GetRowPartitionedMatrixSource() {
 
 inline std::string GetRowPartitionedMatrixHeader(const std::string& type) {
   return gen::MakeHeaderFromTemplate(type + "RowPartitionedMatrix",
-                                     GetRowPartitionedMatrixSource(), "TT", type);
+                                     GetRowPartitionedMatrixSource(), "TT",
+                                     type);
 }
 
 template <class T>
