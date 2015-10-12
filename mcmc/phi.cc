@@ -18,8 +18,8 @@ const std::string kSourcePhi =
                                  __global Float* grads,  // K
                                  __global Float* probs,  // K
                                  random_seed_t* rseed) {
-          __global Float* pi = floatRowPartitionedMatrix_Row(g_pi, node);
-          __global Float* phi = floatRowPartitionedMatrix_Row(g_phi, node);
+          __global Float* pi = FloatRowPartitionedMatrix_Row(g_pi, node);
+          __global Float* phi = FloatRowPartitionedMatrix_Row(g_phi, node);
           Float eps_t = get_eps_t(step_count);
           Float phi_sum = 0;
           for (uint k = 0; k < K; ++k) {
@@ -30,7 +30,7 @@ const std::string kSourcePhi =
           for (uint i = 0; i < NUM_NEIGHBORS; ++i) {
             Vertex neighbor = neighbors[i];
             __global Float* pi_neighbor =
-                floatRowPartitionedMatrix_Row(g_pi, neighbor);
+                FloatRowPartitionedMatrix_Row(g_pi, neighbor);
             Edge edge = MakeEdge(min(node, neighbor), max(node, neighbor));
             bool y = Set_HasEdge(edge_set, edge);
             Float e = (y == 1 ? EPSILON : 1.0 - EPSILON);
@@ -89,8 +89,8 @@ const std::string kSourcePhi =
           uint gsize = get_global_size(0);
           for (; i < num_mini_batch_nodes; i += gsize) {
             Vertex n = mini_batch_nodes[i];
-            __global Float* pi = floatRowPartitionedMatrix_Row(g_pi, n);
-            __global Float* phi = floatRowPartitionedMatrix_Row(g_phi, n);
+            __global Float* pi = FloatRowPartitionedMatrix_Row(g_pi, n);
+            __global Float* phi = FloatRowPartitionedMatrix_Row(g_phi, n);
             Float sum = 0;
             for (uint k = 0; k < K; ++k) {
               sum += phi[k];
@@ -120,8 +120,8 @@ const std::string kSourcePhiWg =
                                    random_seed_t* rseed,
                                    __global Float* scratch,  // K
                                    __local Float* aux) {
-          __global Float* pi = floatRowPartitionedMatrix_Row(g_pi, node);
-          __global Float* phi = floatRowPartitionedMatrix_Row(g_phi, node);
+          __global Float* pi = FloatRowPartitionedMatrix_Row(g_pi, node);
+          __global Float* phi = FloatRowPartitionedMatrix_Row(g_phi, node);
           Float eps_t = get_eps_t(step_count);
           uint lid = get_local_id(0);
           uint lsize = get_local_size(0);
@@ -135,7 +135,7 @@ const std::string kSourcePhiWg =
           for (uint i = 0; i < NUM_NEIGHBORS; ++i) {
             Vertex neighbor = neighbors[i];
             __global Float* pi_neighbor =
-                floatRowPartitionedMatrix_Row(g_pi, neighbor);
+                FloatRowPartitionedMatrix_Row(g_pi, neighbor);
             Edge edge = MakeEdge(min(node, neighbor), max(node, neighbor));
             bool y = Set_HasEdge(edge_set, edge);
             Float e = (y == 1 ? EPSILON : 1.0 - EPSILON);
@@ -206,8 +206,8 @@ const std::string kSourcePhiWg =
           scratch += i * K;
           for (; i < num_mini_batch_nodes; i += gsize) {
             Vertex n = mini_batch_nodes[i];
-            __global Float* pi = floatRowPartitionedMatrix_Row(g_pi, n);
-            __global Float* phi = floatRowPartitionedMatrix_Row(g_phi, n);
+            __global Float* pi = FloatRowPartitionedMatrix_Row(g_pi, n);
+            __global Float* phi = FloatRowPartitionedMatrix_Row(g_phi, n);
             for (uint k = lid; k < K; k += lsize) {
               pi[k] = phi[k];
             }
@@ -260,8 +260,11 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg,
   } else {
     out << "#define PHI_RANDN(X) randn(X)" << std::endl;
   }
-  out << baseFuncs << std::endl << GetRowPartitionedMatrixHeader<Float>()
-      << std::endl << *src << std::endl;
+  out << baseFuncs << std::endl
+      << GetRowPartitionedMatrixHeader<Float>() << std::endl
+      << "#define FloatRowPartitionedMatrix_Row "
+      << compute::type_name<Float>() << "RowPartitionedMatrix_Row\n" << *src
+      << std::endl;
   prog_ = compute::program::create_with_source(out.str(), queue_.get_context());
   try {
     prog_.build(compileFlags);
@@ -309,18 +312,20 @@ void PhiUpdater::operator()(
   } else {
     global = num_mini_batch_nodes * local_;
   }
+  LOG_IF(FATAL, rand_->GetSeeds().size() < global)
+      << "Num seeds smaller than global threads";
   phi_kernel_.set_arg(4, mini_batch_nodes);
   phi_kernel_.set_arg(5, neighbors);
   phi_kernel_.set_arg(6, num_mini_batch_nodes);
   phi_kernel_.set_arg(7, count_calls_);
   phi_event_ = queue_.enqueue_1d_range_kernel(phi_kernel_, 0, global, local_);
   phi_event_.wait();
-  LOG(INFO) << phi_event_.duration<boost::chrono::nanoseconds>().count();
+  //  LOG(INFO) << phi_event_.duration<boost::chrono::nanoseconds>().count();
   pi_kernel_.set_arg(2, mini_batch_nodes);
   pi_kernel_.set_arg(3, num_mini_batch_nodes);
   pi_event_ = queue_.enqueue_1d_range_kernel(pi_kernel_, 0, global, local_);
   pi_event_.wait();
-  LOG(INFO) << pi_event_.duration<boost::chrono::nanoseconds>().count();
+  //  LOG(INFO) << pi_event_.duration<boost::chrono::nanoseconds>().count();
 }
 
 uint64_t PhiUpdater::LastInvocationTime() const {

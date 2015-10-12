@@ -9,9 +9,8 @@ namespace mcmc {
 
 const std::string kSourcePerplexity = BOOST_COMPUTE_STRINGIZE_SOURCE(
 
-    Float calculate_edge_likelihood(__global Float * pi_a,
-                                    __global Float * pi_b,
-                                    __global Float * beta, bool is_edge) {
+    Float calculate_edge_likelihood(__global Float * pi_a, __global Float* pi_b,
+                                    __global Float* beta, bool is_edge) {
       Float s = 0;
       if (is_edge) {
         uint k = 0;
@@ -43,8 +42,8 @@ const std::string kSourcePerplexity = BOOST_COMPUTE_STRINGIZE_SOURCE(
       Vertex v = Vertex1(e);
       bool is_edge = Set_HasEdge(edge_set, e);
       Float edge_likelihood = calculate_edge_likelihood(
-          floatRowPartitionedMatrix_Row(g_pi, u),
-          floatRowPartitionedMatrix_Row(g_pi, v), g_beta, is_edge);
+          FloatRowPartitionedMatrix_Row(g_pi, u),
+          FloatRowPartitionedMatrix_Row(g_pi, v), g_beta, is_edge);
       Float ppx = *g_ppx_per_edge;
       ppx = (ppx * (avg_count - 1) + edge_likelihood) / avg_count;
       if (is_edge) {
@@ -83,7 +82,7 @@ const std::string kSourcePerplexityWg =
     "\n" BOOST_COMPUTE_STRINGIZE_SOURCE(
 
         Float calculate_edge_likelihood_WG(
-            __global Float * pi_a, __global Float * pi_b, __global Float * beta,
+            __global Float * pi_a, __global Float* pi_b, __global Float* beta,
             bool is_edge, __global Float* scratch, __local Float* aux) {
           uint lid = get_local_id(0);
           Float s = 0;
@@ -127,8 +126,8 @@ const std::string kSourcePerplexityWg =
           Vertex v = Vertex1(e);
           bool is_edge = Set_HasEdge(edge_set, e);
           Float edge_likelihood = calculate_edge_likelihood_WG(
-              floatRowPartitionedMatrix_Row(g_pi, u),
-              floatRowPartitionedMatrix_Row(g_pi, v), g_beta, is_edge, scratch,
+              FloatRowPartitionedMatrix_Row(g_pi, u),
+              FloatRowPartitionedMatrix_Row(g_pi, v), g_beta, is_edge, scratch,
               aux);
           if (get_local_id(0) == 0) {
             Float ppx = *g_ppx_per_edge;
@@ -206,7 +205,9 @@ PerplexityCalculator::PerplexityCalculator(
       LOG(FATAL) << "Cannot recognize mode: " << mode;
   }
   prog_ = compute::program::create_with_source(
-      baseFuncs + GetRowPartitionedMatrixHeader<Float>() + *src,
+      baseFuncs + GetRowPartitionedMatrixHeader<Float>() +
+          "#define FloatRowPartitionedMatrix_Row " +
+          compute::type_name<Float>() + "RowPartitionedMatrix_Row\n" + *src,
       queue_.get_context());
   try {
     prog_.build(compileFlags);

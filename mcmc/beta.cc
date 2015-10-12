@@ -84,8 +84,8 @@ const std::string kSourceBeta =
         Vertex v = Vertex1(edge);
         edge = MakeEdge(min(u, v), max(u, v));
         uint y = Set_HasEdge(vset, edge) ? 1 : 0;
-        __global Float* pi_a = floatRowPartitionedMatrix_Row(g_pi, u);
-        __global Float* pi_b = floatRowPartitionedMatrix_Row(g_pi, v);
+        __global Float* pi_a = FloatRowPartitionedMatrix_Row(g_pi, u);
+        __global Float* pi_b = FloatRowPartitionedMatrix_Row(g_pi, v);
         Float pi_sum = 0;
         Float probs_sum = 0;
 
@@ -146,8 +146,8 @@ const std::string kSourceBetaWg =
         Vertex v = Vertex1(edge);
         edge = MakeEdge(min(u, v), max(u, v));
         uint y = Set_HasEdge(vset, edge) ? 1 : 0;
-        __global Float* pi_a = floatRowPartitionedMatrix_Row(g_pi, u);
-        __global Float* pi_b = floatRowPartitionedMatrix_Row(g_pi, v);
+        __global Float* pi_a = FloatRowPartitionedMatrix_Row(g_pi, u);
+        __global Float* pi_b = FloatRowPartitionedMatrix_Row(g_pi, v);
         Float pi_sum = 0;
         Float probs_sum = 0;
 
@@ -215,7 +215,9 @@ BetaUpdater::BetaUpdater(
       LOG(FATAL) << "Failed to recognize mode";
   }
   prog_ = compute::program::create_with_source(
-      baseFuncs + GetRowPartitionedMatrixHeader<Float>() + *src,
+      baseFuncs + GetRowPartitionedMatrixHeader<Float>() +
+          "#define FloatRowPartitionedMatrix_Row " +
+          compute::type_name<Float>() + "RowPartitionedMatrix_Row\n" + *src,
       queue_.get_context());
   try {
     prog_.build(compileFlags);
@@ -292,6 +294,7 @@ void BetaUpdater::operator()(compute::vector<Edge>* edges, uint32_t num_edges,
     normalize_time_ =
         std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t2).count();
   }
+#if 0
   LOG(INFO)
       << "BetaUpdater: "
       << theta_sum_event_.duration<boost::chrono::nanoseconds>().count() / 1e9
@@ -302,6 +305,7 @@ void BetaUpdater::operator()(compute::vector<Edge>* edges, uint32_t num_edges,
       << ", "
       << update_theta_event_.duration<boost::chrono::nanoseconds>().count() /
              1e9 << ", " << normalize_time_ / 1e9;
+#endif
 }
 
 uint64_t BetaUpdater::LastInvocationTime() const {

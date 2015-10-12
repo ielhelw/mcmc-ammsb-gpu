@@ -55,7 +55,7 @@ inline std::string GetRowPartitionedMatrixSource() {
           }
 
           );
-  return kSourceRowPartitionedMatrix;
+  return GetClTypes() + kSourceRowPartitionedMatrix;
 }
 
 inline std::string GetRowPartitionedMatrixHeader(const std::string& type) {
