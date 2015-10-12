@@ -1,6 +1,7 @@
 #ifndef __MCMC_PARTITIONED_ALLOC_H__
 #define __MCMC_PARTITIONED_ALLOC_H__
 
+#include <boost/compute/container/vector.hpp>
 #include <glog/logging.h>
 
 #include "mcmc/gen-util.h"
@@ -8,53 +9,63 @@
 
 namespace mcmc {
 
-const std::string kSourceRowPartitionedMatrix = BOOST_COMPUTE_STRINGIZE_SOURCE(
-    typedef struct {
-      __global TT* blocks_[32];
-      uint num_rows_in_block_;
-      uint num_blocks_;
-      uint num_rows_;
-      uint num_cols_;
-    } TTRowPartitionedMatrix;
+std::string GetRowPartitionedMatrixSource() {
+  static const std::string kSourceRowPartitionedMatrix =
+      BOOST_COMPUTE_STRINGIZE_SOURCE(
+          typedef struct {
+            __global TT* blocks_[32];
+            uint num_rows_in_block_;
+            uint num_blocks_;
+            uint num_rows_;
+            uint num_cols_;
+          } TTRowPartitionedMatrix;
 
-    __global TT * TTRowPartitionedMatrix_Row(
-                      __global TTRowPartitionedMatrix * pm, uint row) {
-                    uint blockIdx = row / pm->num_rows_in_block_;
-                    __global TT* block = pm->blocks_[blockIdx];
-                    uint rowOffsetInBlock =
-                        (row % pm->num_rows_in_block_) * pm->num_cols_;
-                    return block + rowOffsetInBlock;
-                  }
+          __global TT * TTRowPartitionedMatrix_Row(
+                            __global TTRowPartitionedMatrix * pm, uint row) {
+                          uint blockIdx = row / pm->num_rows_in_block_;
+                          __global TT* block = pm->blocks_[blockIdx];
+                          uint rowOffsetInBlock =
+                              (row % pm->num_rows_in_block_) * pm->num_cols_;
+                          return block + rowOffsetInBlock;
+                        }
 
-        __kernel void TTRowPartitionedMatrix_init(
-            __global void* vpm, uint num_rows_in_block, uint num_blocks,
-            uint num_rows, uint num_cols) {
-          __global TTRowPartitionedMatrix* pm =
-              (__global TTRowPartitionedMatrix*)vpm;
-          pm->num_rows_in_block_ = num_rows_in_block;
-          pm->num_blocks_ = num_blocks;
-          pm->num_rows_ = num_rows;
-          pm->num_cols_ = num_cols;
-        }
+              __kernel void TTRowPartitionedMatrix_init(
+                  __global void* vpm, uint num_rows_in_block, uint num_blocks,
+                  uint num_rows, uint num_cols) {
+                __global TTRowPartitionedMatrix* pm =
+                    (__global TTRowPartitionedMatrix*)vpm;
+                pm->num_rows_in_block_ = num_rows_in_block;
+                pm->num_blocks_ = num_blocks;
+                pm->num_rows_ = num_rows;
+                pm->num_cols_ = num_cols;
+              }
 
-        __kernel void TTRowPartitionedMatrix_set(
-            __global void* vpm, __global void* block, uint idx) {
-          __global TTRowPartitionedMatrix* pm =
-              (__global TTRowPartitionedMatrix*)vpm;
-          pm->blocks_[idx] = (__global TT*)block;
-        }
+              __kernel void TTRowPartitionedMatrix_set(
+                  __global void* vpm, __global void* block, uint idx) {
+                __global TTRowPartitionedMatrix* pm =
+                    (__global TTRowPartitionedMatrix*)vpm;
+                pm->blocks_[idx] = (__global TT*)block;
+              }
 
-        __kernel void TTRowPartitionedMatrixSizeof(__global ulong* size) {
-      size[0] = sizeof(TTRowPartitionedMatrix);
-    }
+              __kernel void TTRowPartitionedMatrixSizeof(__global ulong *
+                                                         size) {
+            size[0] = sizeof(TTRowPartitionedMatrix);
+          }
 
-    );
+          );
+  return kSourceRowPartitionedMatrix;
+}
+
+std::string GetRowPartitionedMatrixHeader(const std::string& type) {
+  return gen::MakeHeaderFromTemplate(type + "RowPartitionedMatrix",
+                                     GetRowPartitionedMatrixSource(), "TT", type);
+}
 
 template <class T>
 std::string GetRowPartitionedMatrixHeader() {
   return gen::MakeHeaderFromTemplate(
       std::string(compute::type_name<T>()) + "RowPartitionedMatrix",
-      kSourceRowPartitionedMatrix, "TT", compute::type_name<T>());
+      GetRowPartitionedMatrixSource(), "TT", compute::type_name<T>());
 }
 
 template <class T>

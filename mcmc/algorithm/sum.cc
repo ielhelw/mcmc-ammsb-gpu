@@ -4,6 +4,7 @@
 
 #include "mcmc/gen-util.h"
 #include "mcmc/types.h"
+#include "mcmc/partitioned-alloc.h"
 
 namespace mcmc {
 namespace algorithm {
@@ -70,11 +71,26 @@ static const std::string kSumSourceTemplate = BOOST_COMPUTE_STRINGIZE_SOURCE(
       if (get_local_id(0) == 0) out[gid] = *scratch;
     }
 
+    __kernel void WG_SUM_PARTITIONED_KERNEL_TT(
+        __global void* in, __global TT* out, __global TT* scratch,
+        __local TT* aux) {
+      uint lsize = get_local_size(0);
+      uint gid = get_group_id(0);
+      __global TTRowPartitionedMatrix* pm = (__global TTRowPartitionedMatrix*)in;
+      uint scratch_per_wg =
+          pm->num_cols_ / lsize + (pm->num_cols_ % lsize ? 1 : 0);
+      __global TT* row = TTRowPartitionedMatrix_Row(pm, gid);
+      scratch += gid * scratch_per_wg;
+      WG_SUM_TT(row, scratch, aux, pm->num_cols_);
+      if (get_local_id(0) == 0) out[gid] = *scratch;
+    }
+
     );
 
 std::string WorkGroupSum(const std::string& type) {
-  return mcmc::gen::MakeHeaderFromTemplate(
-      type + "_WG_SUM", GetClTypes() + kSumSourceTemplate, "TT", type);
+  return GetRowPartitionedMatrixHeader(type) +
+         mcmc::gen::MakeHeaderFromTemplate(
+             type + "_WG_SUM", GetClTypes() + kSumSourceTemplate, "TT", type);
 }
 
 }  // namespace algorithm
