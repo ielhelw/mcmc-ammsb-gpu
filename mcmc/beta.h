@@ -16,7 +16,7 @@ class BetaUpdater {
 
   BetaUpdater(Mode mode, const Config& cfg, compute::command_queue queue,
               compute::vector<Float>& theta, compute::vector<Float>& beta,
-              compute::vector<Float>& pi, OpenClSet* trainingSet,
+              RowPartitionedMatrix<Float>* pi, OpenClSet* trainingSet,
               const std::string& compileFlags, const std::string& baseFuncs);
 
   void operator()(compute::vector<Edge>* edges, uint32_t num_edges,
@@ -33,7 +33,7 @@ class BetaUpdater {
 
   compute::vector<Float>& theta_;  // [K, 2]
   compute::vector<Float>& beta_;   // [K]
-  compute::vector<Float>& pi_;     // [N, K]
+  RowPartitionedMatrix<Float>* pi_;     // [N, K]
   OpenClSet* trainingSet_;
 
   compute::program prog_;

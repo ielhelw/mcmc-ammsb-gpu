@@ -60,20 +60,21 @@ class WgBetaTest : public ContextTest,
     dev_set_.reset(factory_->CreateSet(set.Serialize()));
     theta_ = compute::vector<Float>(2 * cfg_.K, queue_.get_context());
     beta_ = compute::vector<Float>(cfg_.K, queue_.get_context());
-    pi_ = compute::vector<Float>(cfg_.N * cfg_.K, queue_.get_context());
-    compute::vector<Float> phi =
-        compute::vector<Float>(cfg_.N * cfg_.K, queue_.get_context());
+    allocFactory = RowPartitionedMatrixFactory<Float>::New(queue_);
+    pi_.reset(allocFactory->CreateMatrix(cfg_.N, cfg_.K));
+    std::unique_ptr<RowPartitionedMatrix<Float>> phi(allocFactory->CreateMatrix(cfg_.N, cfg_.K));
     std::mt19937 mt19937(24);
     std::gamma_distribution<Float> gamma_distribution(cfg_.eta0, cfg_.eta1);
     auto gamma = std::bind(gamma_distribution, mt19937);
-    Learner::GenerateAndNormalize(&queue_, &gamma, &phi, &pi_, cfg_.N, cfg_.K);
+    Learner::GenerateAndNormalize(&queue_, &gamma, phi.get(), pi_.get());
   }
 
   void TearDown() override {
     updater_.reset();
     factory_.reset();
     dev_set_.reset();
-    pi_ = compute::vector<Float>();
+    allocFactory.reset();
+    pi_.reset();
     theta_ = compute::vector<Float>();
     beta_ = compute::vector<Float>();
     ContextTest::TearDown();
@@ -82,7 +83,7 @@ class WgBetaTest : public ContextTest,
   void Run(BetaUpdater::Mode mode) {
     std::vector<Float> host_theta(theta_.size());
     std::vector<Float> host_theta_sum(cfg_.K);
-    updater_.reset(new BetaUpdater(mode, cfg_, queue_, theta_, beta_, pi_, dev_set_.get(),
+    updater_.reset(new BetaUpdater(mode, cfg_, queue_, theta_, beta_, pi_.get(), dev_set_.get(),
                         MakeCompileFlags(cfg_), Learner::GetBaseFuncs()));
     std::vector<Edge> random_edges = GenerateRandomEdges(1024);
     compute::vector<Edge> edges(random_edges.begin(), random_edges.end(),
@@ -106,7 +107,8 @@ class WgBetaTest : public ContextTest,
   Config cfg_;
   compute::vector<Float> theta_;
   compute::vector<Float> beta_;
-  compute::vector<Float> pi_;
+  std::shared_ptr<RowPartitionedMatrixFactory<Float>> allocFactory;
+  std::unique_ptr<RowPartitionedMatrix<Float>> pi_;
   std::shared_ptr<OpenClSetFactory> factory_;
   std::unique_ptr<OpenClSet> dev_set_;
   uint32_t num_tries_;

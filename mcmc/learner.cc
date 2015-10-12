@@ -10,30 +10,31 @@ namespace mcmc {
 
 const std::string& Learner::GetBaseFuncs() {
   static const std::string kSourceBaseFuncs =
-    GetSourceGuard() + GetClTypes() + "\n" + OpenClSetFactory::GetHeader() + "\n" +
-    BOOST_COMPUTE_STRINGIZE_SOURCE(
+      GetSourceGuard() + GetClTypes() + "\n" + OpenClSetFactory::GetHeader() +
+      "\n" + BOOST_COMPUTE_STRINGIZE_SOURCE(
 
-        typedef VERTEX_TYPE Vertex;
-        typedef EDGE_TYPE Edge;
+                 typedef VERTEX_TYPE Vertex; typedef EDGE_TYPE Edge;
 
-        inline Vertex Vertex0(Edge e) {
-          return (Vertex)((e & 0xffff0000) >> 32);
-        }
+                 inline Vertex Vertex0(Edge e) {
+                   return (Vertex)((e & 0xffff0000) >> 32);
+                 }
 
-            inline Vertex Vertex1(Edge e) { return (Vertex)((e & 0x0000ffff)); }
+                     inline Vertex Vertex1(Edge e) {
+                       return (Vertex)((e & 0x0000ffff));
+                     }
 
-            inline Edge MakeEdge(Vertex u,
-                                 Vertex v) { return (((Edge)u) << 32) | v; }
+                     inline Edge MakeEdge(
+                         Vertex u, Vertex v) { return (((Edge)u) << 32) | v; }
 
-            inline __global Float *
-            Pi(__global Float * pi, Vertex u) { return pi + u * K; }
+                     inline __global Float *
+                     Pi(__global Float * pi, Vertex u) { return pi + u * K; }
 
-            inline Float get_eps_t(uint step_count) {
-          return EPS_A * pow(1 + step_count / EPS_B, -EPS_C);
-        }
+                     inline Float get_eps_t(uint step_count) {
+                   return EPS_A * pow(1 + step_count / EPS_B, -EPS_C);
+                 }
 
-        );
- return kSourceBaseFuncs;
+                 );
+  return kSourceBaseFuncs;
 }
 
 Learner::Learner(const Config& cfg, compute::command_queue queue)
@@ -41,8 +42,9 @@ Learner::Learner(const Config& cfg, compute::command_queue queue)
       queue_(queue),
       beta_(cfg_.K, queue_.get_context()),
       theta_(2 * cfg_.K, queue_.get_context()),
-      pi_(cfg_.N * cfg_.K, queue_.get_context()),
-      phi_(cfg_.N * cfg_.K, queue_.get_context()),
+      allocFactory_(RowPartitionedMatrixFactory<Float>::New(queue_)),
+      pi_(allocFactory_->CreateMatrix(cfg_.N, cfg_.K)),
+      phi_(allocFactory_->CreateMatrix(cfg_.N, cfg_.K)),
       scratch_(queue_.get_context(), cfg_.N * cfg_.K * sizeof(Float)),
       setFactory_(OpenClSetFactory::New(queue_)),
       trainingSet_(setFactory_->CreateSet(cfg_.training->Serialize())),
@@ -53,16 +55,16 @@ Learner::Learner(const Config& cfg, compute::command_queue queue)
                     queue_),
       compileFlags_(MakeCompileFlags(cfg_)),
       heldoutPerplexity_(PerplexityCalculator::EDGE_PER_WORKGROUP, cfg_, queue_,
-                         beta_, pi_, heldoutEdges_, heldoutSet_.get(),
+                         beta_, pi_.get(), heldoutEdges_, heldoutSet_.get(),
                          compileFlags_, GetBaseFuncs()),
-      phiUpdater_(PhiUpdater::NODE_PER_WORKGROUP, cfg_, queue_, beta_, pi_, phi_,
-                  trainingSet_.get(), compileFlags_, GetBaseFuncs()) {
+      phiUpdater_(PhiUpdater::NODE_PER_WORKGROUP, cfg_, queue_, beta_, pi_.get(),
+                  phi_.get(), trainingSet_.get(), compileFlags_, GetBaseFuncs()) {
   // gamma generator
   std::mt19937 mt19937;
   std::gamma_distribution<Float> gamma_distribution(cfg_.eta0, cfg_.eta1);
   auto gamma = std::bind(gamma_distribution, mt19937);
   GenerateAndNormalize(&queue_, &gamma, &theta_, &beta_, 1, cfg_.K);
-  GenerateAndNormalize(&queue_, &gamma, &phi_, &pi_, cfg_.N, cfg_.K);
+  GenerateAndNormalize(&queue_, &gamma, phi_.get(), pi_.get());
 }
 
 void Learner::run() {

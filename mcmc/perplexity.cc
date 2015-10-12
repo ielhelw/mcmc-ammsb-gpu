@@ -35,7 +35,7 @@ const std::string kSourcePerplexity = BOOST_COMPUTE_STRINGIZE_SOURCE(
     }
 
     void calculate_ppx_partial_for_edge_(
-        __global Float* g_pi, __global Float* g_beta, __global Set* edge_set,
+        __global void* g_pi, __global Float* g_beta, __global Set* edge_set,
         __global Float* g_ppx_per_edge, __global Float* g_link_likelihood,
         __global Float* g_non_link_likelihood, __global uint* g_link_count,
         __global uint* g_non_link_count, uint avg_count, Edge e) {
@@ -43,7 +43,7 @@ const std::string kSourcePerplexity = BOOST_COMPUTE_STRINGIZE_SOURCE(
       Vertex v = Vertex1(e);
       bool is_edge = Set_HasEdge(edge_set, e);
       Float edge_likelihood =
-          calculate_edge_likelihood(Pi(g_pi, u), Pi(g_pi, v), g_beta, is_edge);
+          calculate_edge_likelihood(floatRowPartitionedMatrix_Row(g_pi, u), floatRowPartitionedMatrix_Row(g_pi, v), g_beta, is_edge);
       Float ppx = *g_ppx_per_edge;
       ppx = (ppx * (avg_count - 1) + edge_likelihood) / avg_count;
       if (is_edge) {
@@ -57,7 +57,7 @@ const std::string kSourcePerplexity = BOOST_COMPUTE_STRINGIZE_SOURCE(
     }
 
     __kernel void calculate_ppx_partial_for_edge(
-        __global Edge* edges, uint num_edges, __global Float* g_pi,
+        __global Edge* edges, uint num_edges, __global void* g_pi,
         __global Float* g_beta, __global void* /* Set* */ void_edge_set,
         __global Float* g_ppx_per_edge,         // [num global threads]
         __global Float* g_link_likelihood,      // [num global threads]
@@ -117,7 +117,7 @@ const std::string kSourcePerplexityWg =
         }
 
         void calculate_ppx_partial_for_edge_(
-            __global Float* g_pi, __global Float* g_beta,
+            __global void* g_pi, __global Float* g_beta,
             __global Set* edge_set, __global Float* g_ppx_per_edge,
             __global Float* g_link_likelihood,
             __global Float* g_non_link_likelihood, __global uint* g_link_count,
@@ -127,7 +127,7 @@ const std::string kSourcePerplexityWg =
           Vertex v = Vertex1(e);
           bool is_edge = Set_HasEdge(edge_set, e);
           Float edge_likelihood = calculate_edge_likelihood_WG(
-              Pi(g_pi, u), Pi(g_pi, v), g_beta, is_edge, scratch, aux);
+              floatRowPartitionedMatrix_Row(g_pi, u), floatRowPartitionedMatrix_Row(g_pi, v), g_beta, is_edge, scratch, aux);
           if (get_local_id(0) == 0) {
             Float ppx = *g_ppx_per_edge;
             ppx = (ppx * (avg_count - 1) + edge_likelihood) / avg_count;
@@ -143,7 +143,7 @@ const std::string kSourcePerplexityWg =
         }
 
         __kernel void calculate_ppx_partial_for_edge(
-            __global Edge* edges, uint num_edges, __global Float* g_pi,
+            __global Edge* edges, uint num_edges, __global void* g_pi,
             __global Float* g_beta, __global void* /* Set* */ void_edge_set,
             __global Float* g_ppx_per_edge,         // [num work groups]
             __global Float* g_link_likelihood,      // [num work groups]
@@ -168,7 +168,7 @@ const std::string kSourcePerplexityWg =
 
 PerplexityCalculator::PerplexityCalculator(
     Mode mode, const Config& cfg, compute::command_queue queue,
-    compute::vector<Float>& beta, compute::vector<Float>& pi,
+    compute::vector<Float>& beta, RowPartitionedMatrix<Float>* pi,
     compute::vector<Edge>& edges, OpenClSet* edgeSet,
     const std::string& compileFlags, const std::string& baseFuncs)
     : queue_(queue),
@@ -203,7 +203,7 @@ PerplexityCalculator::PerplexityCalculator(
     default:
       LOG(FATAL) << "Cannot recognize mode: " << mode;
   }
-  prog_ = compute::program::create_with_source(baseFuncs + *src,
+  prog_ = compute::program::create_with_source(baseFuncs + GetRowPartitionedMatrixHeader<Float>() + *src,
                                                queue_.get_context());
   try {
     prog_.build(compileFlags);
@@ -214,7 +214,7 @@ PerplexityCalculator::PerplexityCalculator(
   kernel_ = prog_.create_kernel("calculate_ppx_partial_for_edge");
   kernel_.set_arg(0, edges_);
   kernel_.set_arg(1, static_cast<compute::uint_>(edges_.size()));
-  kernel_.set_arg(2, pi_);
+  kernel_.set_arg(2, pi_->Get());
   kernel_.set_arg(3, beta_);
   kernel_.set_arg(4, edgeSet_->Get());
   kernel_.set_arg(5, ppx_per_edge_);

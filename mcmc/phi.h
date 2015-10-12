@@ -6,6 +6,7 @@
 
 #include "mcmc/config.h"
 #include "mcmc/random.h"
+#include "mcmc/partitioned-alloc.h"
 
 namespace mcmc {
 
@@ -14,8 +15,8 @@ class PhiUpdater {
   enum Mode { NODE_PER_THREAD, NODE_PER_WORKGROUP };
 
   PhiUpdater(Mode mode, const Config& cfg, compute::command_queue queue,
-             compute::vector<Float>& beta, compute::vector<Float>& pi,
-             compute::vector<Float>& phi, OpenClSet* trainingSet,
+             compute::vector<Float>& beta, RowPartitionedMatrix<Float>* pi,
+             RowPartitionedMatrix<Float>* phi, OpenClSet* trainingSet,
              const std::string& compileFlags, const std::string& baseFuncs);
 
   void operator()(
@@ -32,8 +33,8 @@ class PhiUpdater {
   compute::event pi_event_;
 
   compute::vector<Float>& beta_;  // [K]
-  compute::vector<Float>& pi_;    // [N,K]
-  compute::vector<Float>& phi_;   // [N,K]
+  RowPartitionedMatrix<Float>* pi_;    // [N,K]
+  RowPartitionedMatrix<Float>* phi_;   // [N,K]
   OpenClSet* trainingSet_;
   
   std::shared_ptr<random::OpenClRandomFactory> randFactory_;

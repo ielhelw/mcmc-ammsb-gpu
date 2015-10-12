@@ -62,7 +62,7 @@ const std::string kSourceBeta = kSourceBetaBase + BOOST_COMPUTE_STRINGIZE_SOURCE
         __global Float* theta,      // [K, 2]
         __global Float* theta_sum,  // [K]
         __global Float* beta,       // [K]
-        __global Float* g_pi,       // [N, K]
+        __global void* g_pi,       // [N, K]
         __global void* vset /*EdgeSet*/, __global Edge* mini_batch_edges,
         uint num_mini_batch_edges,
         __global Float* probs,  // [num_mini_batch_edges * K]
@@ -82,8 +82,8 @@ const std::string kSourceBeta = kSourceBetaBase + BOOST_COMPUTE_STRINGIZE_SOURCE
         Vertex v = Vertex1(edge);
         edge = MakeEdge(min(u, v), max(u, v));
         uint y = Set_HasEdge(vset, edge) ? 1 : 0;
-        __global Float* pi_a = Pi(g_pi, u);
-        __global Float* pi_b = Pi(g_pi, v);
+        __global Float* pi_a = floatRowPartitionedMatrix_Row(g_pi, u);
+        __global Float* pi_b = floatRowPartitionedMatrix_Row(g_pi, v);
         Float pi_sum = 0;
         Float probs_sum = 0;
 
@@ -122,7 +122,7 @@ const std::string kSourceBetaWg =
             __global Float* theta,      // [K, 2]
             __global Float* theta_sum,  // [K]
             __global Float* beta,       // [K]
-            __global Float* g_pi,       // [N, K]
+            __global void* g_pi,       // [N, K]
             __global void* vset /*EdgeSet*/, __global Edge* mini_batch_edges,
             uint num_mini_batch_edges,
             __global Float* probs,    // [num_mini_batch_edges * K]
@@ -146,8 +146,8 @@ const std::string kSourceBetaWg =
             Vertex v = Vertex1(edge);
             edge = MakeEdge(min(u, v), max(u, v));
             uint y = Set_HasEdge(vset, edge) ? 1 : 0;
-            __global Float* pi_a = Pi(g_pi, u);
-            __global Float* pi_b = Pi(g_pi, v);
+            __global Float* pi_a = floatRowPartitionedMatrix_Row(g_pi, u);
+            __global Float* pi_b = floatRowPartitionedMatrix_Row(g_pi, v);
             Float pi_sum = 0;
             Float probs_sum = 0;
 
@@ -186,7 +186,7 @@ BetaUpdater::BetaUpdater(Mode mode, const Config& cfg,
                          compute::command_queue queue,
                          compute::vector<Float>& theta,
                          compute::vector<Float>& beta,
-                         compute::vector<Float>& pi, OpenClSet* trainingSet,
+                         RowPartitionedMatrix<Float>* pi, OpenClSet* trainingSet,
                          const std::string& compileFlags,
                          const std::string& baseFuncs)
     : mode_(mode),
@@ -217,7 +217,7 @@ BetaUpdater::BetaUpdater(Mode mode, const Config& cfg,
     default:
       LOG(FATAL) << "Failed to recognize mode";
   }
-  prog_ = compute::program::create_with_source(baseFuncs + *src,
+  prog_ = compute::program::create_with_source(baseFuncs + GetRowPartitionedMatrixHeader<Float>() + *src,
                                                queue_.get_context());
   try {
     prog_.build(compileFlags);
@@ -232,7 +232,7 @@ BetaUpdater::BetaUpdater(Mode mode, const Config& cfg,
   grads_partial_kernel_.set_arg(0, theta_);
   grads_partial_kernel_.set_arg(1, theta_sum_);
   grads_partial_kernel_.set_arg(2, beta_);
-  grads_partial_kernel_.set_arg(3, pi_);
+  grads_partial_kernel_.set_arg(3, pi_->Get());
   grads_partial_kernel_.set_arg(4, trainingSet->Get());
   grads_partial_kernel_.set_arg(7, probs_);
   grads_partial_kernel_.set_arg(8, grads_);

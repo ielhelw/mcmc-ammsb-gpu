@@ -126,7 +126,6 @@ class RowPartitionedMatrix {
     uint64_t row_size = cols * sizeof(T);
     compute::ulong_ max_alloc =
         dev.get_info<compute::ulong_>(CL_DEVICE_MAX_MEM_ALLOC_SIZE);
-    LOG(INFO) << "MAX ALLOC = " << max_alloc;
     return max_alloc / row_size;
   }
 

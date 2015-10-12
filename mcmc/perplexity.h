@@ -2,8 +2,11 @@
 #define __MCMC_PERPLEXITY_H__
 
 #include "mcmc/config.h"
+
 #include <boost/compute/system.hpp>
 #include <boost/compute/container/vector.hpp>
+
+#include "mcmc/partitioned-alloc.h"
 
 namespace mcmc {
 
@@ -13,7 +16,7 @@ class PerplexityCalculator {
 
   PerplexityCalculator(Mode mode, const Config& cfg,
                        compute::command_queue queue,
-                       compute::vector<Float>& beta, compute::vector<Float>& pi,
+                       compute::vector<Float>& beta, RowPartitionedMatrix<Float>* pi,
                        compute::vector<Edge>& edges, OpenClSet* edgeSet,
                        const std::string& compileFlags,
                        const std::string& baseFuncs);
@@ -27,7 +30,7 @@ class PerplexityCalculator {
   compute::event event_;
 
   compute::vector<Float>& beta_;  // [K]
-  compute::vector<Float>& pi_;    // [N,K]
+  RowPartitionedMatrix<Float>* pi_;    // [N,K]
   compute::vector<Edge>& edges_;
   OpenClSet* edgeSet_;
 

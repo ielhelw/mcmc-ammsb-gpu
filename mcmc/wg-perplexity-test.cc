@@ -53,7 +53,11 @@ class WgPerplexityTest : public ContextTest,
     std::generate(pi.begin(), pi.end(), gen);
     std::vector<Float> beta(K_);
     std::generate(beta.begin(), beta.end(), gen);
-    dev_pi_ = compute::vector<Float>(pi.begin(), pi.end(), queue_);
+    allocFactory = (RowPartitionedMatrixFactory<Float>::New(queue_));
+    dev_pi_.reset(allocFactory->CreateMatrix(N_, K_));
+    ASSERT_EQ(1, dev_pi_->Blocks().size());
+    ASSERT_EQ(pi.size(), dev_pi_->Blocks()[0].size());
+    compute::copy(pi.begin(), pi.end(), dev_pi_->Blocks()[0].begin(), queue_);
     dev_beta_ = compute::vector<Float>(beta.begin(), beta.end(), queue_);
     cfg_.K = K_;
   }
@@ -62,7 +66,8 @@ class WgPerplexityTest : public ContextTest,
     dev_edges_ = compute::vector<Edge>();
     factory_.reset();
     dev_set_.reset();
-    dev_pi_ = compute::vector<Float>();
+    dev_pi_.reset();;
+    allocFactory.reset();
     dev_beta_ = compute::vector<Float>();
     ContextTest::TearDown();
   }
@@ -73,7 +78,8 @@ class WgPerplexityTest : public ContextTest,
   compute::vector<Edge> dev_edges_;
   std::shared_ptr<OpenClSetFactory> factory_;
   std::unique_ptr<OpenClSet> dev_set_;
-  compute::vector<Float> dev_pi_;
+  std::shared_ptr<RowPartitionedMatrixFactory<Float>> allocFactory;
+  std::unique_ptr<RowPartitionedMatrix<Float>> dev_pi_;
   compute::vector<Float> dev_beta_;
   Config cfg_;
 };
@@ -81,7 +87,7 @@ class WgPerplexityTest : public ContextTest,
 TEST_P(WgPerplexityTest, Equal) {
   cfg_.ppx_wg_size = GetParam();
   mcmc::PerplexityCalculator ppxSimple(mcmc::PerplexityCalculator::EDGE_PER_THREAD,
-                                 cfg_, queue_, dev_beta_, dev_pi_, dev_edges_,
+                                 cfg_, queue_, dev_beta_, dev_pi_.get(), dev_edges_,
                                  dev_set_.get(), MakeCompileFlags(cfg_),
                                  Learner::GetBaseFuncs());
   Float error = 0.15;
@@ -96,7 +102,7 @@ TEST_P(WgPerplexityTest, Equal) {
     ppx1_total_time += std::chrono::duration_cast<std::chrono::nanoseconds>(t2-t1).count();
   }
   mcmc::PerplexityCalculator ppxWg(mcmc::PerplexityCalculator::EDGE_PER_WORKGROUP,
-                                 cfg_, queue_, dev_beta_, dev_pi_, dev_edges_,
+                                 cfg_, queue_, dev_beta_, dev_pi_.get(), dev_edges_,
                                  dev_set_.get(), MakeCompileFlags(cfg_),
                                  Learner::GetBaseFuncs());
   Float ppx2 = ppxWg();
