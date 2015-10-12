@@ -70,7 +70,7 @@ const std::string kSourcePhi =
           probs += i * K;
           __global Random* rand = (__global Random*)vrand;
           if (i < num_mini_batch_nodes) {
-            random_seed_t rseed = rand->base_[i];
+            random_seed_t rseed = rand->base_[get_global_id(0)];
             for (; i < num_mini_batch_nodes; i += gsize) {
               Vertex node = mini_batch_nodes[i];
               __global Vertex* node_neighbors = neighbors + i * NUM_NEIGHBORS;
@@ -78,7 +78,7 @@ const std::string kSourcePhi =
                                   node_neighbors, step_count, grads, probs,
                                   &rseed);
             }
-            rand->base_[i] = rseed;
+            rand->base_[get_global_id(0)] = rseed;
           }
         }
 
