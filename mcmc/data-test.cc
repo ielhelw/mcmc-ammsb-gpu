@@ -11,7 +11,7 @@ std::vector<Edge> GenerateRandom(uint32_t node_max) {
   std::vector<Edge> edges(1024);
   std::default_random_engine generator;
   std::uniform_int_distribution<Vertex> distribution(0, node_max);
-  for (auto &e : edges) {
+  for (auto& e : edges) {
     Vertex x = distribution(generator) % node_max;
     Vertex y = distribution(generator) % node_max;
     Vertex u = std::min(x, y);

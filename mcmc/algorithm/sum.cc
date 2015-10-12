@@ -76,7 +76,8 @@ static const std::string kSumSourceTemplate = BOOST_COMPUTE_STRINGIZE_SOURCE(
         __local TT* aux) {
       uint lsize = get_local_size(0);
       uint gid = get_group_id(0);
-      __global TTRowPartitionedMatrix* pm = (__global TTRowPartitionedMatrix*)in;
+      __global TTRowPartitionedMatrix* pm =
+          (__global TTRowPartitionedMatrix*)in;
       uint scratch_per_wg =
           pm->num_cols_ / lsize + (pm->num_cols_ % lsize ? 1 : 0);
       __global TT* row = TTRowPartitionedMatrix_Row(pm, gid);

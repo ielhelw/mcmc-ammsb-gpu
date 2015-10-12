@@ -11,39 +11,38 @@ namespace random {
 const std::string GetRandomTypes() {
   static const std::string kClRandomTypes = BOOST_COMPUTE_STRINGIZE_SOURCE(
 
-    typedef ulong2 gsl_rng; typedef gsl_rng random_seed_t;
+      typedef ulong2 gsl_rng; typedef gsl_rng random_seed_t;
 
-    typedef struct {
-      __global random_seed_t* base_;
-      ulong num_seeds;
-    } Random;
+      typedef struct {
+        __global random_seed_t* base_;
+        ulong num_seeds;
+      } Random;
 
-    );
+      );
   return ::mcmc::gen::MakeHeader("RANDOM_TYPES", kClRandomTypes);
 }
 
 const std::string GetRandomSource() {
   static const std::string kClRandomSource =
-    GetRandomTypes() +
-    BOOST_COMPUTE_STRINGIZE_SOURCE(
-        __kernel void SizeOfRandom(__global ulong* size) {
-          *size = sizeof(Random);
-        }
+      GetRandomTypes() +
+      BOOST_COMPUTE_STRINGIZE_SOURCE(
+          __kernel void SizeOfRandom(__global ulong *
+                                     size) { *size = sizeof(Random); }
 
-        __kernel void RandomInit(__global void* base, int num_random_seeds,
-                                 random_seed_t random_seed,
-                                 __global random_seed_t* thread_random_seed) {
-          size_t id = get_global_id(0);
-          for (size_t i = id; i < num_random_seeds; i += get_global_size(0)) {
-            thread_random_seed[i].x = random_seed.x + i;
-            thread_random_seed[i].y = random_seed.y + i;
-          }
-          if (id == 0) {
-            __global Random* random = (__global Random*)base;
-            random->base_ = thread_random_seed;
-            random->num_seeds = num_random_seeds;
-          }
-        });
+          __kernel void RandomInit(__global void* base, int num_random_seeds,
+                                   random_seed_t random_seed,
+                                   __global random_seed_t* thread_random_seed) {
+            size_t id = get_global_id(0);
+            for (size_t i = id; i < num_random_seeds; i += get_global_size(0)) {
+              thread_random_seed[i].x = random_seed.x + i;
+              thread_random_seed[i].y = random_seed.y + i;
+            }
+            if (id == 0) {
+              __global Random* random = (__global Random*)base;
+              random->base_ = thread_random_seed;
+              random->num_seeds = num_random_seeds;
+            }
+          });
   return ::mcmc::gen::MakeHeader("RANDOM_SOURCE", kClRandomSource);
 }
 

@@ -12,4 +12,3 @@ std::string WorkGroupSort(const std::string& type);
 }  // namespace mcmc
 
 #endif  // __MCMC_ALGORITHM_SORT_H__
-

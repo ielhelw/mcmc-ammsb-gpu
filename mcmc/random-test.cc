@@ -36,11 +36,9 @@ const std::string kSource =
           *ok = 1;
         }
 
-        __kernel void generate(
-            __global void* vrand,
-            __global Float* data,  // [#threads * K]
-            uint K
-            ) {
+        __kernel void generate(__global void* vrand,
+                               __global Float* data,  // [#threads * K]
+                               uint K) {
           uint gid = get_global_id(0);
           data += gid * K;
           __global Random* rand = (__global Random*)vrand;

@@ -38,7 +38,7 @@ class Set {
   inline size_t BinsPerBucket() const { return N_; }
 
   inline size_t Capacity() const { return N_ * NUM_SLOTS * NUM_BUCKETS; }
-  
+
   inline size_t Size() const { return count_; }
 
   std::vector<Edge> Serialize() const;
@@ -84,7 +84,7 @@ class OpenClSet {
 class OpenClSetFactory : public std::enable_shared_from_this<OpenClSetFactory> {
  public:
   static const std::string& GetHeader();
-  
+
   static std::shared_ptr<OpenClSetFactory> New(compute::command_queue queue);
 
   OpenClSet* CreateSet(const std::vector<uint64_t>& data);

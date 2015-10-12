@@ -7,114 +7,116 @@
 
 namespace mcmc {
 
-const std::string kSourcePhi = random::GetRandomHeader() +
-  BOOST_COMPUTE_STRINGIZE_SOURCE(
+const std::string kSourcePhi =
+    random::GetRandomHeader() +
+    BOOST_COMPUTE_STRINGIZE_SOURCE(
 
-    void update_phi_for_node(__global Float* beta, __global void* g_pi,
-                             __global void* g_phi, __global Set* edge_set,
-                             Vertex node, __global Vertex* neighbors,
-                             uint step_count,
-                             __global Float* grads,  // K
-                             __global Float* probs,   // K
-                             random_seed_t* rseed
-                             ) {
-      __global Float* pi = floatRowPartitionedMatrix_Row(g_pi, node);
-      __global Float* phi = floatRowPartitionedMatrix_Row(g_phi, node);
-      Float eps_t = get_eps_t(step_count);
-      Float phi_sum = 0;
-      for (uint k = 0; k < K; ++k) {
-        phi_sum += phi[k];
-        // reset grads
-        grads[k] = 0;
-      }
-      for (uint i = 0; i < NUM_NEIGHBORS; ++i) {
-        Vertex neighbor = neighbors[i];
-        __global Float* pi_neighbor = floatRowPartitionedMatrix_Row(g_pi, neighbor);
-        Edge edge = MakeEdge(min(node, neighbor), max(node, neighbor));
-        bool y = Set_HasEdge(edge_set, edge);
-        Float e = (y == 1 ? EPSILON : 1.0 - EPSILON);
-        Float probs_sum = 0;
-        for (uint k = 0; k < K; ++k) {
-          Float f = (y == 1) ? (beta[k] - EPSILON) : (EPSILON - beta[k]);
-          Float probs_k = pi[k] * (pi_neighbor[k] * f + e);
-          probs_sum += probs_k;
-          probs[k] = probs_k;
+        void update_phi_for_node(__global Float* beta, __global void* g_pi,
+                                 __global void* g_phi, __global Set* edge_set,
+                                 Vertex node, __global Vertex* neighbors,
+                                 uint step_count,
+                                 __global Float* grads,  // K
+                                 __global Float* probs,  // K
+                                 random_seed_t* rseed) {
+          __global Float* pi = floatRowPartitionedMatrix_Row(g_pi, node);
+          __global Float* phi = floatRowPartitionedMatrix_Row(g_phi, node);
+          Float eps_t = get_eps_t(step_count);
+          Float phi_sum = 0;
+          for (uint k = 0; k < K; ++k) {
+            phi_sum += phi[k];
+            // reset grads
+            grads[k] = 0;
+          }
+          for (uint i = 0; i < NUM_NEIGHBORS; ++i) {
+            Vertex neighbor = neighbors[i];
+            __global Float* pi_neighbor =
+                floatRowPartitionedMatrix_Row(g_pi, neighbor);
+            Edge edge = MakeEdge(min(node, neighbor), max(node, neighbor));
+            bool y = Set_HasEdge(edge_set, edge);
+            Float e = (y == 1 ? EPSILON : 1.0 - EPSILON);
+            Float probs_sum = 0;
+            for (uint k = 0; k < K; ++k) {
+              Float f = (y == 1) ? (beta[k] - EPSILON) : (EPSILON - beta[k]);
+              Float probs_k = pi[k] * (pi_neighbor[k] * f + e);
+              probs_sum += probs_k;
+              probs[k] = probs_k;
+            }
+            for (uint k = 0; k < K; ++k) {
+              grads[k] += (probs[k] / probs_sum) / phi[k] - 1.0 / phi_sum;
+            }
+          }
+          Float Nn = (1.0 * N) / NUM_NEIGHBORS;
+          for (uint k = 0; k < K; ++k) {
+            Float noise = PHI_RANDN(rseed);
+            Float phi_k = phi[k];
+            phi[k] = fabs(phi_k + eps_t / 2 * (ALPHA - phi_k + Nn * grads[k]) +
+                          sqrt(eps_t * phi_k) * noise);
+          }
         }
-        for (uint k = 0; k < K; ++k) {
-          grads[k] += (probs[k] / probs_sum) / phi[k] - 1.0 / phi_sum;
-        }
-      }
-      Float Nn = (1.0 * N) / NUM_NEIGHBORS;
-      for (uint k = 0; k < K; ++k) {
-        Float noise = PHI_RANDN(rseed);
-        Float phi_k = phi[k];
-        phi[k] = fabs(phi_k + eps_t / 2 * (ALPHA - phi_k + Nn * grads[k]) +
-                      sqrt(eps_t * phi_k) * noise);
-      }
-    }
 
-    __kernel void update_phi(
-        __global Float* g_beta, __global void* g_pi, __global void* g_phi,
-        __global void* training_edge_set, __global Vertex* mini_batch_nodes,
-        __global Vertex* neighbors,  // [mini_batch_nodes * num_neighbor_sample]
-        uint num_mini_batch_nodes, uint step_count,
-        __global Float* grads,  // [num global threads * K]
-        __global Float* probs,   // [num global threads * K]
-        __global void* vrand
-        ) {
-      uint i = get_global_id(0);
-      uint gsize = get_global_size(0);
-      grads += i * K;
-      probs += i * K;
-      __global Random* rand = (__global Random*)vrand;
-      if (i < num_mini_batch_nodes) {
-        random_seed_t rseed = rand->base_[i];
-        for (; i < num_mini_batch_nodes; i += gsize) {
-          Vertex node = mini_batch_nodes[i];
-          __global Vertex* node_neighbors = neighbors + i * NUM_NEIGHBORS;
-          update_phi_for_node(g_beta, g_pi, g_phi, training_edge_set, node,
-                              node_neighbors, step_count, grads, probs, &rseed);
+        __kernel void update_phi(
+            __global Float* g_beta, __global void* g_pi, __global void* g_phi,
+            __global void* training_edge_set, __global Vertex* mini_batch_nodes,
+            __global Vertex*
+                neighbors,  // [mini_batch_nodes * num_neighbor_sample]
+            uint num_mini_batch_nodes,
+            uint step_count,
+            __global Float* grads,  // [num global threads * K]
+            __global Float* probs,  // [num global threads * K]
+            __global void* vrand) {
+          uint i = get_global_id(0);
+          uint gsize = get_global_size(0);
+          grads += i * K;
+          probs += i * K;
+          __global Random* rand = (__global Random*)vrand;
+          if (i < num_mini_batch_nodes) {
+            random_seed_t rseed = rand->base_[i];
+            for (; i < num_mini_batch_nodes; i += gsize) {
+              Vertex node = mini_batch_nodes[i];
+              __global Vertex* node_neighbors = neighbors + i * NUM_NEIGHBORS;
+              update_phi_for_node(g_beta, g_pi, g_phi, training_edge_set, node,
+                                  node_neighbors, step_count, grads, probs,
+                                  &rseed);
+            }
+            rand->base_[i] = rseed;
+          }
         }
-        rand->base_[i] = rseed;
-      }
-    }
 
-    __kernel void update_pi(__global void* g_pi, __global void* g_phi,
-                            __global Vertex* mini_batch_nodes,
-                            uint num_mini_batch_nodes) {
-      uint i = get_global_id(0);
-      uint gsize = get_global_size(0);
-      for (; i < num_mini_batch_nodes; i += gsize) {
-        Vertex n = mini_batch_nodes[i];
-        __global Float* pi = floatRowPartitionedMatrix_Row(g_pi, n);
-        __global Float* phi = floatRowPartitionedMatrix_Row(g_phi, n);
-        Float sum = 0;
-        for (uint k = 0; k < K; ++k) {
-          sum += phi[k];
+        __kernel void update_pi(__global void* g_pi, __global void* g_phi,
+                                __global Vertex* mini_batch_nodes,
+                                uint num_mini_batch_nodes) {
+          uint i = get_global_id(0);
+          uint gsize = get_global_size(0);
+          for (; i < num_mini_batch_nodes; i += gsize) {
+            Vertex n = mini_batch_nodes[i];
+            __global Float* pi = floatRowPartitionedMatrix_Row(g_pi, n);
+            __global Float* phi = floatRowPartitionedMatrix_Row(g_phi, n);
+            Float sum = 0;
+            for (uint k = 0; k < K; ++k) {
+              sum += phi[k];
+            }
+            for (uint k = 0; k < K; ++k) {
+              pi[k] = phi[k] / sum;
+            }
+          }
         }
-        for (uint k = 0; k < K; ++k) {
-          pi[k] = phi[k] / sum;
-        }
-      }
-    }
 
-    );
+        );
 
 const std::string kSourcePhiWg =
     mcmc::algorithm::WorkGroupNormalizeProgram(compute::type_name<Float>()) +
     "\n" + "#define WG_SUM_Float WG_SUM_" + compute::type_name<Float>() +
     "\n"
     "#define WG_NORMALIZE_Float WG_NORMALIZE_" +
-    compute::type_name<Float>() + "\n" +
-    random::GetRandomHeader() +
+    compute::type_name<Float>() + "\n" + random::GetRandomHeader() +
     BOOST_COMPUTE_STRINGIZE_SOURCE(
 
         void update_phi_for_nodeWG(__global Float* beta, __global void* g_pi,
-                                   __global void* g_phi,
-                                   __global Set* edge_set, Vertex node,
-                                   __global Vertex* neighbors, uint step_count,
-                                   __global Float* grads,    // K
-                                   __global Float* probs,    // K
+                                   __global void* g_phi, __global Set* edge_set,
+                                   Vertex node, __global Vertex* neighbors,
+                                   uint step_count,
+                                   __global Float* grads,  // K
+                                   __global Float* probs,  // K
                                    random_seed_t* rseed,
                                    __global Float* scratch,  // K
                                    __local Float* aux) {
@@ -132,7 +134,8 @@ const std::string kSourcePhiWg =
           }
           for (uint i = 0; i < NUM_NEIGHBORS; ++i) {
             Vertex neighbor = neighbors[i];
-            __global Float* pi_neighbor = floatRowPartitionedMatrix_Row(g_pi, neighbor);
+            __global Float* pi_neighbor =
+                floatRowPartitionedMatrix_Row(g_pi, neighbor);
             Edge edge = MakeEdge(min(node, neighbor), max(node, neighbor));
             bool y = Set_HasEdge(edge_set, edge);
             Float e = (y == 1 ? EPSILON : 1.0 - EPSILON);
@@ -153,7 +156,7 @@ const std::string kSourcePhiWg =
           Float Nn = (1.0 * N) / NUM_NEIGHBORS;
           barrier(CLK_GLOBAL_MEM_FENCE);
           for (uint k = lid; k < K; k += lsize) {
-            Float noise =  PHI_RANDN(rseed);
+            Float noise = PHI_RANDN(rseed);
             Float phi_k = phi[k];
             phi[k] = fabs(phi_k + eps_t / 2 * (ALPHA - phi_k + Nn * grads[k]) +
                           sqrt(eps_t * phi_k) * noise);
@@ -167,8 +170,8 @@ const std::string kSourcePhiWg =
                 neighbors,  // [mini_batch_nodes * num_neighbor_sample]
             uint num_mini_batch_nodes,
             uint step_count,
-            __global Float* grads,    // [num local threads * K]
-            __global Float* probs,    // [num local threads * K]
+            __global Float* grads,  // [num local threads * K]
+            __global Float* probs,  // [num local threads * K]
             __global void* vrand,
             __global Float* scratch,  // [num local threads * K]
             __local Float* aux        // [num local threads]
@@ -184,9 +187,9 @@ const std::string kSourcePhiWg =
             for (; i < num_mini_batch_nodes; i += gsize) {
               Vertex node = mini_batch_nodes[i];
               __global Vertex* node_neighbors = neighbors + i * NUM_NEIGHBORS;
-              update_phi_for_nodeWG(g_beta, g_pi, g_phi, training_edge_set, node,
-                                    node_neighbors, step_count, grads, probs, &rseed,
-                                    scratch, aux);
+              update_phi_for_nodeWG(g_beta, g_pi, g_phi, training_edge_set,
+                                    node, node_neighbors, step_count, grads,
+                                    probs, &rseed, scratch, aux);
             }
             rand->base_[get_global_id(0)] = rseed;
           }
@@ -217,7 +220,8 @@ const std::string kSourcePhiWg =
 
 PhiUpdater::PhiUpdater(Mode mode, const Config& cfg,
                        compute::command_queue queue,
-                       compute::vector<Float>& beta, RowPartitionedMatrix<Float>* pi,
+                       compute::vector<Float>& beta,
+                       RowPartitionedMatrix<Float>* pi,
                        RowPartitionedMatrix<Float>* phi, OpenClSet* trainingSet,
                        const std::string& compileFlags,
                        const std::string& baseFuncs)
@@ -229,8 +233,9 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg,
       trainingSet_(trainingSet),
       randFactory_(random::OpenClRandomFactory::New(queue_)),
       rand_(randFactory_->CreateRandom(
-            2 * cfg.mini_batch_size * (mode == NODE_PER_THREAD? 1 : cfg.phi_wg_size),
-            random::random_seed_t{42, 43})),
+          2 * cfg.mini_batch_size *
+              (mode == NODE_PER_THREAD ? 1 : cfg.phi_wg_size),
+          random::random_seed_t{42, 43})),
       count_calls_(0),
       k_(cfg.K),
       local_(cfg.phi_wg_size),
@@ -255,9 +260,9 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg,
   } else {
     out << "#define PHI_RANDN(X) randn(X)" << std::endl;
   }
-  out << baseFuncs << std::endl << GetRowPartitionedMatrixHeader<Float>() << std::endl << *src << std::endl;
-  prog_ = compute::program::create_with_source(out.str(),
-                                               queue_.get_context());
+  out << baseFuncs << std::endl << GetRowPartitionedMatrixHeader<Float>()
+      << std::endl << *src << std::endl;
+  prog_ = compute::program::create_with_source(out.str(), queue_.get_context());
   try {
     prog_.build(compileFlags);
   } catch (compute::opencl_error& e) {
@@ -299,8 +304,8 @@ void PhiUpdater::operator()(
   uint32_t global;
   if (mode_ == NODE_PER_THREAD) {
     global = (num_mini_batch_nodes / local_ +
-                       (num_mini_batch_nodes % local_ ? 1 : 0)) *
-                      local_;
+              (num_mini_batch_nodes % local_ ? 1 : 0)) *
+             local_;
   } else {
     global = num_mini_batch_nodes * local_;
   }

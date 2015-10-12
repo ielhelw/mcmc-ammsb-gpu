@@ -57,8 +57,9 @@ Learner::Learner(const Config& cfg, compute::command_queue queue)
       heldoutPerplexity_(PerplexityCalculator::EDGE_PER_WORKGROUP, cfg_, queue_,
                          beta_, pi_.get(), heldoutEdges_, heldoutSet_.get(),
                          compileFlags_, GetBaseFuncs()),
-      phiUpdater_(PhiUpdater::NODE_PER_WORKGROUP, cfg_, queue_, beta_, pi_.get(),
-                  phi_.get(), trainingSet_.get(), compileFlags_, GetBaseFuncs()) {
+      phiUpdater_(PhiUpdater::NODE_PER_WORKGROUP, cfg_, queue_, beta_,
+                  pi_.get(), phi_.get(), trainingSet_.get(), compileFlags_,
+                  GetBaseFuncs()) {
   // gamma generator
   std::mt19937 mt19937;
   std::gamma_distribution<Float> gamma_distribution(cfg_.eta0, cfg_.eta1);

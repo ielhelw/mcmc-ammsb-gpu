@@ -16,7 +16,8 @@ class PerplexityCalculator {
 
   PerplexityCalculator(Mode mode, const Config& cfg,
                        compute::command_queue queue,
-                       compute::vector<Float>& beta, RowPartitionedMatrix<Float>* pi,
+                       compute::vector<Float>& beta,
+                       RowPartitionedMatrix<Float>* pi,
                        compute::vector<Edge>& edges, OpenClSet* edgeSet,
                        const std::string& compileFlags,
                        const std::string& baseFuncs);
@@ -29,8 +30,8 @@ class PerplexityCalculator {
   compute::command_queue queue_;
   compute::event event_;
 
-  compute::vector<Float>& beta_;  // [K]
-  RowPartitionedMatrix<Float>* pi_;    // [N,K]
+  compute::vector<Float>& beta_;     // [K]
+  RowPartitionedMatrix<Float>* pi_;  // [N,K]
   compute::vector<Edge>& edges_;
   OpenClSet* edgeSet_;
 
@@ -44,7 +45,7 @@ class PerplexityCalculator {
   std::vector<compute::uint_> non_link_count_;
   std::vector<Float> link_likelihood_;
   std::vector<Float> non_link_likelihood_;
-  
+
   compute::vector<Float> scratch_;
   compute::program prog_;
   compute::kernel kernel_;

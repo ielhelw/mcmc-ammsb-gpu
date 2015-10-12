@@ -128,7 +128,8 @@ TEST_F(WgSumTest, PartitionedTest) {
       static_cast<uint32_t>(std::ceil(cols / static_cast<double>(wg)));
   compute::vector<compute::uint_> scratch(rows * scratch_per_wg, context_);
   compute::vector<compute::uint_> out(rows, context_);
-  compute::kernel kernel = prog_.create_kernel("WG_SUM_PARTITIONED_KERNEL_uint");
+  compute::kernel kernel =
+      prog_.create_kernel("WG_SUM_PARTITIONED_KERNEL_uint");
   kernel.set_arg(0, p->Get());
   kernel.set_arg(1, out);
   kernel.set_arg(2, scratch);

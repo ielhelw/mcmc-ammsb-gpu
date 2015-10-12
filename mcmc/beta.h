@@ -31,9 +31,9 @@ class BetaUpdater {
   Mode mode_;
   compute::command_queue queue_;
 
-  compute::vector<Float>& theta_;  // [K, 2]
-  compute::vector<Float>& beta_;   // [K]
-  RowPartitionedMatrix<Float>* pi_;     // [N, K]
+  compute::vector<Float>& theta_;    // [K, 2]
+  compute::vector<Float>& beta_;     // [K]
+  RowPartitionedMatrix<Float>* pi_;  // [N, K]
   OpenClSet* trainingSet_;
 
   compute::program prog_;
@@ -43,7 +43,6 @@ class BetaUpdater {
   compute::kernel update_theta_kernel_;
   compute::kernel beta_kernel_;
   algorithm::Normalizer<Float> normalizer_;
-
 
   std::shared_ptr<random::OpenClRandomFactory> randFactory_;
   std::unique_ptr<random::OpenClRandom> rand_;

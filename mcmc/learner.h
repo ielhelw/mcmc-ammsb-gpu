@@ -47,8 +47,8 @@ class Learner {
   compute::vector<Float> theta_;  // [K]
 
   std::shared_ptr<RowPartitionedMatrixFactory<Float>> allocFactory_;
-  std::unique_ptr<RowPartitionedMatrix<Float>> pi_;     // [N,K]
-  std::unique_ptr<RowPartitionedMatrix<Float>> phi_;    // [N,K]
+  std::unique_ptr<RowPartitionedMatrix<Float>> pi_;   // [N,K]
+  std::unique_ptr<RowPartitionedMatrix<Float>> phi_;  // [N,K]
 
   compute::buffer scratch_;
 

@@ -23,7 +23,7 @@ class PhiUpdater {
       compute::vector<Vertex>& mini_batch_nodes,  // [X <= 2*MINI_BATCH_SIZE]
       compute::vector<Vertex>& neighbors,  // [MINI_BATCH_NODES, NUM_NEIGHBORS]
       uint32_t num_mini_batch_nodes);
-  
+
   uint64_t LastInvocationTime() const;
 
  private:
@@ -32,11 +32,11 @@ class PhiUpdater {
   compute::event phi_event_;
   compute::event pi_event_;
 
-  compute::vector<Float>& beta_;  // [K]
-  RowPartitionedMatrix<Float>* pi_;    // [N,K]
-  RowPartitionedMatrix<Float>* phi_;   // [N,K]
+  compute::vector<Float>& beta_;      // [K]
+  RowPartitionedMatrix<Float>* pi_;   // [N,K]
+  RowPartitionedMatrix<Float>* phi_;  // [N,K]
   OpenClSet* trainingSet_;
-  
+
   std::shared_ptr<random::OpenClRandomFactory> randFactory_;
   std::unique_ptr<random::OpenClRandom> rand_;
 
@@ -47,9 +47,9 @@ class PhiUpdater {
   uint32_t count_calls_;
   uint32_t k_;
   uint32_t local_;
-  
-  compute::vector<Float> grads_;  // [mini_batch, K]
-  compute::vector<Float> probs_;  // [mini_batch, K]
+
+  compute::vector<Float> grads_;    // [mini_batch, K]
+  compute::vector<Float> probs_;    // [mini_batch, K]
   compute::vector<Float> scratch_;  // [mini_batch, K]
 };
 

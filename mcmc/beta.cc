@@ -6,63 +6,65 @@
 
 namespace mcmc {
 
-const std::string kSourceBetaBase = random::GetRandomHeader() +
-  BOOST_COMPUTE_STRINGIZE_SOURCE(
-    __kernel void sum_theta(__global Float* g_theta,     // [K, 2]
-                            __global Float* g_theta_sum  // [K]
-                            ) {
-      uint gsize = get_global_size(0);
-      for (uint i = get_global_id(0); i < K; i += gsize) {
-        g_theta_sum[i] = g_theta[i] + g_theta[K + i];
-      }
-    }
-    __kernel void sum_grads(__global Float* grads, uint num_partial_sums) {
-      uint i = get_global_id(0);
-      uint gsize = get_global_size(0);
-      for (; i < 2 * K; i += gsize) {
-        for (uint p = 1; p < num_partial_sums; ++p) {
-          grads[i] += grads[i + p * 2 * K];
+const std::string kSourceBetaBase =
+    random::GetRandomHeader() +
+    BOOST_COMPUTE_STRINGIZE_SOURCE(
+        __kernel void sum_theta(__global Float* g_theta,     // [K, 2]
+                                __global Float* g_theta_sum  // [K]
+                                ) {
+          uint gsize = get_global_size(0);
+          for (uint i = get_global_id(0); i < K; i += gsize) {
+            g_theta_sum[i] = g_theta[i] + g_theta[K + i];
+          }
+        } __kernel void sum_grads(__global Float* grads,
+                                  uint num_partial_sums) {
+          uint i = get_global_id(0);
+          uint gsize = get_global_size(0);
+          for (; i < 2 * K; i += gsize) {
+            for (uint p = 1; p < num_partial_sums; ++p) {
+              grads[i] += grads[i + p * 2 * K];
+            }
+          }
         }
-      }
-    }
 
-    __kernel void update_theta(__global Float* theta, __global Float* grads,
-                               uint step_count, Float scale, __global void* vrand) {
-      const uint gid = get_global_id(0);
-      const uint gsize = get_global_size(0);
-      __global Random* random = (__global Random*)vrand;
-      if (gid < K) {
-        random_seed_t rseed = random->base_[gid];
-        Float eps_t = get_eps_t(step_count);
-        for (uint k = get_global_id(0); k < K; k += gsize) {
-          Float r0 = randn(&rseed);
-          Float grads_k = grads[k];
-          Float theta_k = theta[k];
-          Float f0 = sqrt(eps_t * theta_k);
-          theta[k] =
-              fabs(theta_k + eps_t / 2.0 * (ETA0 - theta_k + scale * grads_k) +
-                   f0 * r0);
-          Float r1 = randn(&rseed);
-          Float grads_2k = grads[k + K];
-          Float theta_2k = theta[k + K];
-          Float f1 = sqrt(eps_t * theta_2k);
-          theta[k + K] =
-              fabs(theta_2k +
-                   eps_t / 2.0 * (ETA1 - theta_2k + scale * grads_2k) +
-                   f1 * r1);
+        __kernel void update_theta(__global Float* theta, __global Float* grads,
+                                   uint step_count, Float scale,
+                                   __global void* vrand) {
+          const uint gid = get_global_id(0);
+          const uint gsize = get_global_size(0);
+          __global Random* random = (__global Random*)vrand;
+          if (gid < K) {
+            random_seed_t rseed = random->base_[gid];
+            Float eps_t = get_eps_t(step_count);
+            for (uint k = get_global_id(0); k < K; k += gsize) {
+              Float r0 = randn(&rseed);
+              Float grads_k = grads[k];
+              Float theta_k = theta[k];
+              Float f0 = sqrt(eps_t * theta_k);
+              theta[k] = fabs(theta_k +
+                              eps_t / 2.0 * (ETA0 - theta_k + scale * grads_k) +
+                              f0 * r0);
+              Float r1 = randn(&rseed);
+              Float grads_2k = grads[k + K];
+              Float theta_2k = theta[k + K];
+              Float f1 = sqrt(eps_t * theta_2k);
+              theta[k + K] = fabs(
+                  theta_2k +
+                  eps_t / 2.0 * (ETA1 - theta_2k + scale * grads_2k) + f1 * r1);
+            }
+            random->base_[gid] = rseed;
+          }
         }
-        random->base_[gid] = rseed;
-      }
-    }
 
-    );
+        );
 
-const std::string kSourceBeta = kSourceBetaBase + BOOST_COMPUTE_STRINGIZE_SOURCE(
-    __kernel void calculate_grads_partial(
+const std::string kSourceBeta =
+    kSourceBetaBase +
+    BOOST_COMPUTE_STRINGIZE_SOURCE(__kernel void calculate_grads_partial(
         __global Float* theta,      // [K, 2]
         __global Float* theta_sum,  // [K]
         __global Float* beta,       // [K]
-        __global void* g_pi,       // [N, K]
+        __global void* g_pi,        // [N, K]
         __global void* vset /*EdgeSet*/, __global Edge* mini_batch_edges,
         uint num_mini_batch_edges,
         __global Float* probs,  // [num_mini_batch_edges * K]
@@ -108,87 +110,82 @@ const std::string kSourceBeta = kSourceBetaBase + BOOST_COMPUTE_STRINGIZE_SOURCE
           grads[k + K] += f * (y / theta[k + K] - one_over_theta_sum);
         }
       }
-    }
-    );
+    });
 
 const std::string kSourceBetaWg =
     mcmc::algorithm::WorkGroupSum(compute::type_name<Float>()) + "\n" +
     "#define WG_SUM_FOLD_Float WG_SUM_FOLD_" + compute::type_name<Float>() +
     "\n"
     "#define WG_SUM_Float WG_SUM_" +
-    compute::type_name<Float>() + "\n" +
-    kSourceBetaBase + BOOST_COMPUTE_STRINGIZE_SOURCE(
-        __kernel void calculate_grads_partial(
-            __global Float* theta,      // [K, 2]
-            __global Float* theta_sum,  // [K]
-            __global Float* beta,       // [K]
-            __global void* g_pi,       // [N, K]
-            __global void* vset /*EdgeSet*/, __global Edge* mini_batch_edges,
-            uint num_mini_batch_edges,
-            __global Float* probs,    // [num_mini_batch_edges * K]
-            __global Float* grads,    // min(#edges, #num_threads) * [K, 2]
-            __global Float* scratch,  // min(#edges, #num_threads) * [K]
-            __local Float* aux) {
-          uint i = get_group_id(0);
-          const uint gsize = get_num_groups(0);
-          const uint lid = get_local_id(0);
-          const uint lsize = get_local_size(0);
-          probs += i * K;
-          grads += i * 2 * K;
-          scratch += i * K;
-          // reset grads
-          if (i < num_mini_batch_edges) {
-            for (uint j = lid; j < 2 * K; j += lsize) grads[j] = 0;
-          }
-          for (; i < num_mini_batch_edges; i += gsize) {
-            Edge edge = mini_batch_edges[i];
-            Vertex u = Vertex0(edge);
-            Vertex v = Vertex1(edge);
-            edge = MakeEdge(min(u, v), max(u, v));
-            uint y = Set_HasEdge(vset, edge) ? 1 : 0;
-            __global Float* pi_a = floatRowPartitionedMatrix_Row(g_pi, u);
-            __global Float* pi_b = floatRowPartitionedMatrix_Row(g_pi, v);
-            Float pi_sum = 0;
-            Float probs_sum = 0;
+    compute::type_name<Float>() + "\n" + kSourceBetaBase +
+    BOOST_COMPUTE_STRINGIZE_SOURCE(__kernel void calculate_grads_partial(
+        __global Float* theta,      // [K, 2]
+        __global Float* theta_sum,  // [K]
+        __global Float* beta,       // [K]
+        __global void* g_pi,        // [N, K]
+        __global void* vset /*EdgeSet*/, __global Edge* mini_batch_edges,
+        uint num_mini_batch_edges,
+        __global Float* probs,    // [num_mini_batch_edges * K]
+        __global Float* grads,    // min(#edges, #num_threads) * [K, 2]
+        __global Float* scratch,  // min(#edges, #num_threads) * [K]
+        __local Float* aux) {
+      uint i = get_group_id(0);
+      const uint gsize = get_num_groups(0);
+      const uint lid = get_local_id(0);
+      const uint lsize = get_local_size(0);
+      probs += i * K;
+      grads += i * 2 * K;
+      scratch += i * K;
+      // reset grads
+      if (i < num_mini_batch_edges) {
+        for (uint j = lid; j < 2 * K; j += lsize) grads[j] = 0;
+      }
+      for (; i < num_mini_batch_edges; i += gsize) {
+        Edge edge = mini_batch_edges[i];
+        Vertex u = Vertex0(edge);
+        Vertex v = Vertex1(edge);
+        edge = MakeEdge(min(u, v), max(u, v));
+        uint y = Set_HasEdge(vset, edge) ? 1 : 0;
+        __global Float* pi_a = floatRowPartitionedMatrix_Row(g_pi, u);
+        __global Float* pi_b = floatRowPartitionedMatrix_Row(g_pi, v);
+        Float pi_sum = 0;
+        Float probs_sum = 0;
 
-            for (uint k = lid; k < K; k += lsize) {
-              Float f = pi_a[k] * pi_b[k];
-              scratch[k] = f;
-              Float probs_k;
-              Float beta_k = beta[k];
-              if (y) {
-                probs_k = beta_k * f;
-              } else {
-                probs_k = (1.0 - beta_k) * f;
-              }
-              probs[k] = probs_k;
-            }
-            barrier(CLK_GLOBAL_MEM_FENCE);
-            WG_SUM_FOLD_Float(scratch, aux, K);
-            pi_sum = scratch[0];
-            barrier(CLK_GLOBAL_MEM_FENCE);
-            WG_SUM_Float(probs, scratch, aux, K);
-            probs_sum = scratch[0];
-
-            Float prob_0 = (y ? EPSILON : (1.0 - EPSILON)) * (1.0 - pi_sum);
-            probs_sum += prob_0;
-            for (uint k = lid; k < K; k += lsize) {
-              Float f = probs[k] / probs_sum;
-              Float one_over_theta_sum = 1.0 / theta_sum[k];
-              grads[k] += f * ((1 - y) / theta[k] - one_over_theta_sum);
-              grads[k + K] += f * (y / theta[k + K] - one_over_theta_sum);
-            }
+        for (uint k = lid; k < K; k += lsize) {
+          Float f = pi_a[k] * pi_b[k];
+          scratch[k] = f;
+          Float probs_k;
+          Float beta_k = beta[k];
+          if (y) {
+            probs_k = beta_k * f;
+          } else {
+            probs_k = (1.0 - beta_k) * f;
           }
+          probs[k] = probs_k;
         }
-        );
+        barrier(CLK_GLOBAL_MEM_FENCE);
+        WG_SUM_FOLD_Float(scratch, aux, K);
+        pi_sum = scratch[0];
+        barrier(CLK_GLOBAL_MEM_FENCE);
+        WG_SUM_Float(probs, scratch, aux, K);
+        probs_sum = scratch[0];
 
-BetaUpdater::BetaUpdater(Mode mode, const Config& cfg,
-                         compute::command_queue queue,
-                         compute::vector<Float>& theta,
-                         compute::vector<Float>& beta,
-                         RowPartitionedMatrix<Float>* pi, OpenClSet* trainingSet,
-                         const std::string& compileFlags,
-                         const std::string& baseFuncs)
+        Float prob_0 = (y ? EPSILON : (1.0 - EPSILON)) * (1.0 - pi_sum);
+        probs_sum += prob_0;
+        for (uint k = lid; k < K; k += lsize) {
+          Float f = probs[k] / probs_sum;
+          Float one_over_theta_sum = 1.0 / theta_sum[k];
+          grads[k] += f * ((1 - y) / theta[k] - one_over_theta_sum);
+          grads[k + K] += f * (y / theta[k + K] - one_over_theta_sum);
+        }
+      }
+    });
+
+BetaUpdater::BetaUpdater(
+    Mode mode, const Config& cfg, compute::command_queue queue,
+    compute::vector<Float>& theta, compute::vector<Float>& beta,
+    RowPartitionedMatrix<Float>* pi, OpenClSet* trainingSet,
+    const std::string& compileFlags, const std::string& baseFuncs)
     : mode_(mode),
       queue_(queue),
       theta_(theta),
@@ -217,8 +214,9 @@ BetaUpdater::BetaUpdater(Mode mode, const Config& cfg,
     default:
       LOG(FATAL) << "Failed to recognize mode";
   }
-  prog_ = compute::program::create_with_source(baseFuncs + GetRowPartitionedMatrixHeader<Float>() + *src,
-                                               queue_.get_context());
+  prog_ = compute::program::create_with_source(
+      baseFuncs + GetRowPartitionedMatrixHeader<Float>() + *src,
+      queue_.get_context());
   try {
     prog_.build(compileFlags);
   } catch (compute::opencl_error& e) {
@@ -291,7 +289,8 @@ void BetaUpdater::operator()(compute::vector<Edge>* edges, uint32_t num_edges,
     compute::copy(theta_.begin(), theta_.begin() + k_, beta_.begin(), queue_);
     normalizer_();
     auto t2 = std::chrono::high_resolution_clock::now();
-    normalize_time_ = std::chrono::duration_cast<std::chrono::nanoseconds>(t1-t2).count();
+    normalize_time_ =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t2).count();
   }
   LOG(INFO)
       << "BetaUpdater: "
@@ -301,8 +300,8 @@ void BetaUpdater::operator()(compute::vector<Edge>* edges, uint32_t num_edges,
              1e9 << ", "
       << grads_sum_event_.duration<boost::chrono::nanoseconds>().count() / 1e9
       << ", "
-      << update_theta_event_.duration<boost::chrono::nanoseconds>().count() / 1e9
-      << ", " << normalize_time_ / 1e9;
+      << update_theta_event_.duration<boost::chrono::nanoseconds>().count() /
+             1e9 << ", " << normalize_time_ / 1e9;
 }
 
 uint64_t BetaUpdater::LastInvocationTime() const {

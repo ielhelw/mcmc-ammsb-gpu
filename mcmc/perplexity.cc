@@ -42,8 +42,9 @@ const std::string kSourcePerplexity = BOOST_COMPUTE_STRINGIZE_SOURCE(
       Vertex u = Vertex0(e);
       Vertex v = Vertex1(e);
       bool is_edge = Set_HasEdge(edge_set, e);
-      Float edge_likelihood =
-          calculate_edge_likelihood(floatRowPartitionedMatrix_Row(g_pi, u), floatRowPartitionedMatrix_Row(g_pi, v), g_beta, is_edge);
+      Float edge_likelihood = calculate_edge_likelihood(
+          floatRowPartitionedMatrix_Row(g_pi, u),
+          floatRowPartitionedMatrix_Row(g_pi, v), g_beta, is_edge);
       Float ppx = *g_ppx_per_edge;
       ppx = (ppx * (avg_count - 1) + edge_likelihood) / avg_count;
       if (is_edge) {
@@ -78,8 +79,8 @@ const std::string kSourcePerplexity = BOOST_COMPUTE_STRINGIZE_SOURCE(
 
 const std::string kSourcePerplexityWg =
     mcmc::algorithm::WorkGroupSum(compute::type_name<Float>()) + "\n" +
-    "#define WG_SUM_FOLD_Float WG_SUM_FOLD_" + compute::type_name<Float>() + "\n"
-    BOOST_COMPUTE_STRINGIZE_SOURCE(
+    "#define WG_SUM_FOLD_Float WG_SUM_FOLD_" + compute::type_name<Float>() +
+    "\n" BOOST_COMPUTE_STRINGIZE_SOURCE(
 
         Float calculate_edge_likelihood_WG(
             __global Float * pi_a, __global Float * pi_b, __global Float * beta,
@@ -117,9 +118,8 @@ const std::string kSourcePerplexityWg =
         }
 
         void calculate_ppx_partial_for_edge_(
-            __global void* g_pi, __global Float* g_beta,
-            __global Set* edge_set, __global Float* g_ppx_per_edge,
-            __global Float* g_link_likelihood,
+            __global void* g_pi, __global Float* g_beta, __global Set* edge_set,
+            __global Float* g_ppx_per_edge, __global Float* g_link_likelihood,
             __global Float* g_non_link_likelihood, __global uint* g_link_count,
             __global uint* g_non_link_count, uint avg_count, Edge e,
             __global Float* scratch, __local Float* aux) {
@@ -127,7 +127,9 @@ const std::string kSourcePerplexityWg =
           Vertex v = Vertex1(e);
           bool is_edge = Set_HasEdge(edge_set, e);
           Float edge_likelihood = calculate_edge_likelihood_WG(
-              floatRowPartitionedMatrix_Row(g_pi, u), floatRowPartitionedMatrix_Row(g_pi, v), g_beta, is_edge, scratch, aux);
+              floatRowPartitionedMatrix_Row(g_pi, u),
+              floatRowPartitionedMatrix_Row(g_pi, v), g_beta, is_edge, scratch,
+              aux);
           if (get_local_id(0) == 0) {
             Float ppx = *g_ppx_per_edge;
             ppx = (ppx * (avg_count - 1) + edge_likelihood) / avg_count;
@@ -203,8 +205,9 @@ PerplexityCalculator::PerplexityCalculator(
     default:
       LOG(FATAL) << "Cannot recognize mode: " << mode;
   }
-  prog_ = compute::program::create_with_source(baseFuncs + GetRowPartitionedMatrixHeader<Float>() + *src,
-                                               queue_.get_context());
+  prog_ = compute::program::create_with_source(
+      baseFuncs + GetRowPartitionedMatrixHeader<Float>() + *src,
+      queue_.get_context());
   try {
     prog_.build(compileFlags);
   } catch (compute::opencl_error& e) {

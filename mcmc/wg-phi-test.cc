@@ -16,10 +16,9 @@ namespace mcmc {
 namespace test {
 
 class WgPhiTest : public ContextTest,
-                         public ::testing::WithParamInterface<uint32_t> {
+                  public ::testing::WithParamInterface<uint32_t> {
  protected:
-  WgPhiTest(uint32_t K = 1024, uint32_t N = 10*1024)
-    : num_tries_(3) {
+  WgPhiTest(uint32_t K = 1024, uint32_t N = 10 * 1024) : num_tries_(3) {
     cfg_.N = N;
     cfg_.K = K;
     cfg_.phi_wg_size = 32;
@@ -55,7 +54,7 @@ class WgPhiTest : public ContextTest,
 
   void SetUp() override {
     ContextTest::SetUp();
-    std::vector<Edge> edges = GenerateRandomEdges(32*cfg_.N);
+    std::vector<Edge> edges = GenerateRandomEdges(32 * cfg_.N);
     Set set(edges.size());
     for (auto it = edges.begin(); it != edges.end(); ++it) {
       ASSERT_TRUE(set.Insert(*it));
@@ -70,7 +69,7 @@ class WgPhiTest : public ContextTest,
     pi_.reset(allocFactory->CreateMatrix(cfg_.N, cfg_.K));
     ASSERT_EQ(1, pi_->Blocks().size());
   }
-  
+
   void TearDown() override {
     factory_.reset();
     dev_set_.reset();
@@ -84,9 +83,9 @@ class WgPhiTest : public ContextTest,
 
   void Run(PhiUpdater::Mode mode) {
     Float delta = 1.0 / cfg_.K;
-    PhiUpdater updater(mode, cfg_, queue_,
-        beta_, pi_.get(), phi_.get(), dev_set_.get(),
-        MakeCompileFlags(cfg_), Learner::GetBaseFuncs());
+    PhiUpdater updater(mode, cfg_, queue_, beta_, pi_.get(), phi_.get(),
+                       dev_set_.get(), MakeCompileFlags(cfg_),
+                       Learner::GetBaseFuncs());
     // generate random mini-batch nodes
     std::vector<uint> hmbn(cfg_.N);
     uint32_t node = 0;
@@ -104,14 +103,16 @@ class WgPhiTest : public ContextTest,
       updater(mbn, n, static_cast<uint32_t>(mbn.size()));
       time += updater.LastInvocationTime();
       if (i == 0) {
-        compute::copy(pi_->Blocks()[0].begin(), pi_->Blocks()[0].end(), host_pi.begin(), queue_);
+        compute::copy(pi_->Blocks()[0].begin(), pi_->Blocks()[0].end(),
+                      host_pi.begin(), queue_);
       } else {
-        compute::copy(pi_->Blocks()[0].begin(), pi_->Blocks()[0].end(), host_pi_tmp.begin(), queue_);
+        compute::copy(pi_->Blocks()[0].begin(), pi_->Blocks()[0].end(),
+                      host_pi_tmp.begin(), queue_);
       }
     }
     LOG(INFO) << "WG=" << cfg_.phi_wg_size << ", nano=" << time / num_tries_;
   }
-  
+
   uint32_t num_tries_;
   std::shared_ptr<OpenClSetFactory> factory_;
   std::unique_ptr<OpenClSet> dev_set_;
@@ -129,21 +130,27 @@ TEST_P(WgPhiTest, VerifyModes) {
   cfg_.phi_disable_noise = true;
   Run(PhiUpdater::NODE_PER_THREAD);
   std::vector<Float> host_phi1(cfg_.N * cfg_.K);
-  compute::copy(phi_->Blocks()[0].begin(), phi_->Blocks()[0].end(), host_phi1.begin(), queue_);
+  compute::copy(phi_->Blocks()[0].begin(), phi_->Blocks()[0].end(),
+                host_phi1.begin(), queue_);
   std::vector<Float> host_pi1(cfg_.N * cfg_.K);
-  compute::copy(pi_->Blocks()[0].begin(), pi_->Blocks()[0].end(), host_pi1.begin(), queue_);
+  compute::copy(pi_->Blocks()[0].begin(), pi_->Blocks()[0].end(),
+                host_pi1.begin(), queue_);
 
   Run(PhiUpdater::NODE_PER_WORKGROUP);
   std::vector<Float> host_phi2(cfg_.N * cfg_.K);
-  compute::copy(phi_->Blocks()[0].begin(), phi_->Blocks()[0].end(), host_phi2.begin(), queue_);
+  compute::copy(phi_->Blocks()[0].begin(), phi_->Blocks()[0].end(),
+                host_phi2.begin(), queue_);
   std::vector<Float> host_pi2(cfg_.N * cfg_.K);
-  compute::copy(pi_->Blocks()[0].begin(), pi_->Blocks()[0].end(), host_pi2.begin(), queue_);
+  compute::copy(pi_->Blocks()[0].begin(), pi_->Blocks()[0].end(),
+                host_pi2.begin(), queue_);
 
   for (uint32_t k = 0; k < host_phi1.size(); ++k) {
-    ASSERT_NEAR(host_phi1[k], host_phi2[k], std::max(1e-5, 0.02 * std::abs(host_phi1[k])));
+    ASSERT_NEAR(host_phi1[k], host_phi2[k],
+                std::max(1e-5, 0.02 * std::abs(host_phi1[k])));
   }
   for (uint32_t k = 0; k < host_phi1.size(); ++k) {
-    ASSERT_NEAR(host_pi1[k], host_pi2[k], std::max(1e-5, 0.02 * std::abs(host_pi1[k])));
+    ASSERT_NEAR(host_pi1[k], host_pi2[k],
+                std::max(1e-5, 0.02 * std::abs(host_pi1[k])));
   }
 }
 
@@ -158,8 +165,8 @@ TEST_P(WgPhiTest, NodePerWorkGroup) {
 }
 
 INSTANTIATE_TEST_CASE_P(WorkGroups, WgPhiTest,
-                        ::testing::ValuesIn(std::vector<uint32_t>(
-                            {32, 64, 128, 256})));
+                        ::testing::ValuesIn(std::vector<uint32_t>({32, 64, 128,
+                                                                   256})));
 //                            {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024})));
 
 }  // namespace test

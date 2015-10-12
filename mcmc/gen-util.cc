@@ -1,6 +1,5 @@
 #include "mcmc/gen-util.h"
 
-
 namespace mcmc {
 namespace gen {
 
