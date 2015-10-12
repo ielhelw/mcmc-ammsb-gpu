@@ -6,6 +6,7 @@
 #include <boost/filesystem.hpp>
 
 #include "mcmc/learner.h"
+#include "mcmc/data.h"
 
 using namespace std;
 namespace compute = boost::compute;
@@ -33,6 +34,7 @@ int main(int argc, char **argv) {
   std::string filename;
   mcmc::Config cfg;
   po::options_description options;
+  uint32_t max_iters;
   options.add_options()
     ("help,h", "Show usage")
     ("file,f", po::value(&filename)->required(),
@@ -50,6 +52,8 @@ int main(int argc, char **argv) {
     ("neighbors,n", po::value(&cfg.num_node_sample)->default_value(32))
     ("ppx-wg", po::value(&cfg.ppx_wg_size)->default_value(32))
     ("phi-wg", po::value(&cfg.phi_wg_size)->default_value(32))
+    ("beta-wg", po::value(&cfg.beta_wg_size)->default_value(32))
+    ("max-iters,x", po::value(&max_iters)->default_value(100))
   ;
   po::variables_map options_vm;
   po::store(po::parse_command_line(argc, argv, options), options_vm);
@@ -76,11 +80,13 @@ int main(int argc, char **argv) {
                                    &cfg.training, &cfg.heldout)) {
     LOG(FATAL) << "Failed to generate sets from file " << filename;
   }
+  cfg.trainingGraph.reset(new mcmc::Graph(cfg.N, cfg.training_edges));
+  cfg.heldoutGraph.reset(new mcmc::Graph(cfg.N, cfg.heldout_edges));
   if (cfg.alpha == 0) cfg.alpha = static_cast<mcmc::Float>(1)/cfg.K;
   cfg.E = unique_edges.size();
   LOG(INFO) << "Loaded file " << filename;
   LOG(INFO) << cfg;
   mcmc::Learner learner(cfg, queue);
-  learner.run();
+  learner.run(max_iters);
   return 0;
 }

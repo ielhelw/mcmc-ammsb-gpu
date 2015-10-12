@@ -8,7 +8,7 @@
 
 namespace mcmc {
 
-Graph::Graph(uint32_t num_nodes, std::vector<Edge> unique_edges)
+Graph::Graph(uint32_t num_nodes, const std::vector<Edge>& unique_edges)
     : num_nodes_(num_nodes),
       unique_edges_(unique_edges),
       adjacency_(num_nodes) {

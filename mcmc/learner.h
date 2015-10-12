@@ -12,6 +12,7 @@
 #include "mcmc/data.h"
 #include "mcmc/perplexity.h"
 #include "mcmc/phi.h"
+#include "mcmc/beta.h"
 
 namespace mcmc {
 
@@ -21,7 +22,9 @@ class Learner {
 
   Float calculate_perplexity_heldout(uint32_t step_count);
 
-  void run();
+  void sampleMiniBatch(std::vector<Edge>* edges);
+
+  void run(uint32_t max_iters);
 
   // Generate base->size() elements in base. Normalized the first num_rows*K in
   // norm.
@@ -62,6 +65,7 @@ class Learner {
 
   PerplexityCalculator heldoutPerplexity_;
   PhiUpdater phiUpdater_;
+  BetaUpdater betaUpdater_;
 };
 
 template <class Generator>

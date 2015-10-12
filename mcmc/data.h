@@ -15,7 +15,7 @@ using namespace mcmc::cuckoo;
 
 class Graph {
  public:
-  Graph(uint32_t num_nodes, std::vector<Edge> unique_edges);
+  Graph(uint32_t num_nodes, const std::vector<Edge>& unique_edges);
 
   Edge GetRandomEdge() const;
 
