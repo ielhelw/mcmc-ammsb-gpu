@@ -14,7 +14,7 @@ namespace compute = boost::compute;
 
 typedef uint64_t Edge;
 typedef uint32_t Vertex;
-typedef double Float;
+typedef float Float;
 
 inline std::tuple<Vertex, Vertex> Vertices(Edge e) {
   return std::make_tuple<Vertex, Vertex>(

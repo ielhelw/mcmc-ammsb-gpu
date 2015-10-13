@@ -28,6 +28,8 @@ struct Config {
   std::unique_ptr<mcmc::Graph> heldoutGraph;
 
   uint32_t ppx_wg_size;
+  uint32_t ppx_interval;
+
   uint32_t phi_wg_size;
   uint32_t beta_wg_size;
 
@@ -46,6 +48,7 @@ struct Config {
     mini_batch_size = 32;
     num_node_sample = 32;
     ppx_wg_size = 32;
+    ppx_interval = 100;
     phi_wg_size = 32;
     beta_wg_size = 32;
     phi_disable_noise = false;

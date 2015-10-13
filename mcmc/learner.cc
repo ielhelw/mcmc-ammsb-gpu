@@ -109,7 +109,9 @@ void Learner::run(uint32_t max_iters) {
   uint64_t time = 0;
   for (; step_count < max_iters; ++step_count) {
     auto t1 = std::chrono::high_resolution_clock::now();
-    LOG(INFO) << "ppx[" << step_count << "] = " << heldoutPerplexity_();
+    if ((step_count - 1) % cfg_.ppx_interval == 0) {
+      LOG(INFO) << "ppx[" << step_count << "] = " << heldoutPerplexity_();
+    }
     edges.clear();
     sampleMiniBatch(&edges);
     nodes.clear();

@@ -51,6 +51,7 @@ int main(int argc, char **argv) {
     ("mini_batch,m", po::value(&cfg.mini_batch_size)->default_value(32))
     ("neighbors,n", po::value(&cfg.num_node_sample)->default_value(32))
     ("ppx-wg", po::value(&cfg.ppx_wg_size)->default_value(32))
+    ("ppx-interval,i", po::value(&cfg.ppx_interval)->default_value(100))
     ("phi-wg", po::value(&cfg.phi_wg_size)->default_value(32))
     ("beta-wg", po::value(&cfg.beta_wg_size)->default_value(32))
     ("max-iters,x", po::value(&max_iters)->default_value(100))
