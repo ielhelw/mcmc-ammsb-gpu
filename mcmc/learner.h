@@ -87,7 +87,7 @@ void Learner::GenerateAndNormalize(compute::command_queue* queue,
                                    RowPartitionedMatrix<Float>* base,
                                    RowPartitionedMatrix<Float>* norm) {
   for (uint32_t i = 0; i < base->Blocks().size(); ++i) {
-    std::vector<Float> host_base(base->Blocks()[0].size());
+    std::vector<Float> host_base(base->Blocks()[i].size());
     std::generate(host_base.begin(), host_base.end(), *gen);
     compute::copy(host_base.begin(), host_base.end(), base->Blocks()[i].begin(),
                   *queue);
