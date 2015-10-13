@@ -118,6 +118,7 @@ TEST_F(WgNormalizeTest, CustomNormalizePerformance) {
   LOG(INFO) << "custom: " << (t2 - t1).count();
 }
 
+#if 0
 TEST_F(ContextTest, BoostNormalizePerformance) {
   std::vector<Float> host(K);
   for (uint32_t i = 0; i < host.size(); ++i) host[i] = i + 1;
@@ -143,6 +144,7 @@ TEST_F(ContextTest, BoostNormalizePerformance) {
   }
   LOG(INFO) << "compute: " << (t2 - t1).count();
 }
+#endif
 
 TEST_F(WgNormalizeTest, PartitionedTest) {
   uint32_t cols = 1e3;

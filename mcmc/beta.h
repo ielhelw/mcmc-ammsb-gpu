@@ -32,7 +32,7 @@ class BetaUpdater {
   compute::command_queue queue_;
 
   compute::vector<Float>& theta_;    // [K, 2]
-  compute::vector<Float>& beta_;     // [K]
+  compute::vector<Float>& beta_;     // [K, 2]
   RowPartitionedMatrix<Float>* pi_;  // [N, K]
   OpenClSet* trainingSet_;
 

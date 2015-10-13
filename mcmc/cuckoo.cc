@@ -91,7 +91,7 @@ const Edge Set::KEY_INVALID = std::numeric_limits<Edge>::max();
 Set::Set(size_t n)
     : count_(0),
       N_(static_cast<size_t>(
-          1 + std::ceil((1.33 * n) / (NUM_BUCKETS * NUM_SLOTS)))),
+          1 + std::ceil((1.27 * n) / (NUM_BUCKETS * NUM_SLOTS)))),
       seed_(42),
       displacements_max_(n / 2 + 1) {
   for (auto& bucket : buckets_) {

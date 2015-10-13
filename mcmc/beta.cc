@@ -14,7 +14,7 @@ const std::string kSourceBetaBase =
                                 ) {
           uint gsize = get_global_size(0);
           for (uint i = get_global_id(0); i < K; i += gsize) {
-            g_theta_sum[i] = g_theta[i] + g_theta[K + i];
+            g_theta_sum[i] = Theta0(g_theta, i) + Theta1(g_theta,  i);
           }
         } __kernel void sum_grads(__global Float* grads,
                                   uint num_partial_sums) {
@@ -38,19 +38,19 @@ const std::string kSourceBetaBase =
             Float eps_t = get_eps_t(step_count);
             for (uint k = get_global_id(0); k < K; k += gsize) {
               Float r0 = randn(&rseed);
-              Float grads_k = grads[k];
-              Float theta_k = theta[k];
+              Float grads_k = grads[2*k];
+              Float theta_k = Theta0(theta, k);
               Float f0 = sqrt(eps_t * theta_k);
-              theta[k] = fabs(theta_k +
+              SetTheta0(theta, k, fabs(theta_k +
                               eps_t / 2.0 * (ETA0 - theta_k + scale * grads_k) +
-                              f0 * r0);
+                              f0 * r0));
               Float r1 = randn(&rseed);
-              Float grads_2k = grads[k + K];
-              Float theta_2k = theta[k + K];
+              Float grads_2k = grads[2*k + 1];
+              Float theta_2k = Theta1(theta, k);
               Float f1 = sqrt(eps_t * theta_2k);
-              theta[k + K] = fabs(
+              SetTheta1(theta, k, fabs(
                   theta_2k +
-                  eps_t / 2.0 * (ETA1 - theta_2k + scale * grads_2k) + f1 * r1);
+                  eps_t / 2.0 * (ETA1 - theta_2k + scale * grads_2k) + f1 * r1));
             }
             random->base_[gid] = rseed;
           }
@@ -94,9 +94,9 @@ const std::string kSourceBeta =
           pi_sum += f;
           Float probs_k;
           if (y) {
-            probs_k = beta[k] * f;
+            probs_k = Beta(beta, k) * f;
           } else {
-            probs_k = (1.0 - beta[k]) * f;
+            probs_k = (1.0 - Beta(beta, k)) * f;
           }
           probs[k] = probs_k;
           probs_sum += probs_k;
@@ -106,8 +106,8 @@ const std::string kSourceBeta =
         for (uint k = 0; k < K; k++) {
           Float f = probs[k] / probs_sum;
           Float one_over_theta_sum = 1.0 / theta_sum[k];
-          grads[k] += f * ((1 - y) / theta[k] - one_over_theta_sum);
-          grads[k + K] += f * (y / theta[k + K] - one_over_theta_sum);
+          grads[2*k] += f * ((1 - y) / Theta0(theta, k) - one_over_theta_sum);
+          grads[2*k + 1] += f * (y / Theta1(theta, k) - one_over_theta_sum);
         }
       }
     });
@@ -155,7 +155,7 @@ const std::string kSourceBetaWg =
           Float f = pi_a[k] * pi_b[k];
           scratch[k] = f;
           Float probs_k;
-          Float beta_k = beta[k];
+          Float beta_k = Beta(beta, k);
           if (y) {
             probs_k = beta_k * f;
           } else {
@@ -175,8 +175,8 @@ const std::string kSourceBetaWg =
         for (uint k = lid; k < K; k += lsize) {
           Float f = probs[k] / probs_sum;
           Float one_over_theta_sum = 1.0 / theta_sum[k];
-          grads[k] += f * ((1 - y) / theta[k] - one_over_theta_sum);
-          grads[k + K] += f * (y / theta[k + K] - one_over_theta_sum);
+          grads[2*k] += f * ((1 - y) / Theta0(theta, k) - one_over_theta_sum);
+          grads[2*k + 1] += f * (y / Theta1(theta, k) - one_over_theta_sum);
         }
       }
     });
@@ -192,7 +192,7 @@ BetaUpdater::BetaUpdater(
       beta_(beta),
       pi_(pi),
       trainingSet_(trainingSet),
-      normalizer_(queue_, &beta_, cfg.K, 32),
+      normalizer_(queue_, &beta_, 2, 1),
       randFactory_(random::OpenClRandomFactory::New(queue_)),
       rand_(randFactory_->CreateRandom(cfg.K, random::random_seed_t{42, 43})),
       count_calls_(0),
@@ -288,7 +288,7 @@ void BetaUpdater::operator()(compute::vector<Edge>* edges, uint32_t num_edges,
   }
   {
     auto t1 = std::chrono::high_resolution_clock::now();
-    compute::copy(theta_.begin(), theta_.begin() + k_, beta_.begin(), queue_);
+    compute::copy(theta_.begin(), theta_.begin(), beta_.begin(), queue_);
     normalizer_();
     auto t2 = std::chrono::high_resolution_clock::now();
     normalize_time_ =

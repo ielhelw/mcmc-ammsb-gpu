@@ -36,7 +36,7 @@ const std::string kSourcePhi =
             Float e = (y == 1 ? EPSILON : 1.0 - EPSILON);
             Float probs_sum = 0;
             for (uint k = 0; k < K; ++k) {
-              Float f = (y == 1) ? (beta[k] - EPSILON) : (EPSILON - beta[k]);
+              Float f = (y == 1) ? (Beta(beta, k) - EPSILON) : (EPSILON - Beta(beta, k));
               Float probs_k = pi[k] * (pi_neighbor[k] * f + e);
               probs_sum += probs_k;
               probs[k] = probs_k;
@@ -141,7 +141,7 @@ const std::string kSourcePhiWg =
             Float e = (y == 1 ? EPSILON : 1.0 - EPSILON);
             // probs
             for (uint k = lid; k < K; k += lsize) {
-              Float f = (y == 1) ? (beta[k] - EPSILON) : (EPSILON - beta[k]);
+              Float f = (y == 1) ? (Beta(beta, k) - EPSILON) : (EPSILON - Beta(beta, k));
               Float probs_k = pi[k] * (pi_neighbor[k] * f + e);
               probs[k] = probs_k;
             }

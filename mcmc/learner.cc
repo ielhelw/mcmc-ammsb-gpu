@@ -27,6 +27,16 @@ const std::string& Learner::GetBaseFuncs() {
                        return (((Edge)u) << 32) | v;
                      }
 
+                     inline Float Beta(__global Float* g_beta, uint k) { return g_beta[k<<1 + 1]; }
+                     
+                     inline Float Theta0(__global Float* g_theta, uint k) { return g_theta[k<<1]; }
+                     
+                     inline Float Theta1(__global Float* g_theta, uint k) { return g_theta[k<<1 + 1]; }
+                     
+                     inline void SetTheta0(__global Float* g_theta, uint k, Float v) { g_theta[k<<1] = v; }
+                     
+                     inline void SetTheta1(__global Float* g_theta, uint k, Float v) { g_theta[k<<1 + 1] = v; }
+
                      inline __global Float *
                      Pi(__global Float * pi, Vertex u) { return pi + u * K; }
 
@@ -41,7 +51,7 @@ const std::string& Learner::GetBaseFuncs() {
 Learner::Learner(const Config& cfg, compute::command_queue queue)
     : cfg_(cfg),
       queue_(queue),
-      beta_(cfg_.K, queue_.get_context()),
+      beta_(2 * cfg_.K, queue_.get_context()),
       theta_(2 * cfg_.K, queue_.get_context()),
       allocFactory_(RowPartitionedMatrixFactory<Float>::New(queue_)),
       pi_(allocFactory_->CreateMatrix(cfg_.N, cfg_.K)),
@@ -70,11 +80,12 @@ Learner::Learner(const Config& cfg, compute::command_queue queue)
                         : BetaUpdater::EDGE_PER_THREAD),
                    cfg, queue_, theta_, beta_, pi_.get(), trainingSet_.get(),
                    compileFlags_, GetBaseFuncs()) {
+  LOG(INFO) << "LEARNER FLAGS = " << compileFlags_;
   // gamma generator
-  std::mt19937 mt19937;
+  std::mt19937 mt19937(42);
   std::gamma_distribution<Float> gamma_distribution(cfg_.eta0, cfg_.eta1);
   auto gamma = std::bind(gamma_distribution, mt19937);
-  GenerateAndNormalize(&queue_, &gamma, &theta_, &beta_, 1, cfg_.K);
+  GenerateAndNormalize(&queue_, &gamma, &theta_, &beta_, 2);
   GenerateAndNormalize(&queue_, &gamma, phi_.get(), pi_.get());
 }
 
@@ -110,7 +121,8 @@ void Learner::run(uint32_t max_iters) {
   for (; step_count < max_iters; ++step_count) {
     auto t1 = std::chrono::high_resolution_clock::now();
     if ((step_count - 1) % cfg_.ppx_interval == 0) {
-      LOG(INFO) << "ppx[" << step_count << "] = " << heldoutPerplexity_();
+      Float ppx = heldoutPerplexity_();
+      LOG(INFO) << "ppx[" << step_count << "] = " << ppx << ", " << std::exp(ppx);
     }
     edges.clear();
     sampleMiniBatch(&edges);

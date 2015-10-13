@@ -32,7 +32,7 @@ class Learner {
   static void GenerateAndNormalize(compute::command_queue* queue,
                                    Generator* gen, compute::vector<Float>* base,
                                    compute::vector<Float>* norm,
-                                   uint32_t num_rows, uint32_t K);
+                                   uint32_t cols);
 
   template <class Generator>
   static void GenerateAndNormalize(compute::command_queue* queue,
@@ -72,13 +72,22 @@ template <class Generator>
 void Learner::GenerateAndNormalize(compute::command_queue* queue,
                                    Generator* gen, compute::vector<Float>* base,
                                    compute::vector<Float>* norm,
-                                   uint32_t num_rows, uint32_t K) {
+                                   uint32_t cols) {
   std::vector<Float> host_base(base->size());
   std::generate(host_base.begin(), host_base.end(), *gen);
   compute::copy(host_base.begin(), host_base.end(), base->begin(), *queue);
-  compute::copy(base->begin(), base->begin() + K * num_rows, norm->begin(),
+  compute::copy(base->begin(), base->end(), norm->begin(),
                 *queue);
-  mcmc::algorithm::Normalizer<Float>(*queue, norm, K, 32)();
+  mcmc::algorithm::Normalizer<Float>(*queue, norm, cols, 1)();
+#if 0
+  for (uint32_t i = 0; i < base->size() / cols; ++i) {
+    Float sum = 0;
+    for (uint32_t j = i; j < base->size(); j += cols) {
+      sum += (*base)[j];
+    }
+    (*norm)[i] = sum;
+  }
+#endif
 }
 
 template <class Generator>

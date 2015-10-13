@@ -91,13 +91,13 @@ TEST_P(WgPerplexityTest, Equal) {
       mcmc::PerplexityCalculator::EDGE_PER_THREAD, cfg_, queue_, dev_beta_,
       dev_pi_.get(), dev_edges_, dev_set_.get(), MakeCompileFlags(cfg_),
       Learner::GetBaseFuncs());
-  Float error = 0.15;
+  Float error = 0.02;
   Float ppx1 = ppxSimple();
   double ppx1_time = 0;
   double ppx1_total_time = 0;
   for (uint32_t i = 0; i < num_tries_; ++i) {
     auto t1 = std::chrono::high_resolution_clock::now();
-    ASSERT_NEAR(ppx1, ppxSimple(), error);
+    ASSERT_FLOAT_EQ(ppx1, ppxSimple());
     auto t2 = std::chrono::high_resolution_clock::now();
     ppx1_time += ppxSimple.LastInvocationTime();
     ppx1_total_time +=
@@ -110,10 +110,10 @@ TEST_P(WgPerplexityTest, Equal) {
   Float ppx2 = ppxWg();
   double ppx2_time = 0;
   double ppx2_total_time = 0;
-  ASSERT_NEAR(ppx1, ppx2, error);
+  ASSERT_NEAR(ppx1, ppx2, std::abs(error * ppx1));
   for (uint32_t i = 0; i < num_tries_; ++i) {
     auto t1 = std::chrono::high_resolution_clock::now();
-    ASSERT_NEAR(ppx2, ppxWg(), error);
+    ASSERT_FLOAT_EQ(ppx2, ppxWg());
     auto t2 = std::chrono::high_resolution_clock::now();
     ppx2_time += ppxWg.LastInvocationTime();
     ppx2_total_time +=

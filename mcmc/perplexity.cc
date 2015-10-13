@@ -15,14 +15,14 @@ const std::string kSourcePerplexity = BOOST_COMPUTE_STRINGIZE_SOURCE(
       if (is_edge) {
         uint k = 0;
         for (; k < K; ++k) {
-          s += pi_a[k] * pi_b[k] * beta[k];
+          s += pi_a[k] * pi_b[k] * Beta(beta, k);
         }
       } else {
         Float sum = 0;
         uint k = 0;
         for (; k < K; ++k) {
           Float f = pi_a[k] * pi_b[k];
-          s += f * (1.0 - beta[k]);
+          s += f * (1.0 - Beta(beta, k));
           sum += f;
         }
         s += (1.0 - sum) * (1.0 - EPSILON);
@@ -47,11 +47,15 @@ const std::string kSourcePerplexity = BOOST_COMPUTE_STRINGIZE_SOURCE(
       Float ppx = *g_ppx_per_edge;
       ppx = (ppx * (avg_count - 1) + edge_likelihood) / avg_count;
       if (is_edge) {
-        ++(*g_link_count);
-        *g_link_likelihood += log(ppx);
+        *g_link_count = 1;
+        *g_link_likelihood = log(ppx);
+        *g_non_link_count = 0;
+        *g_non_link_likelihood = 0;
       } else {
-        ++(*g_non_link_count);
-        *g_non_link_likelihood += log(ppx);
+        (*g_non_link_count) = 1;
+        *g_non_link_likelihood = log(ppx);
+        *g_link_count = 0;
+        *g_link_likelihood = 0;
       }
       *g_ppx_per_edge = ppx;
     }
@@ -88,7 +92,7 @@ const std::string kSourcePerplexityWg =
           Float s = 0;
           if (is_edge) {
             for (uint i = lid; i < K; i += get_local_size(0)) {
-              scratch[i] = pi_a[i] * pi_b[i] * beta[i];
+              scratch[i] = pi_a[i] * pi_b[i] * Beta(beta, i);
             }
             barrier(CLK_GLOBAL_MEM_FENCE);
             WG_SUM_FOLD_Float(scratch, aux, K);
@@ -103,7 +107,7 @@ const std::string kSourcePerplexityWg =
             sum = scratch[0];
             barrier(CLK_LOCAL_MEM_FENCE);
             for (uint i = lid; i < K; i += get_local_size(0)) {
-              scratch[i] = pi_a[i] * pi_b[i] * (1.0 - beta[i]);
+              scratch[i] = pi_a[i] * pi_b[i] * (1.0 - Beta(beta, i));
             }
             barrier(CLK_GLOBAL_MEM_FENCE);
             WG_SUM_FOLD_Float(scratch, aux, K);
@@ -133,11 +137,15 @@ const std::string kSourcePerplexityWg =
             Float ppx = *g_ppx_per_edge;
             ppx = (ppx * (avg_count - 1) + edge_likelihood) / avg_count;
             if (is_edge) {
-              ++(*g_link_count);
-              *g_link_likelihood += log(ppx);
+              *g_link_count = 1;
+              *g_link_likelihood = log(ppx);
+              *g_non_link_count = 0;
+              *g_non_link_likelihood = 0;
             } else {
-              ++(*g_non_link_count);
-              *g_non_link_likelihood += log(ppx);
+              *g_non_link_count = 1;
+              *g_non_link_likelihood = log(ppx);
+              *g_link_count = 0;
+              *g_link_likelihood = 0;
             }
             *g_ppx_per_edge = ppx;
           }
@@ -260,6 +268,10 @@ Float PerplexityCalculator::operator()() {
     avg_likelihood = (link_likelihood_[0] + non_link_likelihood_[0]) /
                      (link_count_[0] + non_link_count_[0]);
   }
+  LOG(INFO) << "link_count " << link_count_[0];
+  LOG(INFO) << "non_link_count " << non_link_count_[0];
+  LOG(INFO) << "link_likelihood " << link_likelihood_[0];
+  LOG(INFO) << "non_link_likelihood " << non_link_likelihood_[0];
   return (-avg_likelihood);
 }
 
