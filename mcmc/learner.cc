@@ -16,11 +16,11 @@ const std::string& Learner::GetBaseFuncs() {
                  typedef VERTEX_TYPE Vertex; typedef EDGE_TYPE Edge;
 
                  inline Vertex Vertex0(Edge e) {
-                   return (Vertex)((e & 0xffff0000) >> 32);
+                   return (Vertex)((e & 0xffffffff00000000) >> 32);
                  }
 
                      inline Vertex Vertex1(Edge e) {
-                       return (Vertex)((e & 0x0000ffff));
+                       return (Vertex)((e & 0x00000000ffffffff));
                      }
 
                      inline Edge MakeEdge(Vertex u, Vertex v) {
@@ -129,7 +129,6 @@ void Learner::run(uint32_t max_iters) {
                   queue_);
     compute::copy(neighbors_vec.begin(), neighbors_vec.end(),
                   dev_neighbors.begin(), queue_);
-
     phiUpdater_(dev_nodes, dev_neighbors, nodes.size());
     betaUpdater_(&dev_edges, edges.size(), 0.1);
     auto t2 = std::chrono::high_resolution_clock::now();

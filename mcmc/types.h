@@ -18,8 +18,8 @@ typedef double Float;
 
 inline std::tuple<Vertex, Vertex> Vertices(Edge e) {
   return std::make_tuple<Vertex, Vertex>(
-      static_cast<Vertex>((e & 0xffff0000) >> 32),
-      static_cast<Vertex>((e & 0x0000ffff)));
+      static_cast<Vertex>((e & 0xffffffff00000000) >> 32),
+      static_cast<Vertex>((e & 0x00000000ffffffff)));
 }
 
 inline Edge MakeEdge(Vertex u, Vertex v) {

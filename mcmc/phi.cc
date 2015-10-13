@@ -239,7 +239,7 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg,
       count_calls_(0),
       k_(cfg.K),
       local_(cfg.phi_wg_size),
-      grads_(std::min(cfg.N, 2 * cfg.mini_batch_size) * cfg.K,
+      grads_(2 * cfg.mini_batch_size * cfg.K,
              queue_.get_context()),
       probs_(grads_.size(), queue_.get_context()) {
   const std::string* src = nullptr;
@@ -282,7 +282,7 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg,
   phi_kernel_.set_arg(10, rand_->Get());
   if (mode_ == NODE_PER_WORKGROUP) {
     phi_kernel_.set_arg(11, scratch_);
-    phi_kernel_.set_arg(12, cfg.K * sizeof(Float), 0);
+    phi_kernel_.set_arg(12, local_ * sizeof(Float), 0);
   }
 
   pi_kernel_ = prog_.create_kernel("update_pi");
@@ -290,7 +290,7 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg,
   pi_kernel_.set_arg(1, phi_->Get());
   if (mode_ == NODE_PER_WORKGROUP) {
     pi_kernel_.set_arg(4, scratch_);
-    pi_kernel_.set_arg(5, cfg.K * sizeof(Float), 0);
+    pi_kernel_.set_arg(5, local_ * sizeof(Float), 0);
   }
 }
 
