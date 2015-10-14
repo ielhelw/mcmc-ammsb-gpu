@@ -34,7 +34,8 @@ class Graph {
 bool GetUniqueEdgesFromFile(const std::string& filename,
                             uint64_t* count_vertices, std::vector<Edge>* vals);
 
-bool GenerateSetsFromEdges(const std::vector<Edge>& vals, double heldout_ratio,
+bool GenerateSetsFromEdges(uint64_t N, const std::vector<Edge>& vals,
+                           double heldout_ratio,
                            std::vector<Edge>* training_edges,
                            std::vector<Edge>* heldout_edges,
                            std::unique_ptr<Set>* training,

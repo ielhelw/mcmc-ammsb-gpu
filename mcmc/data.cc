@@ -73,16 +73,17 @@ bool GetUniqueEdgesFromFile(const std::string& filename,
   return true;
 }
 
-bool GenerateSetsFromEdges(const std::vector<Edge>& vals, double heldout_ratio,
+bool GenerateSetsFromEdges(uint64_t N, const std::vector<Edge>& vals,
+                           double heldout_ratio,
                            std::vector<Edge>* training_edges,
                            std::vector<Edge>* heldout_edges,
                            std::unique_ptr<Set>* training,
                            std::unique_ptr<Set>* heldout) {
   size_t training_len =
-      static_cast<size_t>(std::ceil((1 - heldout_ratio) * vals.size()));
+      static_cast<size_t>(std::ceil((1 - heldout_ratio / 2) * vals.size()));
   size_t heldout_len = vals.size() - training_len;
   if (heldout_len > 0) {
-    heldout->reset(new Set(heldout_len));
+    heldout->reset(new Set(2 * heldout_len));
     for (auto it = vals.begin(); it != vals.begin() + heldout_len; ++it) {
       if (!(*heldout)->Insert(*it)) {
         LOG(ERROR) << "Failed to insert into heldout set";
@@ -104,6 +105,25 @@ bool GenerateSetsFromEdges(const std::vector<Edge>& vals, double heldout_ratio,
     }
     training_edges->push_back(*it);
   }
+  if (heldout_len > 0) {
+    for (uint32_t i = 0; i < heldout_len; ++i) {
+      Vertex u, v;
+      Edge e;
+      do {
+        u = rand() % N;
+        do {
+          v = rand() % N;
+        } while (u == v);  // no self links
+        e = MakeEdge(std::min(u, v), std::max(u, v));
+      } while ((*heldout)->Has(e) || (*training)->Has(e));  // skip edge
+      if (!(*heldout)->Insert(e)) {
+        LOG(ERROR) << "Failed to insert into heldout set";
+        heldout->reset();
+        return false;
+      }
+      heldout_edges->push_back(e);
+    }
+  }
   return true;
 }
 
@@ -117,8 +137,8 @@ bool GenerateSetsFromFile(const std::string& filename, double heldout_ratio,
             << " with held-out ratio " << heldout_ratio;
   std::vector<Edge> vals;
   if (!GetUniqueEdgesFromFile(filename, count_vertices, &vals)) return false;
-  if (!GenerateSetsFromEdges(vals, heldout_ratio, training_edges, heldout_edges,
-                             training, heldout))
+  if (!GenerateSetsFromEdges(*count_vertices, vals, heldout_ratio,
+                             training_edges, heldout_edges, training, heldout))
     return false;
   return true;
 }

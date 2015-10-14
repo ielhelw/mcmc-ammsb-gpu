@@ -77,7 +77,7 @@ int main(int argc, char **argv) {
     << "  Device Driver: " << dev.driver_version();
   std::vector<mcmc::Edge> unique_edges;
   if (!mcmc::GetUniqueEdgesFromFile(filename, &cfg.N, &unique_edges) ||
-      !mcmc::GenerateSetsFromEdges(unique_edges, cfg.heldout_ratio,
+      !mcmc::GenerateSetsFromEdges(cfg.N, unique_edges, cfg.heldout_ratio,
                                    &cfg.training_edges, &cfg.heldout_edges,
                                    &cfg.training, &cfg.heldout)) {
     LOG(FATAL) << "Failed to generate sets from file " << filename;
