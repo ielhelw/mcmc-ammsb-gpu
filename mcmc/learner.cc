@@ -28,7 +28,7 @@ const std::string& Learner::GetBaseFuncs() {
                            return (((Edge)u) << 32) | v;
                          } inline Float Beta(__global Float * g_beta,
                                              uint k) {
-                           return g_beta[(k << 1)];
+                           return g_beta[(k << 1) + 1];
                          } inline Float Theta0(__global Float * g_theta,
                                                uint k) {
                            return g_theta[k << 1];
