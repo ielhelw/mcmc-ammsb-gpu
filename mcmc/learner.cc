@@ -158,6 +158,8 @@ void Learner::DoSample(Learner::Sample* sample) {
   sample->edges.clear();
   sampleMiniBatch(&sample->edges, &sample->seeds[0]);
   extractNodesFromMiniBatch(sample->edges, &sample->nodes_vec);
+  LOG_IF(FATAL, sample->nodes_vec.size() == 0) << "mini-batch size = 0!";
+  LOG_IF(FATAL, sample->nodes_vec.size() > 2*cfg_.mini_batch_size) << "mini-batch too big";
   sampleNeighbors(sample->nodes_vec, &sample->neighbors_vec, &sample->seeds);
 }
 
@@ -184,9 +186,9 @@ void Learner::run(uint32_t max_iters) {
                 << std::exp(ppx);
     }
     auto tsampling_start = high_resolution_clock::now();
-    futures[1 - phase] = std::async(std::launch::async, &Learner::DoSample,
-                                    this, &samples[phase]);
     futures[phase].wait();
+    futures[1 - phase] = std::async(std::launch::async, &Learner::DoSample,
+                                    this, &samples[1 - phase]);
     auto tsampling_end = high_resolution_clock::now();
     tsampling +=
         duration_cast<nanoseconds>(tsampling_end - tsampling_start).count();
@@ -203,7 +205,6 @@ void Learner::run(uint32_t max_iters) {
     auto tstaging_end = high_resolution_clock::now();
     tstaging +=
         duration_cast<nanoseconds>(tstaging_end - tstaging_start).count();
-
     auto tpi_start = high_resolution_clock::now();
     phiUpdater_(samples[phase].dev_nodes, samples[phase].dev_neighbors,
                 samples[phase].nodes_vec.size());
@@ -214,7 +215,7 @@ void Learner::run(uint32_t max_iters) {
     betaUpdater_(&samples[phase].dev_edges, samples[phase].edges.size(), 0.1);
     auto tbeta_end = high_resolution_clock::now();
     tbeta += duration_cast<nanoseconds>(tbeta_end - tbeta_start).count();
-
+ 
     phase = 1 - phase;
   }
   auto T2 = high_resolution_clock::now();

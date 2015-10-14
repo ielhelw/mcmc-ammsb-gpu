@@ -299,6 +299,7 @@ void PhiUpdater::operator()(
     compute::vector<Vertex>& mini_batch_nodes,  // [X <= 2*MINI_BATCH_SIZE]
     compute::vector<Vertex>& neighbors,  // [MINI_BATCH_NODES, NUM_NEIGHBORS]
     uint32_t num_mini_batch_nodes) {
+  LOG_IF(FATAL, num_mini_batch_nodes == 0) << "mini-batch nodes size = 0!";
   LOG_IF(FATAL, grads_.size() < num_mini_batch_nodes * k_) << "grads too small";
   LOG_IF(FATAL, probs_.size() < num_mini_batch_nodes * k_) << "probs too small";
   LOG_IF(FATAL, mode_ == NODE_PER_WORKGROUP &&
