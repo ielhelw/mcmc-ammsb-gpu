@@ -7,6 +7,8 @@
 
 #include "mcmc/algorithm/sum.h"
 
+using namespace std::chrono;
+
 namespace mcmc {
 
 const std::string& Learner::GetBaseFuncs() {
@@ -117,13 +119,21 @@ void Learner::run(uint32_t max_iters) {
   std::vector<Vertex> neighbors_vec;
   compute::vector<Vertex> dev_neighbors(
       2 * cfg_.mini_batch_size * cfg_.num_node_sample, queue_.get_context());
-  uint64_t time = 0;
+  uint64_t tppx = 0;
+  uint64_t tsampling = 0;
+  uint64_t tstaging = 0;
+  uint64_t tpi = 0;
+  uint64_t tbeta = 0;
+  auto T1 = high_resolution_clock::now();
   for (; step_count < max_iters; ++step_count) {
-    auto t1 = std::chrono::high_resolution_clock::now();
     if ((step_count - 1) % cfg_.ppx_interval == 0) {
+      auto tppx_start = high_resolution_clock::now();
       Float ppx = heldoutPerplexity_();
+      auto tppx_end = high_resolution_clock::now();
+      tppx += duration_cast<nanoseconds>(tppx_end-tppx_start).count();
       LOG(INFO) << "ppx[" << step_count << "] = " << ppx << ", " << std::exp(ppx);
     }
+    auto tsampling_start = high_resolution_clock::now();
     edges.clear();
     sampleMiniBatch(&edges);
     nodes.clear();
@@ -138,18 +148,36 @@ void Learner::run(uint32_t max_iters) {
     neighbors_vec.resize(nodes.size() * cfg_.num_node_sample);
     std::generate(neighbors_vec.begin(), neighbors_vec.end(),
                   [this]() { return rand() % cfg_.N; });
+    auto tsampling_end = high_resolution_clock::now();
+    tsampling += duration_cast<nanoseconds>(tsampling_end-tsampling_start).count();
+
+    auto tstaging_start = high_resolution_clock::now();
     compute::copy(edges.begin(), edges.end(), dev_edges.begin(), queue_);
     compute::copy(nodes_vec.begin(), nodes_vec.end(), dev_nodes.begin(),
                   queue_);
     compute::copy(neighbors_vec.begin(), neighbors_vec.end(),
                   dev_neighbors.begin(), queue_);
+    auto tstaging_end = high_resolution_clock::now();
+    tstaging += duration_cast<nanoseconds>(tstaging_end-tstaging_start).count();
+
+    auto tpi_start = high_resolution_clock::now();
     phiUpdater_(dev_nodes, dev_neighbors, nodes.size());
+    auto tpi_end = high_resolution_clock::now();
+    tpi += duration_cast<nanoseconds>(tpi_end-tpi_start).count();
+
+    auto tbeta_start = high_resolution_clock::now();
     betaUpdater_(&dev_edges, edges.size(), 0.1);
-    auto t2 = std::chrono::high_resolution_clock::now();
-    time +=
-        std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count();
+    auto tbeta_end = high_resolution_clock::now();
+    tbeta += duration_cast<nanoseconds>(tbeta_end-tbeta_start).count();
   }
-  LOG(INFO) << "TOTAL TIME: " << time / 1e9;
+  auto T2 = high_resolution_clock::now();
+  uint64_t time = duration_cast<nanoseconds>(T2 - T1).count();
+  LOG(INFO) << "TOTAL    : " << time / 1e9;
+  LOG(INFO) << "PPX      : " << tppx / 1e9 << " (%" << 100 * (tppx/1e9) / (time/1e9) << ")";
+  LOG(INFO) << "SAMPLING : " << tsampling / 1e9 << " (%" << 100 * (tsampling/1e9) / (time/1e9) << ")";
+  LOG(INFO) << "STAGING  : " << tstaging / 1e9 << " (%" << 100 * (tstaging/1e9) / (time/1e9) << ")";
+  LOG(INFO) << "PI       : " << tpi / 1e9 << " (%" << 100 * (tpi/1e9) / (time/1e9) << ")";
+  LOG(INFO) << "BETA     : " << tbeta / 1e9 << " (%" << 100 * (tbeta/1e9) / (time/1e9) << ")";
 }
 
 }  // namespace mcmc
