@@ -12,18 +12,18 @@ const std::string kSourcePhi =
     BOOST_COMPUTE_STRINGIZE_SOURCE(
 
         void update_phi_for_node(__global Float* beta, __global void* g_pi,
-                                 __global void* g_phi, __global Set* edge_set,
+                                 __global Float* g_phi,
+                                 __global Float* phi_vec,
+                                 __global Set* edge_set,
                                  Vertex node, __global Vertex* neighbors,
                                  uint step_count,
                                  __global Float* grads,  // K
                                  __global Float* probs,  // K
                                  random_seed_t* rseed) {
           __global Float* pi = FloatRowPartitionedMatrix_Row(g_pi, node);
-          __global Float* phi = FloatRowPartitionedMatrix_Row(g_phi, node);
           Float eps_t = get_eps_t(step_count);
-          Float phi_sum = 0;
+          Float phi_sum = g_phi[node];
           for (uint k = 0; k < K; ++k) {
-            phi_sum += phi[k];
             // reset grads
             grads[k] = 0;
           }
@@ -42,20 +42,21 @@ const std::string kSourcePhi =
               probs[k] = probs_k;
             }
             for (uint k = 0; k < K; ++k) {
-              grads[k] += (probs[k] / probs_sum) / phi[k] - 1.0 / phi_sum;
+              grads[k] += (probs[k] / probs_sum) / (pi[k]*phi_sum) - 1.0 / phi_sum;
             }
           }
           Float Nn = (1.0 * N) / NUM_NEIGHBORS;
           for (uint k = 0; k < K; ++k) {
             Float noise = PHI_RANDN(rseed);
-            Float phi_k = phi[k];
-            phi[k] = fabs(phi_k + eps_t / 2 * (ALPHA - phi_k + Nn * grads[k]) +
+            Float phi_k = pi[k]*phi_sum;
+            phi_vec[k] = fabs(phi_k + eps_t / 2 * (ALPHA - phi_k + Nn * grads[k]) +
                           sqrt(eps_t * phi_k) * noise);
           }
         }
 
         __kernel void update_phi(
-            __global Float* g_beta, __global void* g_pi, __global void* g_phi,
+            __global Float* g_beta, __global void* g_pi, __global Float* g_phi,
+            __global Float* g_phi_vec,
             __global void* training_edge_set, __global Vertex* mini_batch_nodes,
             __global Vertex*
                 neighbors,  // [mini_batch_nodes * num_neighbor_sample]
@@ -74,7 +75,8 @@ const std::string kSourcePhi =
             for (; i < num_mini_batch_nodes; i += gsize) {
               Vertex node = mini_batch_nodes[i];
               __global Vertex* node_neighbors = neighbors + i * NUM_NEIGHBORS;
-              update_phi_for_node(g_beta, g_pi, g_phi, training_edge_set, node,
+              __global Float* phi_vec = g_phi_vec + i * K;
+              update_phi_for_node(g_beta, g_pi, g_phi, phi_vec, training_edge_set, node,
                                   node_neighbors, step_count, grads, probs,
                                   &rseed);
             }
@@ -82,7 +84,7 @@ const std::string kSourcePhi =
           }
         }
 
-        __kernel void update_pi(__global void* g_pi, __global void* g_phi,
+        __kernel void update_pi(__global void* g_pi, __global Float* g_phi_vec,
                                 __global Vertex* mini_batch_nodes,
                                 uint num_mini_batch_nodes) {
           uint i = get_global_id(0);
@@ -90,7 +92,7 @@ const std::string kSourcePhi =
           for (; i < num_mini_batch_nodes; i += gsize) {
             Vertex n = mini_batch_nodes[i];
             __global Float* pi = FloatRowPartitionedMatrix_Row(g_pi, n);
-            __global Float* phi = FloatRowPartitionedMatrix_Row(g_phi, n);
+            __global Float* phi = g_phi_vec + i * K;
             Float sum = 0;
             for (uint k = 0; k < K; ++k) {
               sum += phi[k];
@@ -112,7 +114,8 @@ const std::string kSourcePhiWg =
     BOOST_COMPUTE_STRINGIZE_SOURCE(
 
         void update_phi_for_nodeWG(__global Float* beta, __global void* g_pi,
-                                   __global void* g_phi, __global Set* edge_set,
+                                   __global Float* g_phi, __global Float* phi_vec,
+                                   __global Set* edge_set,
                                    Vertex node, __global Vertex* neighbors,
                                    uint step_count,
                                    __global Float* grads,  // K
@@ -121,13 +124,11 @@ const std::string kSourcePhiWg =
                                    __global Float* scratch,  // K
                                    __local Float* aux) {
           __global Float* pi = FloatRowPartitionedMatrix_Row(g_pi, node);
-          __global Float* phi = FloatRowPartitionedMatrix_Row(g_phi, node);
           Float eps_t = get_eps_t(step_count);
           uint lid = get_local_id(0);
           uint lsize = get_local_size(0);
           // phi sum
-          WG_SUM_Float(phi, scratch, aux, K);
-          Float phi_sum = scratch[0];
+          Float phi_sum = g_phi[node];
           // reset grads
           for (uint k = lid; k < K; k += lsize) {
             grads[k] = 0;
@@ -150,21 +151,22 @@ const std::string kSourcePhiWg =
             WG_SUM_Float(probs, scratch, aux, K);
             Float probs_sum = scratch[0];
             for (uint k = lid; k < K; k += lsize) {
-              grads[k] += (probs[k] / probs_sum) / phi[k] - 1.0 / phi_sum;
+              grads[k] += (probs[k] / probs_sum) / (pi[k]*phi_sum) - 1.0 / phi_sum;
             }
           }
           Float Nn = (1.0 * N) / NUM_NEIGHBORS;
           barrier(CLK_GLOBAL_MEM_FENCE);
           for (uint k = lid; k < K; k += lsize) {
             Float noise = PHI_RANDN(rseed);
-            Float phi_k = phi[k];
-            phi[k] = fabs(phi_k + eps_t / 2 * (ALPHA - phi_k + Nn * grads[k]) +
+            Float phi_k = pi[k]*phi_sum;
+            phi_vec[k] = fabs(phi_k + eps_t / 2 * (ALPHA - phi_k + Nn * grads[k]) +
                           sqrt(eps_t * phi_k) * noise);
           }
         }
 
         __kernel void update_phi(
-            __global Float* g_beta, __global void* g_pi, __global void* g_phi,
+            __global Float* g_beta, __global void* g_pi, __global Float* g_phi,
+            __global Float* g_phi_vec,
             __global void* training_edge_set, __global Vertex* mini_batch_nodes,
             __global Vertex*
                 neighbors,  // [mini_batch_nodes * num_neighbor_sample]
@@ -187,7 +189,8 @@ const std::string kSourcePhiWg =
             for (; i < num_mini_batch_nodes; i += gsize) {
               Vertex node = mini_batch_nodes[i];
               __global Vertex* node_neighbors = neighbors + i * NUM_NEIGHBORS;
-              update_phi_for_nodeWG(g_beta, g_pi, g_phi, training_edge_set,
+              __global Float* phi_vec = g_phi_vec + i * K;
+              update_phi_for_nodeWG(g_beta, g_pi, g_phi, phi_vec, training_edge_set,
                                     node, node_neighbors, step_count, grads,
                                     probs, &rseed, scratch, aux);
             }
@@ -195,7 +198,7 @@ const std::string kSourcePhiWg =
           }
         }
 
-        __kernel void update_pi(__global void* g_pi, __global void* g_phi,
+        __kernel void update_pi(__global void* g_pi, __global Float* g_phi_vec,
                                 __global Vertex* mini_batch_nodes,
                                 uint num_mini_batch_nodes,
                                 __global Float* scratch, __local Float* aux) {
@@ -207,7 +210,7 @@ const std::string kSourcePhiWg =
           for (; i < num_mini_batch_nodes; i += gsize) {
             Vertex n = mini_batch_nodes[i];
             __global Float* pi = FloatRowPartitionedMatrix_Row(g_pi, n);
-            __global Float* phi = FloatRowPartitionedMatrix_Row(g_phi, n);
+            __global Float* phi = g_phi_vec + i * K;
             for (uint k = lid; k < K; k += lsize) {
               pi[k] = phi[k];
             }
@@ -222,7 +225,7 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg,
                        compute::command_queue queue,
                        compute::vector<Float>& beta,
                        RowPartitionedMatrix<Float>* pi,
-                       RowPartitionedMatrix<Float>* phi, OpenClSet* trainingSet,
+                       compute::vector<Float>& phi, OpenClSet* trainingSet,
                        const std::string& compileFlags,
                        const std::string& baseFuncs)
     : mode_(mode),
@@ -230,6 +233,7 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg,
       beta_(beta),
       pi_(pi),
       phi_(phi),
+      phi_vec(2*cfg.mini_batch_size * cfg.K, queue_.get_context()),
       trainingSet_(trainingSet),
       randFactory_(random::OpenClRandomFactory::New(queue_)),
       rand_(randFactory_->CreateRandom(
@@ -275,20 +279,21 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg,
   phi_kernel_ = prog_.create_kernel("update_phi");
   phi_kernel_.set_arg(0, beta_);
   phi_kernel_.set_arg(1, pi_->Get());
-  phi_kernel_.set_arg(2, phi_->Get());
-  phi_kernel_.set_arg(3, trainingSet->Get());
+  phi_kernel_.set_arg(2, phi_);
+  phi_kernel_.set_arg(3, phi_vec);
+  phi_kernel_.set_arg(4, trainingSet->Get());
 
-  phi_kernel_.set_arg(8, grads_);
-  phi_kernel_.set_arg(9, probs_);
-  phi_kernel_.set_arg(10, rand_->Get());
+  phi_kernel_.set_arg(9, grads_);
+  phi_kernel_.set_arg(10, probs_);
+  phi_kernel_.set_arg(11, rand_->Get());
   if (mode_ == NODE_PER_WORKGROUP) {
-    phi_kernel_.set_arg(11, scratch_);
-    phi_kernel_.set_arg(12, local_ * sizeof(Float), 0);
+    phi_kernel_.set_arg(12, scratch_);
+    phi_kernel_.set_arg(13, local_ * sizeof(Float), 0);
   }
 
   pi_kernel_ = prog_.create_kernel("update_pi");
   pi_kernel_.set_arg(0, pi_->Get());
-  pi_kernel_.set_arg(1, phi_->Get());
+  pi_kernel_.set_arg(1, phi_vec);
   if (mode_ == NODE_PER_WORKGROUP) {
     pi_kernel_.set_arg(4, scratch_);
     pi_kernel_.set_arg(5, local_ * sizeof(Float), 0);
@@ -316,10 +321,10 @@ void PhiUpdater::operator()(
   }
   LOG_IF(FATAL, rand_->GetSeeds().size() < global)
       << "Num seeds smaller than global threads";
-  phi_kernel_.set_arg(4, mini_batch_nodes);
-  phi_kernel_.set_arg(5, neighbors);
-  phi_kernel_.set_arg(6, num_mini_batch_nodes);
-  phi_kernel_.set_arg(7, count_calls_);
+  phi_kernel_.set_arg(5, mini_batch_nodes);
+  phi_kernel_.set_arg(6, neighbors);
+  phi_kernel_.set_arg(7, num_mini_batch_nodes);
+  phi_kernel_.set_arg(8, count_calls_);
   phi_event_ = queue_.enqueue_1d_range_kernel(phi_kernel_, 0, global, local_);
   phi_event_.wait();
   //  LOG(INFO) << phi_event_.duration<boost::chrono::nanoseconds>().count();

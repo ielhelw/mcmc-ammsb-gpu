@@ -78,10 +78,12 @@ template <typename T>
 class PartitionedNormalizer {
  public:
   PartitionedNormalizer(compute::command_queue queue,
-                        RowPartitionedMatrix<T>* in, uint32_t wg,
+                        RowPartitionedMatrix<T>* in,
+                        compute::vector<Float>& sum, uint32_t wg,
                         compute::buffer* scratch = nullptr)
       : queue_(queue),
         data_(in),
+        sum_(sum),
         wg_(wg),
         scratch_(scratch),
         scratch_is_owned_(scratch == nullptr) {
@@ -105,8 +107,9 @@ class PartitionedNormalizer {
         prog_.create_kernel(std::string("WG_NORMALIZE_PARTITIONED_KERNEL_") +
                             std::string(compute::type_name<T>()));
     kernel_.set_arg(0, data_->Get());
-    kernel_.set_arg(1, *scratch_);
-    kernel_.set_arg(2, wg * sizeof(T), 0);
+    kernel_.set_arg(1, sum_);
+    kernel_.set_arg(2, *scratch_);
+    kernel_.set_arg(3, wg * sizeof(T), 0);
   }
 
   ~PartitionedNormalizer() {
@@ -124,6 +127,7 @@ class PartitionedNormalizer {
  private:
   compute::command_queue queue_;
   RowPartitionedMatrix<T>* data_;
+  compute::vector<Float>& sum_;
   uint32_t wg_;
   std::unique_ptr<compute::buffer> scratch_;
   bool scratch_is_owned_;

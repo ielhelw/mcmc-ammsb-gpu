@@ -35,8 +35,9 @@ static const std::string kNormalizeSourceTemplate =
         }
 
         __kernel void WG_NORMALIZE_PARTITIONED_KERNEL_TT(
-            __global void* in, __global TT* scratch, __local TT* aux) {
+            __global void* in, __global TT* g_sum, __global TT* scratch, __local TT* aux) {
           uint lsize = get_local_size(0);
+          uint lid = get_local_id(0);
           uint gid = get_group_id(0);
           __global TTRowPartitionedMatrix* pm =
               (__global TTRowPartitionedMatrix*)in;
@@ -44,7 +45,12 @@ static const std::string kNormalizeSourceTemplate =
               pm->num_cols_ / lsize + (pm->num_cols_ % lsize ? 1 : 0);
           __global TT* row = TTRowPartitionedMatrix_Row(pm, gid);
           scratch += gid * scratch_per_wg;
-          WG_NORMALIZE_TT(row, scratch, aux, pm->num_cols_);
+          WG_SUM_TT(row, scratch, aux, pm->num_cols_);
+          Float sum = *scratch;
+          g_sum[gid] = sum;
+          for (uint i = lid; i < pm->num_cols_; i += lsize) {
+            row[i] = row[i] / sum;
+          }
         }
 
         );

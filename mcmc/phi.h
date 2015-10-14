@@ -16,7 +16,7 @@ class PhiUpdater {
 
   PhiUpdater(Mode mode, const Config& cfg, compute::command_queue queue,
              compute::vector<Float>& beta, RowPartitionedMatrix<Float>* pi,
-             RowPartitionedMatrix<Float>* phi, OpenClSet* trainingSet,
+             compute::vector<Float>& phi, OpenClSet* trainingSet,
              const std::string& compileFlags, const std::string& baseFuncs);
 
   void operator()(
@@ -34,7 +34,8 @@ class PhiUpdater {
 
   compute::vector<Float>& beta_;      // [K]
   RowPartitionedMatrix<Float>* pi_;   // [N,K]
-  RowPartitionedMatrix<Float>* phi_;  // [N,K]
+  compute::vector<Float>& phi_;  // [N]
+  compute::vector<Float> phi_vec;  // [2*mini_batch, K]
   OpenClSet* trainingSet_;
 
   std::shared_ptr<random::OpenClRandomFactory> randFactory_;

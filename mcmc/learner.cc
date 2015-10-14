@@ -57,7 +57,7 @@ Learner::Learner(const Config& cfg, compute::command_queue queue)
       theta_(2 * cfg_.K, queue_.get_context()),
       allocFactory_(RowPartitionedMatrixFactory<Float>::New(queue_)),
       pi_(allocFactory_->CreateMatrix(cfg_.N, cfg_.K)),
-      phi_(allocFactory_->CreateMatrix(cfg_.N, cfg_.K)),
+      phi_(cfg_.N, queue_.get_context()),
       setFactory_(OpenClSetFactory::New(queue_)),
       trainingSet_(setFactory_->CreateSet(cfg_.training->Serialize())),
       heldoutSet_(setFactory_->CreateSet(cfg_.heldout->Serialize())),
@@ -74,7 +74,7 @@ Learner::Learner(const Config& cfg, compute::command_queue queue)
       phiUpdater_((queue_.get_device().type() == CL_DEVICE_TYPE_GPU
                        ? PhiUpdater::NODE_PER_WORKGROUP
                        : PhiUpdater::NODE_PER_THREAD),
-                  cfg_, queue_, beta_, pi_.get(), phi_.get(),
+                  cfg_, queue_, beta_, pi_.get(), phi_,
                   trainingSet_.get(), compileFlags_, GetBaseFuncs()),
       betaUpdater_((queue_.get_device().type() == CL_DEVICE_TYPE_GPU
                         ? BetaUpdater::EDGE_PER_WORKGROUP
@@ -87,7 +87,7 @@ Learner::Learner(const Config& cfg, compute::command_queue queue)
   std::gamma_distribution<Float> gamma_distribution(cfg_.eta0, cfg_.eta1);
   auto gamma = std::bind(gamma_distribution, mt19937);
   GenerateAndNormalize(&queue_, &gamma, &theta_, &beta_, 2);
-  GenerateAndNormalize(&queue_, &gamma, phi_.get(), pi_.get());
+  GenerateAndNormalize(&queue_, &gamma, phi_, pi_.get());
 }
 
 void Learner::sampleMiniBatch(std::vector<Edge>* edges, unsigned int* seed) {

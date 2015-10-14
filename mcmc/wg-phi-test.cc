@@ -49,7 +49,7 @@ class WgPhiTest : public ContextTest,
     std::gamma_distribution<Float> gamma_distribution(cfg_.eta0, cfg_.eta1);
     auto gamma = std::bind(gamma_distribution, mt19937);
     Learner::GenerateAndNormalize(&queue_, &gamma, &theta_, &beta_, 2);
-    Learner::GenerateAndNormalize(&queue_, &gamma, phi_.get(), pi_.get());
+    Learner::GenerateAndNormalize(&queue_, &gamma, phi_, pi_.get());
   }
 
   void SetUp() override {
@@ -64,8 +64,7 @@ class WgPhiTest : public ContextTest,
     theta_ = compute::vector<Float>(2 * cfg_.K, queue_.get_context());
     beta_ = compute::vector<Float>(2 * cfg_.K, queue_.get_context());
     allocFactory = RowPartitionedMatrixFactory<Float>::New(queue_);
-    phi_.reset(allocFactory->CreateMatrix(cfg_.N, cfg_.K));
-    ASSERT_EQ(1, phi_->Blocks().size());
+    phi_ = compute::vector<Float>(cfg_.N, context_);
     pi_.reset(allocFactory->CreateMatrix(cfg_.N, cfg_.K));
     ASSERT_EQ(1, pi_->Blocks().size());
   }
@@ -75,7 +74,7 @@ class WgPhiTest : public ContextTest,
     dev_set_.reset();
     allocFactory.reset();
     pi_.reset();
-    phi_.reset();
+    phi_ = compute::vector<Float>();
     theta_ = compute::vector<Float>();
     beta_ = compute::vector<Float>();
     ContextTest::TearDown();
@@ -83,7 +82,7 @@ class WgPhiTest : public ContextTest,
 
   void Run(PhiUpdater::Mode mode) {
     Float delta = 1.0 / cfg_.K;
-    PhiUpdater updater(mode, cfg_, queue_, beta_, pi_.get(), phi_.get(),
+    PhiUpdater updater(mode, cfg_, queue_, beta_, pi_.get(), phi_,
                        dev_set_.get(), MakeCompileFlags(cfg_),
                        Learner::GetBaseFuncs());
     // generate random mini-batch nodes
@@ -118,7 +117,7 @@ class WgPhiTest : public ContextTest,
   std::unique_ptr<OpenClSet> dev_set_;
   std::shared_ptr<RowPartitionedMatrixFactory<Float>> allocFactory;
   std::unique_ptr<RowPartitionedMatrix<Float>> pi_;
-  std::unique_ptr<RowPartitionedMatrix<Float>> phi_;
+  compute::vector<Float> phi_;
   compute::vector<Float> beta_;
   compute::vector<Float> theta_;
   Config cfg_;
@@ -129,16 +128,16 @@ TEST_P(WgPhiTest, VerifyModes) {
   cfg_.phi_wg_size = GetParam();
   cfg_.phi_disable_noise = true;
   Run(PhiUpdater::NODE_PER_THREAD);
-  std::vector<Float> host_phi1(cfg_.N * cfg_.K);
-  compute::copy(phi_->Blocks()[0].begin(), phi_->Blocks()[0].end(),
+  std::vector<Float> host_phi1(cfg_.N);
+  compute::copy(phi_.begin(), phi_.end(),
                 host_phi1.begin(), queue_);
   std::vector<Float> host_pi1(cfg_.N * cfg_.K);
   compute::copy(pi_->Blocks()[0].begin(), pi_->Blocks()[0].end(),
                 host_pi1.begin(), queue_);
 
   Run(PhiUpdater::NODE_PER_WORKGROUP);
-  std::vector<Float> host_phi2(cfg_.N * cfg_.K);
-  compute::copy(phi_->Blocks()[0].begin(), phi_->Blocks()[0].end(),
+  std::vector<Float> host_phi2(cfg_.N);
+  compute::copy(phi_.begin(), phi_.end(),
                 host_phi2.begin(), queue_);
   std::vector<Float> host_pi2(cfg_.N * cfg_.K);
   compute::copy(pi_->Blocks()[0].begin(), pi_->Blocks()[0].end(),

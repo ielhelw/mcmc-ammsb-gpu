@@ -57,7 +57,7 @@ class Learner {
   template <class Generator>
   static void GenerateAndNormalize(compute::command_queue* queue,
                                    Generator* gen,
-                                   RowPartitionedMatrix<Float>* base,
+                                   compute::vector<Float>& sum,
                                    RowPartitionedMatrix<Float>* norm);
 
   static const std::string& GetBaseFuncs();
@@ -71,7 +71,7 @@ class Learner {
 
   std::shared_ptr<RowPartitionedMatrixFactory<Float>> allocFactory_;
   std::unique_ptr<RowPartitionedMatrix<Float>> pi_;   // [N,K]
-  std::unique_ptr<RowPartitionedMatrix<Float>> phi_;  // [N,K]
+  compute::vector<Float> phi_;  // [N]
 
   std::shared_ptr<OpenClSetFactory> setFactory_;
 
@@ -102,17 +102,15 @@ void Learner::GenerateAndNormalize(compute::command_queue* queue,
 template <class Generator>
 void Learner::GenerateAndNormalize(compute::command_queue* queue,
                                    Generator* gen,
-                                   RowPartitionedMatrix<Float>* base,
+                                   compute::vector<Float>& sum,
                                    RowPartitionedMatrix<Float>* norm) {
-  for (uint32_t i = 0; i < base->Blocks().size(); ++i) {
-    std::vector<Float> host_base(base->Blocks()[i].size());
+  for (uint32_t i = 0; i < norm->Blocks().size(); ++i) {
+    std::vector<Float> host_base(norm->Blocks()[i].size());
     std::generate(host_base.begin(), host_base.end(), *gen);
-    compute::copy(host_base.begin(), host_base.end(), base->Blocks()[i].begin(),
+    compute::copy(host_base.begin(), host_base.end(), norm->Blocks()[i].begin(),
                   *queue);
-    compute::copy(base->Blocks()[i].begin(), base->Blocks()[i].end(),
-                  norm->Blocks()[i].begin(), *queue);
   }
-  mcmc::algorithm::PartitionedNormalizer<Float>(*queue, norm, 32)();
+  mcmc::algorithm::PartitionedNormalizer<Float>(*queue, norm, sum, 32)();
 }
 
 }  // namespace mcmc

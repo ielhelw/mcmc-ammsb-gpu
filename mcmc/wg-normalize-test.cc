@@ -146,50 +146,6 @@ TEST_F(ContextTest, BoostNormalizePerformance) {
 }
 #endif
 
-TEST_F(WgNormalizeTest, PartitionedTest) {
-  uint32_t cols = 1e3;
-  uint32_t rows = 1e3;
-  uint32_t num_rows_in_block = rows / 11;
-  uint32_t num_blocks =
-      rows / num_rows_in_block + (rows % num_rows_in_block ? 1 : 0);
-  uint32_t num_elements_in_block = num_rows_in_block * cols;
-  auto factory = RowPartitionedMatrixFactory<Float>::New(queue_);
-  std::unique_ptr<RowPartitionedMatrix<Float>> p(
-      factory->CreateMatrix(rows, cols, num_rows_in_block));
-  std::vector<Float> host(cols);
-  uint32_t n = 0;
-  std::generate(host.begin(), host.end(), [&n]() { return ++n; });
-  for (uint32_t i = 0; i < p->Blocks().size(); ++i) {
-    for (uint32_t j = 0; j < p->Blocks()[i].size() / cols; ++j) {
-      compute::copy(host.begin(), host.end(), p->Blocks()[i].begin() + j * cols,
-                    queue_);
-    }
-  }
-  uint32_t wg = 32;
-  uint32_t scratch_per_wg =
-      static_cast<uint32_t>(std::ceil(cols / static_cast<double>(wg)));
-  compute::vector<Float> scratch(rows * scratch_per_wg, context_);
-  compute::kernel kernel =
-      prog_.create_kernel(std::string("WG_NORMALIZE_PARTITIONED_KERNEL_") +
-                          std::string(compute::type_name<Float>()));
-  kernel.set_arg(0, p->Get());
-  kernel.set_arg(1, scratch);
-  kernel.set_arg(2, wg * sizeof(uint32_t), 0);
-  auto e = queue_.enqueue_1d_range_kernel(kernel, 0, rows * wg, wg);
-  e.wait();
-  Float sum = (cols * (cols + 1)) / 2;
-  for (uint32_t i = 0; i < p->Blocks().size(); ++i) {
-    for (uint32_t j = 0; j < p->Blocks()[i].size() / cols; ++j) {
-      compute::copy(p->Blocks()[i].begin() + j * cols,
-                    p->Blocks()[i].begin() + j * cols + cols, host.begin(),
-                    queue_);
-      for (uint32_t k = 0; k < cols; ++k) {
-        ASSERT_FLOAT_EQ((k + 1) / static_cast<Float>(sum), host[k]);
-      }
-    }
-  }
-}
-
 TEST_F(WgNormalizeTest, PartitionedNormalizerClassTest) {
   uint32_t cols = 1e3;
   uint32_t rows = 1e3;
@@ -209,10 +165,12 @@ TEST_F(WgNormalizeTest, PartitionedNormalizerClassTest) {
                     queue_);
     }
   }
-  algorithm::PartitionedNormalizer<Float> normalizer(queue_, p.get(), 32);
+  compute::vector<Float> g_sum(rows, context_);
+  algorithm::PartitionedNormalizer<Float> normalizer(queue_, p.get(), g_sum, 32);
   normalizer();
   Float sum = (cols * (cols + 1)) / 2;
   for (uint32_t i = 0; i < p->Blocks().size(); ++i) {
+    ASSERT_FLOAT_EQ(sum, g_sum[i]);
     for (uint32_t j = 0; j < p->Blocks()[i].size() / cols; ++j) {
       compute::copy(p->Blocks()[i].begin() + j * cols,
                     p->Blocks()[i].begin() + j * cols + cols, host.begin(),

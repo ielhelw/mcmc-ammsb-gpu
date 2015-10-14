@@ -58,7 +58,8 @@ class WgPerplexityTest : public ContextTest,
     ASSERT_EQ(1, dev_pi_->Blocks().size());
     ASSERT_EQ(pi.size(), dev_pi_->Blocks()[0].size());
     compute::copy(pi.begin(), pi.end(), dev_pi_->Blocks()[0].begin(), queue_);
-    mcmc::algorithm::PartitionedNormalizer<Float>(queue_, dev_pi_.get(), K_)();
+    compute::vector<Float> phi(N_, context_);
+    mcmc::algorithm::PartitionedNormalizer<Float>(queue_, dev_pi_.get(), phi, K_)();
     dev_beta_ = compute::vector<Float>(beta.begin(), beta.end(), queue_);
     mcmc::algorithm::Normalizer<Float>(queue_, &dev_beta_, 2, 1)();
     cfg_.K = K_;
