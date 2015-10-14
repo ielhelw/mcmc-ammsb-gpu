@@ -36,7 +36,7 @@ const std::string kSourceBetaBase =
           if (gid < K) {
             random_seed_t rseed = random->base_[gid];
             Float eps_t = get_eps_t(step_count);
-            for (uint k = get_global_id(0); k < K; k += gsize) {
+            for (uint k = gid; k < K; k += gsize) {
               Float r0 = randn(&rseed);
               Float grads_k = grads[2*k];
               Float theta_k = Theta0(theta, k);
@@ -224,6 +224,7 @@ BetaUpdater::BetaUpdater(
   } catch (compute::opencl_error& e) {
     LOG(FATAL) << prog_.build_log();
   }
+  LOG(INFO) << "####################### BETA LOG:" << std::endl << prog_.build_log();
   theta_sum_kernel_ = prog_.create_kernel("sum_theta");
   theta_sum_kernel_.set_arg(0, theta_);
   theta_sum_kernel_.set_arg(1, theta_sum_);

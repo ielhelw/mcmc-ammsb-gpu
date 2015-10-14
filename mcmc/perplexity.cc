@@ -222,6 +222,7 @@ PerplexityCalculator::PerplexityCalculator(
   } catch (compute::opencl_error& e) {
     LOG(FATAL) << prog_.build_log();
   }
+  LOG(INFO) << "####################### PERPLEXITY LOG:" << std::endl << prog_.build_log();
   // ppx_kernel
   kernel_ = prog_.create_kernel("calculate_ppx_partial_for_edge");
   kernel_.set_arg(0, edges_);

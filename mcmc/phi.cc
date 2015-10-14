@@ -271,6 +271,7 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg,
   } catch (compute::opencl_error& e) {
     LOG(FATAL) << prog_.build_log();
   }
+  LOG(INFO) << "####################### PHI LOG:" << std::endl << prog_.build_log();
   phi_kernel_ = prog_.create_kernel("update_phi");
   phi_kernel_.set_arg(0, beta_);
   phi_kernel_.set_arg(1, pi_->Get());

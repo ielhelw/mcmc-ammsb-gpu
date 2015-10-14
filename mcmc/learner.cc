@@ -28,15 +28,15 @@ const std::string& Learner::GetBaseFuncs() {
                        return (((Edge)u) << 32) | v;
                      }
 
-                     inline Float Beta(__global Float* g_beta, uint k) { return g_beta[k<<1]; }
+                     inline Float Beta(__global Float* g_beta, uint k) { return g_beta[(k<<1)]; }
                      
                      inline Float Theta0(__global Float* g_theta, uint k) { return g_theta[k<<1]; }
                      
-                     inline Float Theta1(__global Float* g_theta, uint k) { return g_theta[k<<1 + 1]; }
+                     inline Float Theta1(__global Float* g_theta, uint k) { return g_theta[(k<<1) + 1]; }
                      
                      inline void SetTheta0(__global Float* g_theta, uint k, Float v) { g_theta[k<<1] = v; }
                      
-                     inline void SetTheta1(__global Float* g_theta, uint k, Float v) { g_theta[k<<1 + 1] = v; }
+                     inline void SetTheta1(__global Float* g_theta, uint k, Float v) { g_theta[(k<<1) + 1] = v; }
 
                      inline __global Float *
                      Pi(__global Float * pi, Vertex u) { return pi + u * K; }
@@ -82,7 +82,7 @@ Learner::Learner(const Config& cfg, compute::command_queue queue)
                    compileFlags_, GetBaseFuncs()) {
   LOG(INFO) << "LEARNER FLAGS = " << compileFlags_;
   // gamma generator
-  std::mt19937 mt19937(42);
+  std::mt19937 mt19937(6342455113);
   std::gamma_distribution<Float> gamma_distribution(cfg_.eta0, cfg_.eta1);
   auto gamma = std::bind(gamma_distribution, mt19937);
   GenerateAndNormalize(&queue_, &gamma, &theta_, &beta_, 2);
