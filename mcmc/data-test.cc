@@ -43,7 +43,7 @@ TEST(DataTest, RandomEdge) {
     do {
       u = rand() % N;
       v = rand() % N;
-      e = MakeEdge(u, v);
+      e = MakeEdge(std::min(u, v), std::max(u, v));
     } while (std::find(edges.begin(), edges.end(), e) != edges.end());
     auto& u_adj = g.NeighborsOf(u);
     ASSERT_EQ(std::find(u_adj.begin(), u_adj.end(), v), u_adj.end());

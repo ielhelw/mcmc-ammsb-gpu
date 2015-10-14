@@ -48,7 +48,7 @@ class WgPhiTest : public ContextTest,
     std::mt19937 mt19937;
     std::gamma_distribution<Float> gamma_distribution(cfg_.eta0, cfg_.eta1);
     auto gamma = std::bind(gamma_distribution, mt19937);
-    Learner::GenerateAndNormalize(&queue_, &gamma, &theta_, &beta_, 1, cfg_.K);
+    Learner::GenerateAndNormalize(&queue_, &gamma, &theta_, &beta_, 2);
     Learner::GenerateAndNormalize(&queue_, &gamma, phi_.get(), pi_.get());
   }
 
@@ -62,7 +62,7 @@ class WgPhiTest : public ContextTest,
     factory_ = OpenClSetFactory::New(queue_);
     dev_set_.reset(factory_->CreateSet(set.Serialize()));
     theta_ = compute::vector<Float>(2 * cfg_.K, queue_.get_context());
-    beta_ = compute::vector<Float>(cfg_.K, queue_.get_context());
+    beta_ = compute::vector<Float>(2 * cfg_.K, queue_.get_context());
     allocFactory = RowPartitionedMatrixFactory<Float>::New(queue_);
     phi_.reset(allocFactory->CreateMatrix(cfg_.N, cfg_.K));
     ASSERT_EQ(1, phi_->Blocks().size());

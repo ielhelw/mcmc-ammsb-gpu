@@ -85,6 +85,7 @@ TEST_F(WgSumTest, CustomSumPerformance) {
   LOG(INFO) << "custom: " << (t2 - t1).count();
 }
 
+#if 0
 TEST_F(ContextTest, BoostSumPerformance) {
   std::vector<uint32_t> host(K);
   for (uint32_t i = 0; i < host.size(); ++i) host[i] = i + 1;
@@ -103,6 +104,7 @@ TEST_F(ContextTest, BoostSumPerformance) {
   auto t2 = std::chrono::high_resolution_clock::now();
   LOG(INFO) << "compute: " << (t2 - t1).count();
 }
+#endif
 
 TEST_F(WgSumTest, PartitionedTest) {
   uint32_t cols = 1e3;
