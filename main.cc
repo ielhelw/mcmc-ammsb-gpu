@@ -69,7 +69,8 @@ int main(int argc, char **argv) {
   compute::device dev = ChooseDevice();
   compute::context context(dev);
   compute::command_queue queue(context, dev,
-                               compute::command_queue::enable_profiling);
+                               compute::command_queue::enable_profiling |
+                               compute::command_queue::enable_out_of_order_execution);
   LOG(INFO) << "OpenCL:" << endl
     << "  Platform: " << dev.platform().name() << endl
     << "  Device: " << dev.name() << endl

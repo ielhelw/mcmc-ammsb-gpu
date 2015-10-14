@@ -18,11 +18,32 @@ namespace mcmc {
 
 class Learner {
  public:
+  struct Sample {
+    std::vector<Edge> edges;
+    compute::vector<Edge> dev_edges;
+    std::vector<Vertex> nodes_vec;
+    compute::vector<Vertex> dev_nodes;
+    std::vector<Vertex> neighbors_vec;
+    compute::vector<Vertex> dev_neighbors;
+    std::vector<unsigned int> seeds;
+
+    Sample(const Config& cfg, compute::command_queue queue);
+  };
+
   Learner(const Config& cfg, compute::command_queue queue);
 
   Float calculate_perplexity_heldout(uint32_t step_count);
 
-  void sampleMiniBatch(std::vector<Edge>* edges);
+  void sampleMiniBatch(std::vector<Edge>* edges, unsigned int* seed);
+
+  void extractNodesFromMiniBatch(const std::vector<Edge>& edges,
+                                 std::vector<Vertex>* nodes);
+
+  void sampleNeighbors(const std::vector<Vertex>& nodes,
+                       std::vector<Vertex>* neighbors,
+                       std::vector<unsigned int>* seeds);
+
+  void DoSample(Sample* sample);
 
   void run(uint32_t max_iters);
 
@@ -31,8 +52,7 @@ class Learner {
   template <class Generator>
   static void GenerateAndNormalize(compute::command_queue* queue,
                                    Generator* gen, compute::vector<Float>* base,
-                                   compute::vector<Float>* norm,
-                                   uint32_t cols);
+                                   compute::vector<Float>* norm, uint32_t cols);
 
   template <class Generator>
   static void GenerateAndNormalize(compute::command_queue* queue,
@@ -52,7 +72,6 @@ class Learner {
   std::shared_ptr<RowPartitionedMatrixFactory<Float>> allocFactory_;
   std::unique_ptr<RowPartitionedMatrix<Float>> pi_;   // [N,K]
   std::unique_ptr<RowPartitionedMatrix<Float>> phi_;  // [N,K]
-
 
   std::shared_ptr<OpenClSetFactory> setFactory_;
 
@@ -76,8 +95,7 @@ void Learner::GenerateAndNormalize(compute::command_queue* queue,
   std::vector<Float> host_base(base->size());
   std::generate(host_base.begin(), host_base.end(), *gen);
   compute::copy(host_base.begin(), host_base.end(), base->begin(), *queue);
-  compute::copy(base->begin(), base->end(), norm->begin(),
-                *queue);
+  compute::copy(base->begin(), base->end(), norm->begin(), *queue);
   mcmc::algorithm::Normalizer<Float>(*queue, norm, cols, 1)();
 }
 
