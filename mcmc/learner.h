@@ -53,9 +53,9 @@ class Learner {
   std::unique_ptr<RowPartitionedMatrix<Float>> pi_;   // [N,K]
   std::unique_ptr<RowPartitionedMatrix<Float>> phi_;  // [N,K]
 
-  compute::buffer scratch_;
 
   std::shared_ptr<OpenClSetFactory> setFactory_;
+
   std::unique_ptr<OpenClSet> trainingSet_;
   std::unique_ptr<OpenClSet> heldoutSet_;
   compute::vector<Edge> trainingEdges_;
@@ -79,15 +79,6 @@ void Learner::GenerateAndNormalize(compute::command_queue* queue,
   compute::copy(base->begin(), base->end(), norm->begin(),
                 *queue);
   mcmc::algorithm::Normalizer<Float>(*queue, norm, cols, 1)();
-#if 0
-  for (uint32_t i = 0; i < base->size() / cols; ++i) {
-    Float sum = 0;
-    for (uint32_t j = i; j < base->size(); j += cols) {
-      sum += (*base)[j];
-    }
-    (*norm)[i] = sum;
-  }
-#endif
 }
 
 template <class Generator>

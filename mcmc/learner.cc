@@ -1,6 +1,7 @@
 #include "mcmc/learner.h"
 
 #include <algorithm>
+#include <boost/compute/algorithm/reduce.hpp>
 #include <glog/logging.h>
 #include <random>
 
@@ -27,7 +28,7 @@ const std::string& Learner::GetBaseFuncs() {
                        return (((Edge)u) << 32) | v;
                      }
 
-                     inline Float Beta(__global Float* g_beta, uint k) { return g_beta[k<<1 + 1]; }
+                     inline Float Beta(__global Float* g_beta, uint k) { return g_beta[k<<1]; }
                      
                      inline Float Theta0(__global Float* g_theta, uint k) { return g_theta[k<<1]; }
                      
@@ -56,7 +57,6 @@ Learner::Learner(const Config& cfg, compute::command_queue queue)
       allocFactory_(RowPartitionedMatrixFactory<Float>::New(queue_)),
       pi_(allocFactory_->CreateMatrix(cfg_.N, cfg_.K)),
       phi_(allocFactory_->CreateMatrix(cfg_.N, cfg_.K)),
-      scratch_(queue_.get_context(), cfg_.N * cfg_.K * sizeof(Float)),
       setFactory_(OpenClSetFactory::New(queue_)),
       trainingSet_(setFactory_->CreateSet(cfg_.training->Serialize())),
       heldoutSet_(setFactory_->CreateSet(cfg_.heldout->Serialize())),

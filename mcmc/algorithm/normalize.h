@@ -28,7 +28,7 @@ class Normalizer {
     LOG_IF(FATAL, data_->size() % slice != 0)
         << "Data size must be multiple of slice";
     uint32_t scratch_per_wg = slice / wg + (slice % wg ? 1 : 0);
-    uint32_t scratch_size = sizeof(T) * scratch_per_wg * in->size() / slice;
+    uint32_t scratch_size = (in->size() / slice + (in->size() % slice? 1: 0)) * scratch_per_wg * sizeof(T);
     if (scratch_is_owned_) {
       scratch_.reset(new compute::buffer(queue_.get_context(), scratch_size));
     } else {
