@@ -1,7 +1,6 @@
 #ifndef __MCMC_GEN_UTIL_H__
 #define __MCMC_GEN_UTIL_H__
 
-#include <regex>
 #include <sstream>
 
 namespace mcmc {

@@ -1,5 +1,7 @@
 #include "mcmc/gen-util.h"
 
+#include <boost/algorithm/string/replace.hpp>
+
 namespace mcmc {
 namespace gen {
 
@@ -7,8 +9,7 @@ std::string MakeHeaderFromTemplate(const std::string& guard,
                                    const std::string& source,
                                    const std::string& pattern,
                                    const std::string& replacement) {
-  std::regex e(pattern);
-  return MakeHeader(guard, std::regex_replace(source, e, replacement));
+  return MakeHeader(guard, boost::replace_all_copy(source, pattern, replacement));
 }
 
 std::string MakeHeader(const std::string& guard, const std::string& source) {
