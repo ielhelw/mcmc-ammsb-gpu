@@ -44,6 +44,7 @@ add_library(mcmc SHARED
   mcmc/learner.cc
   mcmc/config.cc
   mcmc/types.cc
+  mcmc/sample.cc
 )
 
 add_executable(main main.cc)

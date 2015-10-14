@@ -55,6 +55,7 @@ int main(int argc, char **argv) {
     ("phi-wg", po::value(&cfg.phi_wg_size)->default_value(32))
     ("beta-wg", po::value(&cfg.beta_wg_size)->default_value(32))
     ("max-iters,x", po::value(&max_iters)->default_value(100))
+    ("sample,s", po::value(&cfg.strategy)->default_value(mcmc::NodeStratified))
   ;
   po::variables_map options_vm;
   po::store(po::parse_command_line(argc, argv, options), options_vm);

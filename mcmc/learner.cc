@@ -6,6 +6,7 @@
 #include <glog/logging.h>
 #include <random>
 #include <unordered_set>
+#include <queue>
 
 #include "mcmc/algorithm/sum.h"
 
@@ -81,6 +82,20 @@ Learner::Learner(const Config& cfg, compute::command_queue queue)
                         : BetaUpdater::EDGE_PER_THREAD),
                    cfg, queue_, theta_, beta_, pi_.get(), trainingSet_.get(),
                    compileFlags_, GetBaseFuncs()) {
+
+  switch (cfg_.strategy) {
+    case NodeLink:
+      sampler_ = sampleNodeLink;
+      break;
+    case NodeNonLink:
+      sampler_ = sampleNodeNonLink;
+      break;
+    case NodeStratified:
+      sampler_ = sampleNodeStratified;
+      break;
+    default:
+      LOG(FATAL) << "Unkown sample strategy";
+  }
   LOG(INFO) << "LEARNER FLAGS = " << compileFlags_;
   // gamma generator
   std::mt19937 mt19937(6342455113);
@@ -91,20 +106,7 @@ Learner::Learner(const Config& cfg, compute::command_queue queue)
 }
 
 void Learner::sampleMiniBatch(std::vector<Edge>* edges, unsigned int* seed) {
-  std::unordered_set<Edge> set;
-  while (set.size() < cfg_.mini_batch_size) {
-    Vertex u = rand_r(seed) % cfg_.N;
-    auto& neighbors = cfg_.trainingGraph->NeighborsOf(u);
-    for (auto& v : neighbors) {
-      if (set.size() < cfg_.mini_batch_size) {
-        Edge e = MakeEdge(std::min(u, v), std::max(u, v));
-        set.insert(e);
-      } else {
-        break;
-      }
-    }
-  }
-  edges->insert(edges->begin(), set.begin(), set.end());
+  sampler_(cfg_, edges, seed);
 }
 
 void Learner::extractNodesFromMiniBatch(const std::vector<Edge>& edges,
@@ -145,16 +147,7 @@ void Learner::sampleNeighbors(const std::vector<Vertex>& nodes,
   }
 }
 
-Learner::Sample::Sample(const Config& cfg, compute::command_queue queue)
-    : dev_edges(cfg.mini_batch_size, queue.get_context()),
-      dev_nodes(2 * cfg.mini_batch_size, queue.get_context()),
-      dev_neighbors(2 * cfg.mini_batch_size * cfg.num_node_sample,
-                    queue.get_context()),
-      seeds(2 * cfg.mini_batch_size) {
-  std::generate(seeds.begin(), seeds.end(), rand);
-}
-
-void Learner::DoSample(Learner::Sample* sample) {
+void Learner::DoSample(Sample* sample) {
   sample->edges.clear();
   sampleMiniBatch(&sample->edges, &sample->seeds[0]);
   extractNodesFromMiniBatch(sample->edges, &sample->nodes_vec);
@@ -212,7 +205,7 @@ void Learner::run(uint32_t max_iters) {
     tpi += duration_cast<nanoseconds>(tpi_end - tpi_start).count();
 
     auto tbeta_start = high_resolution_clock::now();
-    betaUpdater_(&samples[phase].dev_edges, samples[phase].edges.size(), 0.1);
+    betaUpdater_(&samples[phase].dev_edges, samples[phase].edges.size(), cfg_.num_node_sample * cfg_.N);
     auto tbeta_end = high_resolution_clock::now();
     tbeta += duration_cast<nanoseconds>(tbeta_end - tbeta_start).count();
  

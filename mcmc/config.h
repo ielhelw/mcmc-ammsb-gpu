@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "mcmc/data.h"
+#include "mcmc/sample.h"
 
 namespace mcmc {
 
@@ -35,6 +36,8 @@ struct Config {
 
   bool phi_disable_noise;
 
+  SampleStrategy strategy;
+
   Config() {
     heldout_ratio = 0.01;
     alpha = 0.001;
@@ -52,6 +55,7 @@ struct Config {
     phi_wg_size = 32;
     beta_wg_size = 32;
     phi_disable_noise = false;
+    strategy = NodeLink;
   }
 };
 

@@ -18,17 +18,6 @@ namespace mcmc {
 
 class Learner {
  public:
-  struct Sample {
-    std::vector<Edge> edges;
-    compute::vector<Edge> dev_edges;
-    std::vector<Vertex> nodes_vec;
-    compute::vector<Vertex> dev_nodes;
-    std::vector<Vertex> neighbors_vec;
-    compute::vector<Vertex> dev_neighbors;
-    std::vector<unsigned int> seeds;
-
-    Sample(const Config& cfg, compute::command_queue queue);
-  };
 
   Learner(const Config& cfg, compute::command_queue queue);
 
@@ -85,6 +74,8 @@ class Learner {
   PerplexityCalculator heldoutPerplexity_;
   PhiUpdater phiUpdater_;
   BetaUpdater betaUpdater_;
+  
+  void (*sampler_)(const Config& cfg, std::vector<Edge>* edges, unsigned int* seed);
 };
 
 template <class Generator>
