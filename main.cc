@@ -17,6 +17,9 @@ struct State {};
 
 compute::device ChooseDevice() {
   auto devices = compute::system::devices();
+  if (devices.size() == 1) {
+    return devices[0];
+  }
   for (uint32_t i = 0; i < devices.size(); ++i) {
     cout << i << ": " << devices[i].platform().name() << " | "
          << devices[i].name() << endl;
