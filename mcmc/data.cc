@@ -3,6 +3,7 @@
 #include <cmath>
 #include <fstream>
 #include <unordered_map>
+#include <unordered_set>
 
 #include <glog/logging.h>
 
@@ -83,7 +84,7 @@ bool GenerateSetsFromEdges(uint64_t N, const std::vector<Edge>& vals,
       static_cast<size_t>(std::ceil((1 - heldout_ratio / 2) * vals.size()));
   size_t heldout_len = vals.size() - training_len;
   if (heldout_len > 0) {
-    heldout->reset(new Set(2 * heldout_len));
+    heldout->reset(new Set(heldout_len));
     for (auto it = vals.begin(); it != vals.begin() + heldout_len; ++it) {
       if (!(*heldout)->Insert(*it)) {
         LOG(ERROR) << "Failed to insert into heldout set";
@@ -106,6 +107,7 @@ bool GenerateSetsFromEdges(uint64_t N, const std::vector<Edge>& vals,
     training_edges->push_back(*it);
   }
   if (heldout_len > 0) {
+    std::unordered_set<Edge> fake_edges;
     for (uint32_t i = 0; i < heldout_len; ++i) {
       Vertex u, v;
       Edge e;
@@ -115,12 +117,9 @@ bool GenerateSetsFromEdges(uint64_t N, const std::vector<Edge>& vals,
           v = rand() % N;
         } while (u == v);  // no self links
         e = MakeEdge(std::min(u, v), std::max(u, v));
-      } while ((*heldout)->Has(e) || (*training)->Has(e));  // skip edge
-      if (!(*heldout)->Insert(e)) {
-        LOG(ERROR) << "Failed to insert into heldout set";
-        heldout->reset();
-        return false;
-      }
+      } while (fake_edges.find(e) != fake_edges.end() ||
+          (*heldout)->Has(e) || (*training)->Has(e));  // skip edge
+      fake_edges.insert(e);
       heldout_edges->push_back(e);
     }
   }
