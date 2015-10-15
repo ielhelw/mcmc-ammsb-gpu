@@ -289,7 +289,7 @@ void BetaUpdater::operator()(compute::vector<Edge>* edges, uint32_t num_edges,
   }
   {
     auto t1 = std::chrono::high_resolution_clock::now();
-    compute::copy(theta_.begin(), theta_.begin(), beta_.begin(), queue_);
+    compute::copy(theta_.begin(), theta_.end(), beta_.begin(), queue_);
     normalizer_();
     auto t2 = std::chrono::high_resolution_clock::now();
     normalize_time_ =

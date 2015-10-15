@@ -205,7 +205,7 @@ void Learner::run(uint32_t max_iters) {
     tpi += duration_cast<nanoseconds>(tpi_end - tpi_start).count();
 
     auto tbeta_start = high_resolution_clock::now();
-    betaUpdater_(&samples[phase].dev_edges, samples[phase].edges.size(), cfg_.num_node_sample * cfg_.N);
+    betaUpdater_(&samples[phase].dev_edges, samples[phase].edges.size(), cfg_.N);
     auto tbeta_end = high_resolution_clock::now();
     tbeta += duration_cast<nanoseconds>(tbeta_end - tbeta_start).count();
  
