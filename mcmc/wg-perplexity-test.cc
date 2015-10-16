@@ -38,7 +38,7 @@ class WgPerplexityTest : public ContextTest,
 
   void SetUp() override {
     ContextTest::SetUp();
-    std::vector<Edge> edges = GenerateRandomEdges(1024, N_);
+    std::vector<Edge> edges = GenerateRandomEdges(1024, N_ - 1);
     dev_edges_ = compute::vector<Edge>(edges.begin(), edges.end(), queue_);
     Set set(edges.size());
     for (auto it = edges.begin(); it != edges.end(); ++it) {
