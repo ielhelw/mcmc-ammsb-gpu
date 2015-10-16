@@ -114,8 +114,6 @@ const std::string kSourceBeta =
 
 const std::string kSourceBetaWg =
     mcmc::algorithm::WorkGroupSum(compute::type_name<Float>()) + "\n" +
-    "#define WG_SUM_FOLD_Float WG_SUM_FOLD_" + compute::type_name<Float>() +
-    "\n"
     "#define WG_SUM_Float WG_SUM_" +
     compute::type_name<Float>() + "\n" + kSourceBetaBase +
     BOOST_COMPUTE_STRINGIZE_SOURCE(__kernel void calculate_grads_partial(
@@ -164,11 +162,11 @@ const std::string kSourceBetaWg =
           probs[k] = probs_k;
         }
         barrier(CLK_GLOBAL_MEM_FENCE);
-        WG_SUM_FOLD_Float(scratch, aux, K);
-        pi_sum = scratch[0];
+        WG_SUM_Float(scratch, aux, K);
+        pi_sum = aux[0];
         barrier(CLK_GLOBAL_MEM_FENCE);
-        WG_SUM_Float(probs, scratch, aux, K);
-        probs_sum = scratch[0];
+        WG_SUM_Float(probs, aux, K);
+        probs_sum = aux[0];
 
         Float prob_0 = (y ? EPSILON : (1.0 - EPSILON)) * (1.0 - pi_sum);
         probs_sum += prob_0;

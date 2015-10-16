@@ -148,8 +148,8 @@ const std::string kSourcePhiWg =
             }
             // probs sum
             barrier(CLK_GLOBAL_MEM_FENCE);
-            WG_SUM_Float(probs, scratch, aux, K);
-            Float probs_sum = scratch[0];
+            WG_SUM_Float(probs, aux, K);
+            Float probs_sum = aux[0];
             for (uint k = lid; k < K; k += lsize) {
               grads[k] += (probs[k] / probs_sum) / (pi[k]*phi_sum) - 1.0 / phi_sum;
             }
@@ -215,7 +215,7 @@ const std::string kSourcePhiWg =
               pi[k] = phi[k];
             }
             barrier(CLK_GLOBAL_MEM_FENCE);
-            WG_NORMALIZE_Float(pi, scratch, aux, K);
+            WG_NORMALIZE_Float(pi, aux, K);
           }
         }
 

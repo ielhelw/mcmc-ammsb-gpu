@@ -35,14 +35,10 @@ TEST_P(WgSumParameterizedTest, VaryLength) {
     std::random_shuffle(host.begin(), host.end());
     compute::vector<uint32_t> in(host.begin(), host.end(), queue_);
     compute::vector<uint32_t> out(1, context_);
-    uint32_t scratch_per_wg =
-        static_cast<size_t>(std::ceil(in.size() / static_cast<double>(wg)));
-    compute::vector<uint32_t> scratch(scratch_per_wg, context_);
     kernel.set_arg(0, in);
     kernel.set_arg(1, out);
-    kernel.set_arg(2, scratch);
-    kernel.set_arg(3, wg * sizeof(uint32_t), 0);
-    kernel.set_arg(4, static_cast<compute::uint_>(in.size()));
+    kernel.set_arg(2, wg * sizeof(uint32_t), 0);
+    kernel.set_arg(3, static_cast<compute::uint_>(in.size()));
     auto e = queue_.enqueue_1d_range_kernel(kernel, 0, wg, wg);
     e.wait();
     compute::copy(out.begin(), out.begin() + 1, host.begin(), queue_);
@@ -64,17 +60,13 @@ TEST_F(WgSumTest, CustomSumPerformance) {
     compute::copy(host.begin(), host.end(), in.begin() + i * K, queue_);
   }
   uint32_t wg = 32;
-  uint32_t scratch_per_wg =
-      static_cast<uint32_t>(std::ceil(K / static_cast<double>(wg)));
-  compute::vector<compute::uint_> scratch(N * scratch_per_wg, context_);
   compute::vector<compute::uint_> out(N, context_);
   auto t1 = std::chrono::high_resolution_clock::now();
   compute::kernel kernel = prog_.create_kernel("WG_SUM_KERNEL_uint");
   kernel.set_arg(0, in);
   kernel.set_arg(1, out);
-  kernel.set_arg(2, scratch);
-  kernel.set_arg(3, wg * sizeof(uint32_t), 0);
-  kernel.set_arg(4, static_cast<compute::uint_>(K));
+  kernel.set_arg(2, wg * sizeof(uint32_t), 0);
+  kernel.set_arg(3, static_cast<compute::uint_>(K));
   auto e = queue_.enqueue_1d_range_kernel(kernel, 0, N * wg, wg);
   e.wait();
   for (uint32_t i = 0; i < N; ++i) {
@@ -110,9 +102,6 @@ TEST_F(WgSumTest, PartitionedTest) {
   uint32_t cols = 1e3;
   uint32_t rows = 1e3;
   uint32_t num_rows_in_block = rows / 11;
-  uint32_t num_blocks =
-      rows / num_rows_in_block + (rows % num_rows_in_block ? 1 : 0);
-  uint32_t num_elements_in_block = num_rows_in_block * cols;
   auto factory = RowPartitionedMatrixFactory<compute::uint_>::New(queue_);
   std::unique_ptr<RowPartitionedMatrix<compute::uint_>> p(
       factory->CreateMatrix(rows, cols, num_rows_in_block));
@@ -126,16 +115,12 @@ TEST_F(WgSumTest, PartitionedTest) {
     }
   }
   uint32_t wg = 32;
-  uint32_t scratch_per_wg =
-      static_cast<uint32_t>(std::ceil(cols / static_cast<double>(wg)));
-  compute::vector<compute::uint_> scratch(rows * scratch_per_wg, context_);
   compute::vector<compute::uint_> out(rows, context_);
   compute::kernel kernel =
       prog_.create_kernel("WG_SUM_PARTITIONED_KERNEL_uint");
   kernel.set_arg(0, p->Get());
   kernel.set_arg(1, out);
-  kernel.set_arg(2, scratch);
-  kernel.set_arg(3, wg * sizeof(uint32_t), 0);
+  kernel.set_arg(2, wg * sizeof(uint32_t), 0);
   auto e = queue_.enqueue_1d_range_kernel(kernel, 0, rows * wg, wg);
   e.wait();
   for (uint32_t i = 0; i < rows; ++i) {
