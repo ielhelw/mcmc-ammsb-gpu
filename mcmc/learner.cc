@@ -110,8 +110,8 @@ Learner::Learner(const Config& cfg, compute::command_queue queue)
   std::mt19937 mt19937(6342455113);
   std::gamma_distribution<Float> gamma_distribution(cfg_.eta0, cfg_.eta1);
   auto gamma = std::bind(gamma_distribution, mt19937);
-  GenerateAndNormalize(&queue_, &gamma, &theta_, &beta_, 2);
-  GenerateAndNormalize(&queue_, &gamma, phi_, pi_.get());
+  random::RandomAndNormalize(&queue_, &gamma, &theta_, &beta_, 2);
+  random::RandomGammaAndNormalize(&queue_, cfg_.eta0, cfg_.eta1, pi_.get(), &phi_);
 }
 
 Float Learner::sampleMiniBatch(std::vector<Edge>* edges, unsigned int* seed) {

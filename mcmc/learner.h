@@ -36,19 +36,6 @@ class Learner {
 
   void run(uint32_t max_iters);
 
-  // Generate base->size() elements in base. Normalized the first num_rows*K in
-  // norm.
-  template <class Generator>
-  static void GenerateAndNormalize(compute::command_queue* queue,
-                                   Generator* gen, compute::vector<Float>* base,
-                                   compute::vector<Float>* norm, uint32_t cols);
-
-  template <class Generator>
-  static void GenerateAndNormalize(compute::command_queue* queue,
-                                   Generator* gen,
-                                   compute::vector<Float>& sum,
-                                   RowPartitionedMatrix<Float>* norm);
-
   static const std::string& GetBaseFuncs();
 
  private:
@@ -77,32 +64,6 @@ class Learner {
   
   Float (*sampler_)(const Config& cfg, std::vector<Edge>* edges, unsigned int* seed);
 };
-
-template <class Generator>
-void Learner::GenerateAndNormalize(compute::command_queue* queue,
-                                   Generator* gen, compute::vector<Float>* base,
-                                   compute::vector<Float>* norm,
-                                   uint32_t cols) {
-  std::vector<Float> host_base(base->size());
-  std::generate(host_base.begin(), host_base.end(), *gen);
-  compute::copy(host_base.begin(), host_base.end(), base->begin(), *queue);
-  compute::copy(base->begin(), base->end(), norm->begin(), *queue);
-  mcmc::algorithm::Normalizer<Float>(*queue, norm, cols, 1)();
-}
-
-template <class Generator>
-void Learner::GenerateAndNormalize(compute::command_queue* queue,
-                                   Generator* gen,
-                                   compute::vector<Float>& sum,
-                                   RowPartitionedMatrix<Float>* norm) {
-  for (uint32_t i = 0; i < norm->Blocks().size(); ++i) {
-    std::vector<Float> host_base(norm->Blocks()[i].size());
-    std::generate(host_base.begin(), host_base.end(), *gen);
-    compute::copy(host_base.begin(), host_base.end(), norm->Blocks()[i].begin(),
-                  *queue);
-  }
-  mcmc::algorithm::PartitionedNormalizer<Float>(*queue, norm, sum, 32)();
-}
 
 }  // namespace mcmc
 

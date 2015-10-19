@@ -46,7 +46,7 @@ class WgBetaTest : public ContextTest,
     std::mt19937 mt19937(42);
     std::gamma_distribution<Float> gamma_distribution(cfg_.eta0, cfg_.eta1);
     auto gamma = std::bind(gamma_distribution, mt19937);
-    Learner::GenerateAndNormalize(&queue_, &gamma, &theta_, &beta_, 2);
+    random::RandomAndNormalize(&queue_, &gamma, &theta_, &beta_, 2);
   }
 
   void SetUp() override {
@@ -63,10 +63,7 @@ class WgBetaTest : public ContextTest,
     allocFactory = RowPartitionedMatrixFactory<Float>::New(queue_);
     pi_.reset(allocFactory->CreateMatrix(cfg_.N, cfg_.K));
     compute::vector<Float> phi(cfg_.N, context_);
-    std::mt19937 mt19937(24);
-    std::gamma_distribution<Float> gamma_distribution(cfg_.eta0, cfg_.eta1);
-    auto gamma = std::bind(gamma_distribution, mt19937);
-    Learner::GenerateAndNormalize(&queue_, &gamma, phi, pi_.get());
+    random::RandomGammaAndNormalize(&queue_, cfg_.eta0, cfg_.eta1, pi_.get(), &phi);
   }
 
   void TearDown() override {

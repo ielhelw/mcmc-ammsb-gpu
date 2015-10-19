@@ -98,5 +98,70 @@ OpenClRandomFactory::OpenClRandomFactory(compute::command_queue queue)
   compute::copy(size.begin(), size.end(), &sizeOfRandom_, queue_);
 }
 
+const std::string& GenerateGammaSource() {
+  static const std::string kSource =
+      BOOST_COMPUTE_STRINGIZE_SOURCE(__kernel void generate_gamma(
+          __global void * vpi, __global void * vrand, TT a, TT b) {
+        __global TTRowPartitionedMatrix* pm =
+            (__global TTRowPartitionedMatrix*)vpi;
+        uint i = get_group_id(0);
+        uint gsize = get_num_groups(0);
+        uint lid = get_local_id(0);
+        uint lsize = get_local_size(0);
+        __global Random* seeds = (__global Random*)vrand;
+
+        if (i < pm->num_rows_) {
+          random_seed_t seed = seeds->base_[get_global_id(0)];
+          for (; i < pm->num_rows_; i += gsize) {
+            __global TT* row = TTRowPartitionedMatrix_Row(pm, i);
+            for (uint j = lid; j < pm->num_cols_; j += lsize) {
+              row[j] = rand_gamma(&seed, a, b);
+            }
+          }
+          seeds->base_[get_global_id(0)] = seed;
+        }
+      });
+  return kSource;
+}
+
+void RandomGamma(compute::command_queue* queue, OpenClRandom* randv, Float eta0,
+                 Float eta1, RowPartitionedMatrix<Float>* norm) {
+  uint32_t local = 32;
+  LOG_IF(FATAL, randv->GetSeeds().size() < local * norm->Rows())
+      << "RandomSeeds vector too small";
+  std::ostringstream out;
+  out << random::GetRandomHeader() << std::endl;
+  out << GetRowPartitionedMatrixHeader<Float>() << std::endl;
+  out << GenerateGammaSource() << std::endl;
+  std::string source = gen::MakeHeaderFromTemplate(
+      "GenAndNorm", out.str(), "TT", compute::type_name<Float>());
+  compute::program prog =
+      compute::program::create_with_source(source, queue->get_context());
+  try {
+    prog.build();
+  }
+  catch (compute::opencl_error& e) {
+    LOG(FATAL) << prog.build_log();
+  }
+  compute::kernel kernel = prog.create_kernel("generate_gamma");
+  kernel.set_arg(0, norm->Get());
+  kernel.set_arg(1, randv->Get());
+  kernel.set_arg(2, eta0);
+  kernel.set_arg(3, eta1);
+  queue->enqueue_1d_range_kernel(kernel, 0, norm->Rows() * local, local).wait();
+}
+
+void RandomGammaAndNormalize(compute::command_queue* queue,
+                             Float eta0, Float eta1,
+                             RowPartitionedMatrix<Float>* norm,
+                             compute::vector<Float>* sum) {
+  auto randFactory = random::OpenClRandomFactory::New(*queue);
+  std::unique_ptr<random::OpenClRandom>
+    randv(randFactory->CreateRandom(norm->Rows() * 32,
+          random::random_seed_t{11, 113}));
+  random::RandomGamma(queue, randv.get(), eta0, eta1, norm);
+  mcmc::algorithm::PartitionedNormalizer<Float>(*queue, norm, *sum, 32)();
+}
+
 }  // namespapce random
 }  // namespace mcmc

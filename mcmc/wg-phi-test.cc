@@ -48,8 +48,8 @@ class WgPhiTest : public ContextTest,
     std::mt19937 mt19937;
     std::gamma_distribution<Float> gamma_distribution(cfg_.eta0, cfg_.eta1);
     auto gamma = std::bind(gamma_distribution, mt19937);
-    Learner::GenerateAndNormalize(&queue_, &gamma, &theta_, &beta_, 2);
-    Learner::GenerateAndNormalize(&queue_, &gamma, phi_, pi_.get());
+    random::RandomAndNormalize(&queue_, &gamma, &theta_, &beta_, 2);
+    random::RandomGammaAndNormalize(&queue_, cfg_.eta0, cfg_.eta1, pi_.get(), &phi_);
   }
 
   void SetUp() override {
