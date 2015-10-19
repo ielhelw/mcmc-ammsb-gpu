@@ -11,18 +11,18 @@ namespace cuckoo {
 
 namespace internal {
 
-const std::string& GetSetTypes() {
+const std::string GetSetTypes() {
   static const std::string kClSetTypes = BOOST_COMPUTE_STRINGIZE_SOURCE(
 
       typedef ulong uint64_t; typedef uint uint32_t;
 
       typedef struct {
-        __global uint64_t* base_;
+        GLOBAL uint64_t* base_;
         uint64_t num_bins_;
       } Set;
 
       );
-  return kClSetTypes;
+  return ::mcmc::GetClTypes() + kClSetTypes;
 }
 
 const std::string& GetSetHeader() {
@@ -39,7 +39,7 @@ const std::string& GetSetHeader() {
           uint64_t hash2(uint64_t num_bins,
                          uint64_t k) { return (k ^ 179440147) % num_bins; }
 
-          bool Set_SlotHasEdge_(__global uint64_t * slot, uint64_t k) {
+          bool Set_SlotHasEdge_(GLOBAL uint64_t * slot, uint64_t k) {
             if (k == slot[0]) return true;
             if (k == slot[1]) return true;
             if (k == slot[2]) return true;
@@ -47,7 +47,7 @@ const std::string& GetSetHeader() {
             return false;
           }
 
-          bool Set_HasEdge(__global Set * set, uint64_t k) {
+          bool Set_HasEdge(GLOBAL Set * set, uint64_t k) {
             uint64_t h1 = hash1(set->num_bins_, k);
             if (Set_SlotHasEdge_(set->base_ + 0 * set->num_bins_ * NUM_SLOTS +
                                      h1 * NUM_SLOTS,
@@ -70,12 +70,12 @@ const std::string& GetSetSource() {
       GetSetTypes() +
       BOOST_COMPUTE_STRINGIZE_SOURCE(
 
-          __kernel void SizeOfSet(__global uint64_t *
+          KERNEL void SizeOfSet(GLOBAL uint64_t *
                                   size) { *size = sizeof(Set); }
 
-          __kernel void SetInit(__global void* vset, __global uint64_t* data,
+          KERNEL void SetInit(GLOBAL void* vset, GLOBAL uint64_t* data,
                                 uint64_t num_bins) {
-            __global Set* set = (__global Set*)vset;
+            GLOBAL Set* set = (GLOBAL Set*)vset;
             set->base_ = data;
             set->num_bins_ = num_bins;
           }

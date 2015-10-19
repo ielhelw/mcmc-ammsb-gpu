@@ -11,16 +11,16 @@ const std::string kSourcePhi =
     random::GetRandomHeader() +
     BOOST_COMPUTE_STRINGIZE_SOURCE(
 
-        void update_phi_for_node(__global Float* beta, __global void* g_pi,
-                                 __global Float* g_phi,
-                                 __global Float* phi_vec,
-                                 __global Set* edge_set,
-                                 Vertex node, __global Vertex* neighbors,
+        void update_phi_for_node(GLOBAL Float* beta, GLOBAL void* g_pi,
+                                 GLOBAL Float* g_phi,
+                                 GLOBAL Float* phi_vec,
+                                 GLOBAL Set* edge_set,
+                                 Vertex node, GLOBAL Vertex* neighbors,
                                  uint step_count,
-                                 __global Float* grads,  // K
-                                 __global Float* probs,  // K
+                                 GLOBAL Float* grads,  // K
+                                 GLOBAL Float* probs,  // K
                                  random_seed_t* rseed) {
-          __global Float* pi = FloatRowPartitionedMatrix_Row(g_pi, node);
+          GLOBAL Float* pi = FloatRowPartitionedMatrix_Row(g_pi, node);
           Float eps_t = get_eps_t(step_count);
           Float phi_sum = g_phi[node];
           for (uint k = 0; k < K; ++k) {
@@ -29,7 +29,7 @@ const std::string kSourcePhi =
           }
           for (uint i = 0; i < NUM_NEIGHBORS; ++i) {
             Vertex neighbor = neighbors[i];
-            __global Float* pi_neighbor =
+            GLOBAL Float* pi_neighbor =
                 FloatRowPartitionedMatrix_Row(g_pi, neighbor);
             Edge edge = MakeEdge(min(node, neighbor), max(node, neighbor));
             bool y = Set_HasEdge(edge_set, edge);
@@ -54,45 +54,45 @@ const std::string kSourcePhi =
           }
         }
 
-        __kernel void update_phi(
-            __global Float* g_beta, __global void* g_pi, __global Float* g_phi,
-            __global Float* g_phi_vec,
-            __global void* training_edge_set, __global Vertex* mini_batch_nodes,
-            __global Vertex*
+        KERNEL void update_phi(
+            GLOBAL Float* g_beta, GLOBAL void* g_pi, GLOBAL Float* g_phi,
+            GLOBAL Float* g_phi_vec,
+            GLOBAL void* training_edge_set, GLOBAL Vertex* mini_batch_nodes,
+            GLOBAL Vertex*
                 neighbors,  // [mini_batch_nodes * num_neighbor_sample]
             uint num_mini_batch_nodes,
             uint step_count,
-            __global Float* grads,  // [num global threads * K]
-            __global Float* probs,  // [num global threads * K]
-            __global void* vrand) {
-          uint i = get_global_id(0);
-          uint gsize = get_global_size(0);
+            GLOBAL Float* grads,  // [num global threads * K]
+            GLOBAL Float* probs,  // [num global threads * K]
+            GLOBAL void* vrand) {
+          uint i = GET_GLOBAL_ID();
+          uint gsize = GET_GLOBAL_SIZE();
           grads += i * K;
           probs += i * K;
-          __global Random* rand = (__global Random*)vrand;
+          GLOBAL Random* rand = (GLOBAL Random*)vrand;
           if (i < num_mini_batch_nodes) {
-            random_seed_t rseed = rand->base_[get_global_id(0)];
+            random_seed_t rseed = rand->base_[GET_GLOBAL_ID()];
             for (; i < num_mini_batch_nodes; i += gsize) {
               Vertex node = mini_batch_nodes[i];
-              __global Vertex* node_neighbors = neighbors + i * NUM_NEIGHBORS;
-              __global Float* phi_vec = g_phi_vec + i * K;
+              GLOBAL Vertex* node_neighbors = neighbors + i * NUM_NEIGHBORS;
+              GLOBAL Float* phi_vec = g_phi_vec + i * K;
               update_phi_for_node(g_beta, g_pi, g_phi, phi_vec, training_edge_set, node,
                                   node_neighbors, step_count, grads, probs,
                                   &rseed);
             }
-            rand->base_[get_global_id(0)] = rseed;
+            rand->base_[GET_GLOBAL_ID()] = rseed;
           }
         }
 
-        __kernel void update_pi(__global void* g_pi, __global Float* g_phi_vec,
-                                __global Vertex* mini_batch_nodes,
+        KERNEL void update_pi(GLOBAL void* g_pi, GLOBAL Float* g_phi_vec,
+                                GLOBAL Vertex* mini_batch_nodes,
                                 uint num_mini_batch_nodes) {
-          uint i = get_global_id(0);
-          uint gsize = get_global_size(0);
+          uint i = GET_GLOBAL_ID();
+          uint gsize = GET_GLOBAL_SIZE();
           for (; i < num_mini_batch_nodes; i += gsize) {
             Vertex n = mini_batch_nodes[i];
-            __global Float* pi = FloatRowPartitionedMatrix_Row(g_pi, n);
-            __global Float* phi = g_phi_vec + i * K;
+            GLOBAL Float* pi = FloatRowPartitionedMatrix_Row(g_pi, n);
+            GLOBAL Float* phi = g_phi_vec + i * K;
             Float sum = 0;
             for (uint k = 0; k < K; ++k) {
               sum += phi[k];
@@ -113,20 +113,20 @@ const std::string kSourcePhiWg =
     compute::type_name<Float>() + "\n" + random::GetRandomHeader() +
     BOOST_COMPUTE_STRINGIZE_SOURCE(
 
-        void update_phi_for_nodeWG(__global Float* beta, __global void* g_pi,
-                                   __global Float* g_phi, __global Float* phi_vec,
-                                   __global Set* edge_set,
-                                   Vertex node, __global Vertex* neighbors,
+        void update_phi_for_nodeWG(GLOBAL Float* beta, GLOBAL void* g_pi,
+                                   GLOBAL Float* g_phi, GLOBAL Float* phi_vec,
+                                   GLOBAL Set* edge_set,
+                                   Vertex node, GLOBAL Vertex* neighbors,
                                    uint step_count,
-                                   __global Float* grads,  // K
-                                   __global Float* probs,  // K
+                                   GLOBAL Float* grads,  // K
+                                   GLOBAL Float* probs,  // K
                                    random_seed_t* rseed,
-                                   __global Float* scratch,  // K
-                                   __local Float* aux) {
-          __global Float* pi = FloatRowPartitionedMatrix_Row(g_pi, node);
+                                   GLOBAL Float* scratch,  // K
+                                   LOCAL Float* aux) {
+          GLOBAL Float* pi = FloatRowPartitionedMatrix_Row(g_pi, node);
           Float eps_t = get_eps_t(step_count);
-          uint lid = get_local_id(0);
-          uint lsize = get_local_size(0);
+          uint lid = GET_LOCAL_ID();
+          uint lsize = GET_LOCAL_SIZE();
           // phi sum
           Float phi_sum = g_phi[node];
           // reset grads
@@ -135,7 +135,7 @@ const std::string kSourcePhiWg =
           }
           for (uint i = 0; i < NUM_NEIGHBORS; ++i) {
             Vertex neighbor = neighbors[i];
-            __global Float* pi_neighbor =
+            GLOBAL Float* pi_neighbor =
                 FloatRowPartitionedMatrix_Row(g_pi, neighbor);
             Edge edge = MakeEdge(min(node, neighbor), max(node, neighbor));
             bool y = Set_HasEdge(edge_set, edge);
@@ -164,53 +164,53 @@ const std::string kSourcePhiWg =
           }
         }
 
-        __kernel void update_phi(
-            __global Float* g_beta, __global void* g_pi, __global Float* g_phi,
-            __global Float* g_phi_vec,
-            __global void* training_edge_set, __global Vertex* mini_batch_nodes,
-            __global Vertex*
+        KERNEL void update_phi(
+            GLOBAL Float* g_beta, GLOBAL void* g_pi, GLOBAL Float* g_phi,
+            GLOBAL Float* g_phi_vec,
+            GLOBAL void* training_edge_set, GLOBAL Vertex* mini_batch_nodes,
+            GLOBAL Vertex*
                 neighbors,  // [mini_batch_nodes * num_neighbor_sample]
             uint num_mini_batch_nodes,
             uint step_count,
-            __global Float* grads,  // [num local threads * K]
-            __global Float* probs,  // [num local threads * K]
-            __global void* vrand,
-            __global Float* scratch,  // [num local threads * K]
-            __local Float* aux        // [num local threads]
+            GLOBAL Float* grads,  // [num local threads * K]
+            GLOBAL Float* probs,  // [num local threads * K]
+            GLOBAL void* vrand,
+            GLOBAL Float* scratch,  // [num local threads * K]
+            LOCAL Float* aux        // [num local threads]
             ) {
-          uint i = get_group_id(0);
-          uint gsize = get_num_groups(0);
-          __global Random* rand = (__global Random*)vrand;
+          uint i = GET_GROUP_ID();
+          uint gsize = GET_NUM_GROUPS();
+          GLOBAL Random* rand = (GLOBAL Random*)vrand;
           grads += i * K;
           probs += i * K;
           scratch += i * K;
           if (i < num_mini_batch_nodes) {
-            random_seed_t rseed = rand->base_[get_global_id(0)];
+            random_seed_t rseed = rand->base_[GET_GLOBAL_ID()];
             for (; i < num_mini_batch_nodes; i += gsize) {
               Vertex node = mini_batch_nodes[i];
-              __global Vertex* node_neighbors = neighbors + i * NUM_NEIGHBORS;
-              __global Float* phi_vec = g_phi_vec + i * K;
+              GLOBAL Vertex* node_neighbors = neighbors + i * NUM_NEIGHBORS;
+              GLOBAL Float* phi_vec = g_phi_vec + i * K;
               update_phi_for_nodeWG(g_beta, g_pi, g_phi, phi_vec, training_edge_set,
                                     node, node_neighbors, step_count, grads,
                                     probs, &rseed, scratch, aux);
             }
-            rand->base_[get_global_id(0)] = rseed;
+            rand->base_[GET_GLOBAL_ID()] = rseed;
           }
         }
 
-        __kernel void update_pi(__global void* g_pi, __global Float* g_phi_vec,
-                                __global Vertex* mini_batch_nodes,
+        KERNEL void update_pi(GLOBAL void* g_pi, GLOBAL Float* g_phi_vec,
+                                GLOBAL Vertex* mini_batch_nodes,
                                 uint num_mini_batch_nodes,
-                                __global Float* scratch, __local Float* aux) {
-          uint i = get_group_id(0);
-          uint gsize = get_num_groups(0);
-          uint lid = get_local_id(0);
-          uint lsize = get_local_size(0);
+                                GLOBAL Float* scratch, LOCAL Float* aux) {
+          uint i = GET_GROUP_ID();
+          uint gsize = GET_NUM_GROUPS();
+          uint lid = GET_LOCAL_ID();
+          uint lsize = GET_LOCAL_SIZE();
           scratch += i * K;
           for (; i < num_mini_batch_nodes; i += gsize) {
             Vertex n = mini_batch_nodes[i];
-            __global Float* pi = FloatRowPartitionedMatrix_Row(g_pi, n);
-            __global Float* phi = g_phi_vec + i * K;
+            GLOBAL Float* pi = FloatRowPartitionedMatrix_Row(g_pi, n);
+            GLOBAL Float* phi = g_phi_vec + i * K;
             for (uint k = lid; k < K; k += lsize) {
               pi[k] = phi[k];
             }

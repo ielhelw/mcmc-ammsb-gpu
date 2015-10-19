@@ -15,41 +15,41 @@ inline std::string GetRowPartitionedMatrixSource() {
       BOOST_COMPUTE_STRINGIZE_SOURCE(
 
           typedef struct {
-            __global TT* blocks_[32];
+            GLOBAL TT* blocks_[32];
             uint num_rows_in_block_;
             uint num_blocks_;
             uint num_rows_;
             uint num_cols_;
           } TTRowPartitionedMatrix;
 
-          __global TT * TTRowPartitionedMatrix_Row(
-                            __global TTRowPartitionedMatrix * pm, uint row) {
+          GLOBAL TT * TTRowPartitionedMatrix_Row(
+                            GLOBAL TTRowPartitionedMatrix * pm, uint row) {
                           uint blockIdx = row / pm->num_rows_in_block_;
-                          __global TT* block = pm->blocks_[blockIdx];
+                          GLOBAL TT* block = pm->blocks_[blockIdx];
                           uint rowOffsetInBlock =
                               (row % pm->num_rows_in_block_) * pm->num_cols_;
                           return block + rowOffsetInBlock;
                         }
 
-              __kernel void TTRowPartitionedMatrix_init(
-                  __global void* vpm, uint num_rows_in_block, uint num_blocks,
+              KERNEL void TTRowPartitionedMatrix_init(
+                  GLOBAL void* vpm, uint num_rows_in_block, uint num_blocks,
                   uint num_rows, uint num_cols) {
-                __global TTRowPartitionedMatrix* pm =
-                    (__global TTRowPartitionedMatrix*)vpm;
+                GLOBAL TTRowPartitionedMatrix* pm =
+                    (GLOBAL TTRowPartitionedMatrix*)vpm;
                 pm->num_rows_in_block_ = num_rows_in_block;
                 pm->num_blocks_ = num_blocks;
                 pm->num_rows_ = num_rows;
                 pm->num_cols_ = num_cols;
               }
 
-              __kernel void TTRowPartitionedMatrix_set(
-                  __global void* vpm, __global void* block, uint idx) {
-                __global TTRowPartitionedMatrix* pm =
-                    (__global TTRowPartitionedMatrix*)vpm;
-                pm->blocks_[idx] = (__global TT*)block;
+              KERNEL void TTRowPartitionedMatrix_set(
+                  GLOBAL void* vpm, GLOBAL void* block, uint idx) {
+                GLOBAL TTRowPartitionedMatrix* pm =
+                    (GLOBAL TTRowPartitionedMatrix*)vpm;
+                pm->blocks_[idx] = (GLOBAL TT*)block;
               }
 
-              __kernel void TTRowPartitionedMatrixSizeof(__global ulong *
+              KERNEL void TTRowPartitionedMatrixSizeof(GLOBAL ulong *
                                                          size) {
             size[0] = sizeof(TTRowPartitionedMatrix);
           }

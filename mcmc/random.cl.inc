@@ -21,7 +21,7 @@ const std::string GetRandomHeader() {
 
                 // printf((__constant char *)"%zd: xorshift_128plus() %p
                 // (0x%llx,0x%llx)\n",
-                // get_global_id(0), s, (*s).x, (*s).y);
+                // GET_GLOBAL_ID(), s, (*s).x, (*s).y);
 
                 return res;
               }
@@ -29,7 +29,7 @@ const std::string GetRandomHeader() {
               inline ulong rand(random_seed_t * s) {
                 ulong r = xorshift_128plus(s);
                 // printf((__constant char *)"%zd: rand/x() %llu\n",
-                // get_global_id(0), r);
+                // GET_GLOBAL_ID(), r);
                 return r;
               }
 

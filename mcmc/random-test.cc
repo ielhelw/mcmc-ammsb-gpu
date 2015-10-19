@@ -17,8 +17,8 @@ const std::string kSource =
     ::mcmc::random::GetRandomHeader() +
 
     BOOST_COMPUTE_STRINGIZE_SOURCE(
-        __kernel void test(__global void* vrand, __global ulong* ok) {
-          __global Random* rand = (__global Random*)vrand;
+        KERNEL void test(GLOBAL void* vrand, GLOBAL ulong* ok) {
+          GLOBAL Random* rand = (GLOBAL Random*)vrand;
           if (rand == 0) {
             *ok = 0;
             return;
@@ -36,12 +36,12 @@ const std::string kSource =
           *ok = 1;
         }
 
-        __kernel void generate(__global void* vrand,
-                               __global Float* data,  // [#threads * K]
+        KERNEL void generate(GLOBAL void* vrand,
+                               GLOBAL Float* data,  // [#threads * K]
                                uint K) {
-          uint gid = get_global_id(0);
+          uint gid = GET_GLOBAL_ID();
           data += gid * K;
-          __global Random* rand = (__global Random*)vrand;
+          GLOBAL Random* rand = (GLOBAL Random*)vrand;
           random_seed_t seed = rand->base_[gid];
           for (uint i = 0; i < K; ++i) {
             data[i] = randn(&seed);

@@ -3,16 +3,17 @@
 #include <boost/compute/utility/source.hpp>
 
 #include "mcmc/gen-util.h"
+#include "mcmc/types.h"
 
 namespace mcmc {
 namespace algorithm {
 
 const std::string kSortSourceTemplate = BOOST_COMPUTE_STRINGIZE_SOURCE(
 
-    __kernel void WG_SORT_TT(__global TT* in, __global TT* out, uint len,
-                             __local TT* aux) {
-      size_t i = get_local_id(0);
-      size_t wg = get_local_size(0);
+    KERNEL void WG_SORT_TT(GLOBAL TT* in, GLOBAL TT* out, uint len,
+                             LOCAL TT* aux) {
+      size_t i = GET_LOCAL_ID();
+      size_t wg = GET_LOCAL_SIZE();
       aux[i] = in[i];
       barrier(CLK_LOCAL_MEM_FENCE);
       for (size_t length = 1; length < wg; length <<= 1) {
@@ -34,7 +35,7 @@ const std::string kSortSourceTemplate = BOOST_COMPUTE_STRINGIZE_SOURCE(
     );
 
 std::string WorkGroupSort(const std::string& type) {
-  return mcmc::gen::MakeHeaderFromTemplate(type + "_WG_SORT",
+  return GetClTypes() + mcmc::gen::MakeHeaderFromTemplate(type + "_WG_SORT",
                                            kSortSourceTemplate, "TT", type);
 }
 

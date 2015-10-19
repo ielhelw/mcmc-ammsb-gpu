@@ -9,8 +9,8 @@ namespace mcmc {
 
 const std::string kSourcePerplexity = BOOST_COMPUTE_STRINGIZE_SOURCE(
 
-    Float calculate_edge_likelihood(__global Float * pi_a, __global Float* pi_b,
-                                    __global Float* beta, bool is_edge) {
+    Float calculate_edge_likelihood(GLOBAL Float * pi_a, GLOBAL Float* pi_b,
+                                    GLOBAL Float* beta, bool is_edge) {
       Float s = 0;
       if (is_edge) {
         uint k = 0;
@@ -34,10 +34,10 @@ const std::string kSourcePerplexity = BOOST_COMPUTE_STRINGIZE_SOURCE(
     }
 
     void calculate_ppx_partial_for_edge_(
-        __global void* g_pi, __global Float* g_beta, __global Set* edge_set,
-        __global Float* g_ppx_per_edge, __global Float* g_link_likelihood,
-        __global Float* g_non_link_likelihood, __global uint* g_link_count,
-        __global uint* g_non_link_count, uint avg_count, Edge e) {
+        GLOBAL void* g_pi, GLOBAL Float* g_beta, GLOBAL Set* edge_set,
+        GLOBAL Float* g_ppx_per_edge, GLOBAL Float* g_link_likelihood,
+        GLOBAL Float* g_non_link_likelihood, GLOBAL uint* g_link_count,
+        GLOBAL uint* g_non_link_count, uint avg_count, Edge e) {
       Vertex u = Vertex0(e);
       Vertex v = Vertex1(e);
       bool is_edge = Set_HasEdge(edge_set, e);
@@ -60,17 +60,17 @@ const std::string kSourcePerplexity = BOOST_COMPUTE_STRINGIZE_SOURCE(
       *g_ppx_per_edge = ppx;
     }
 
-    __kernel void calculate_ppx_partial_for_edge(
-        __global Edge* edges, uint num_edges, __global void* g_pi,
-        __global Float* g_beta, __global void* /* Set* */ void_edge_set,
-        __global Float* g_ppx_per_edge,         // [num global threads]
-        __global Float* g_link_likelihood,      // [num global threads]
-        __global Float* g_non_link_likelihood,  // [num global threads]
-        __global uint* g_link_count,            // [num global threads]
-        __global uint* g_non_link_count,        // [num global threads]
+    KERNEL void calculate_ppx_partial_for_edge(
+        GLOBAL Edge* edges, uint num_edges, GLOBAL void* g_pi,
+        GLOBAL Float* g_beta, GLOBAL void* /* Set* */ void_edge_set,
+        GLOBAL Float* g_ppx_per_edge,         // [num global threads]
+        GLOBAL Float* g_link_likelihood,      // [num global threads]
+        GLOBAL Float* g_non_link_likelihood,  // [num global threads]
+        GLOBAL uint* g_link_count,            // [num global threads]
+        GLOBAL uint* g_non_link_count,        // [num global threads]
         uint avg_count) {
-      size_t i = get_global_id(0);
-      for (; i < num_edges; i += get_global_size(0)) {
+      size_t i = GET_GLOBAL_ID();
+      for (; i < num_edges; i += GET_GLOBAL_SIZE()) {
         calculate_ppx_partial_for_edge_(
             g_pi, g_beta, void_edge_set, g_ppx_per_edge + i,
             g_link_likelihood + i, g_non_link_likelihood + i, g_link_count + i,
@@ -86,12 +86,12 @@ const std::string kSourcePerplexityWg =
     "\n" BOOST_COMPUTE_STRINGIZE_SOURCE(
 
         Float calculate_edge_likelihood_WG(
-            __global Float * pi_a, __global Float* pi_b, __global Float* beta,
-            bool is_edge, __global Float* scratch, __local Float* aux) {
-          uint lid = get_local_id(0);
+            GLOBAL Float * pi_a, GLOBAL Float* pi_b, GLOBAL Float* beta,
+            bool is_edge, GLOBAL Float* scratch, LOCAL Float* aux) {
+          uint lid = GET_LOCAL_ID();
           Float s = 0;
           if (is_edge) {
-            for (uint i = lid; i < K; i += get_local_size(0)) {
+            for (uint i = lid; i < K; i += GET_LOCAL_SIZE()) {
               scratch[i] = pi_a[i] * pi_b[i] * Beta(beta, i);
             }
             barrier(CLK_GLOBAL_MEM_FENCE);
@@ -99,14 +99,14 @@ const std::string kSourcePerplexityWg =
             s = aux[0];
           } else {
             Float sum = 0;
-            for (uint i = lid; i < K; i += get_local_size(0)) {
+            for (uint i = lid; i < K; i += GET_LOCAL_SIZE()) {
               scratch[i] = pi_a[i] * pi_b[i];
             }
             barrier(CLK_GLOBAL_MEM_FENCE);
             WG_SUM_Float(scratch, aux, K);
             sum = aux[0];
             barrier(CLK_LOCAL_MEM_FENCE);
-            for (uint i = lid; i < K; i += get_local_size(0)) {
+            for (uint i = lid; i < K; i += GET_LOCAL_SIZE()) {
               scratch[i] = pi_a[i] * pi_b[i] * (1.0 - Beta(beta, i));
             }
             barrier(CLK_GLOBAL_MEM_FENCE);
@@ -121,11 +121,11 @@ const std::string kSourcePerplexityWg =
         }
 
         void calculate_ppx_partial_for_edge_(
-            __global void* g_pi, __global Float* g_beta, __global Set* edge_set,
-            __global Float* g_ppx_per_edge, __global Float* g_link_likelihood,
-            __global Float* g_non_link_likelihood, __global uint* g_link_count,
-            __global uint* g_non_link_count, uint avg_count, Edge e,
-            __global Float* scratch, __local Float* aux) {
+            GLOBAL void* g_pi, GLOBAL Float* g_beta, GLOBAL Set* edge_set,
+            GLOBAL Float* g_ppx_per_edge, GLOBAL Float* g_link_likelihood,
+            GLOBAL Float* g_non_link_likelihood, GLOBAL uint* g_link_count,
+            GLOBAL uint* g_non_link_count, uint avg_count, Edge e,
+            GLOBAL Float* scratch, LOCAL Float* aux) {
           Vertex u = Vertex0(e);
           Vertex v = Vertex1(e);
           bool is_edge = Set_HasEdge(edge_set, e);
@@ -133,7 +133,7 @@ const std::string kSourcePerplexityWg =
               FloatRowPartitionedMatrix_Row(g_pi, u),
               FloatRowPartitionedMatrix_Row(g_pi, v), g_beta, is_edge, scratch,
               aux);
-          if (get_local_id(0) == 0) {
+          if (GET_LOCAL_ID() == 0) {
             Float ppx = *g_ppx_per_edge;
             ppx = (ppx * (avg_count - 1) + edge_likelihood) / avg_count;
             if (is_edge) {
@@ -151,20 +151,20 @@ const std::string kSourcePerplexityWg =
           }
         }
 
-        __kernel void calculate_ppx_partial_for_edge(
-            __global Edge* edges, uint num_edges, __global void* g_pi,
-            __global Float* g_beta, __global void* /* Set* */ void_edge_set,
-            __global Float* g_ppx_per_edge,         // [num work groups]
-            __global Float* g_link_likelihood,      // [num work groups]
-            __global Float* g_non_link_likelihood,  // [num work groups]
-            __global uint* g_link_count,            // [num work groups]
-            __global uint* g_non_link_count,        // [num work groups]
+        KERNEL void calculate_ppx_partial_for_edge(
+            GLOBAL Edge* edges, uint num_edges, GLOBAL void* g_pi,
+            GLOBAL Float* g_beta, GLOBAL void* /* Set* */ void_edge_set,
+            GLOBAL Float* g_ppx_per_edge,         // [num work groups]
+            GLOBAL Float* g_link_likelihood,      // [num work groups]
+            GLOBAL Float* g_non_link_likelihood,  // [num work groups]
+            GLOBAL uint* g_link_count,            // [num work groups]
+            GLOBAL uint* g_non_link_count,        // [num work groups]
             uint avg_count,
-            __global Float* scratch,  // [num work groups * K]
-            __local Float* aux) {
-          size_t i = get_group_id(0);
-          scratch += get_group_id(0) * K;
-          for (; i < num_edges; i += get_num_groups(0)) {
+            GLOBAL Float* scratch,  // [num work groups * K]
+            LOCAL Float* aux) {
+          size_t i = GET_GROUP_ID();
+          scratch += GET_GROUP_ID() * K;
+          for (; i < num_edges; i += GET_NUM_GROUPS()) {
             calculate_ppx_partial_for_edge_(
                 g_pi, g_beta, void_edge_set, g_ppx_per_edge + i,
                 g_link_likelihood + i, g_non_link_likelihood + i,

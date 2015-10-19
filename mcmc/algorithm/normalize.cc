@@ -13,10 +13,10 @@ namespace algorithm {
 static const std::string kNormalizeSourceTemplate =
     BOOST_COMPUTE_STRINGIZE_SOURCE(
 
-        void WG_NORMALIZE_TT(__global TT* in,
-                             __local TT* aux, uint len) {
-          uint lid = get_local_id(0);
-          uint stride = get_local_size(0);
+        void WG_NORMALIZE_TT(GLOBAL TT* in,
+                             LOCAL TT* aux, uint len) {
+          uint lid = GET_LOCAL_ID();
+          uint stride = GET_LOCAL_SIZE();
           WG_SUM_TT(in, aux, len);
           TT sum = aux[0];
           for (; lid < len; lid += stride) {
@@ -24,22 +24,22 @@ static const std::string kNormalizeSourceTemplate =
           }
         }
 
-        __kernel void WG_NORMALIZE_KERNEL_TT(
-            __global TT* in, __local TT* aux, uint len) {
-          uint gid = get_group_id(0);
-          uint stride = get_local_size(0);
+        KERNEL void WG_NORMALIZE_KERNEL_TT(
+            GLOBAL TT* in, LOCAL TT* aux, uint len) {
+          uint gid = GET_GROUP_ID();
+          uint stride = GET_LOCAL_SIZE();
           in += gid * len;
           WG_NORMALIZE_TT(in, aux, len);
         }
 
-        __kernel void WG_NORMALIZE_PARTITIONED_KERNEL_TT(
-            __global void* in, __global TT* g_sum, __local TT* aux) {
-          uint lsize = get_local_size(0);
-          uint lid = get_local_id(0);
-          uint gid = get_group_id(0);
-          __global TTRowPartitionedMatrix* pm =
-              (__global TTRowPartitionedMatrix*)in;
-          __global TT* row = TTRowPartitionedMatrix_Row(pm, gid);
+        KERNEL void WG_NORMALIZE_PARTITIONED_KERNEL_TT(
+            GLOBAL void* in, GLOBAL TT* g_sum, LOCAL TT* aux) {
+          uint lsize = GET_LOCAL_SIZE();
+          uint lid = GET_LOCAL_ID();
+          uint gid = GET_GROUP_ID();
+          GLOBAL TTRowPartitionedMatrix* pm =
+              (GLOBAL TTRowPartitionedMatrix*)in;
+          GLOBAL TT* row = TTRowPartitionedMatrix_Row(pm, gid);
           WG_SUM_TT(row, aux, pm->num_cols_);
           Float sum = aux[0];
           for (uint i = lid; i < pm->num_cols_; i += lsize) {

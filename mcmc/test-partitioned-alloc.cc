@@ -52,11 +52,11 @@ TEST_F(PartitionedAllocTest, RetrieveElements) {
 
   const std::string kSource = BOOST_COMPUTE_STRINGIZE_SOURCE(
 
-      __kernel void fetch(__global void* g_matrix, uint row, uint col,
-                          __global uint* ret) {
-        __global uintRowPartitionedMatrix* rpm =
-            (__global uintRowPartitionedMatrix*)g_matrix;
-        __global uint* p = uintRowPartitionedMatrix_Row(rpm, row);
+      KERNEL void fetch(GLOBAL void* g_matrix, uint row, uint col,
+                          GLOBAL uint* ret) {
+        GLOBAL uintRowPartitionedMatrix* rpm =
+            (GLOBAL uintRowPartitionedMatrix*)g_matrix;
+        GLOBAL uint* p = uintRowPartitionedMatrix_Row(rpm, row);
         ret[0] = p[col];
         ret[1] = p[col + 1];
       }

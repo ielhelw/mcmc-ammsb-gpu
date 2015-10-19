@@ -9,17 +9,17 @@ namespace mcmc {
 const std::string kSourceBetaBase =
     random::GetRandomHeader() +
     BOOST_COMPUTE_STRINGIZE_SOURCE(
-        __kernel void sum_theta(__global Float* g_theta,     // [K, 2]
-                                __global Float* g_theta_sum  // [K]
+        KERNEL void sum_theta(GLOBAL Float* g_theta,     // [K, 2]
+                                GLOBAL Float* g_theta_sum  // [K]
                                 ) {
-          uint gsize = get_global_size(0);
-          for (uint i = get_global_id(0); i < K; i += gsize) {
+          uint gsize = GET_GLOBAL_SIZE();
+          for (uint i = GET_GLOBAL_ID(); i < K; i += gsize) {
             g_theta_sum[i] = Theta0(g_theta, i) + Theta1(g_theta,  i);
           }
-        } __kernel void sum_grads(__global Float* grads,
+        } KERNEL void sum_grads(GLOBAL Float* grads,
                                   uint num_partial_sums) {
-          uint i = get_global_id(0);
-          uint gsize = get_global_size(0);
+          uint i = GET_GLOBAL_ID();
+          uint gsize = GET_GLOBAL_SIZE();
           for (; i < 2 * K; i += gsize) {
             for (uint p = 1; p < num_partial_sums; ++p) {
               grads[i] += grads[i + p * 2 * K];
@@ -27,12 +27,12 @@ const std::string kSourceBetaBase =
           }
         }
 
-        __kernel void update_theta(__global Float* theta, __global Float* grads,
+        KERNEL void update_theta(GLOBAL Float* theta, GLOBAL Float* grads,
                                    uint step_count, Float scale,
-                                   __global void* vrand) {
-          const uint gid = get_global_id(0);
-          const uint gsize = get_global_size(0);
-          __global Random* random = (__global Random*)vrand;
+                                   GLOBAL void* vrand) {
+          const uint gid = GET_GLOBAL_ID();
+          const uint gsize = GET_GLOBAL_SIZE();
+          GLOBAL Random* random = (GLOBAL Random*)vrand;
           if (gid < K) {
             random_seed_t rseed = random->base_[gid];
             Float eps_t = get_eps_t(step_count);
@@ -60,18 +60,18 @@ const std::string kSourceBetaBase =
 
 const std::string kSourceBeta =
     kSourceBetaBase +
-    BOOST_COMPUTE_STRINGIZE_SOURCE(__kernel void calculate_grads_partial(
-        __global Float* theta,      // [K, 2]
-        __global Float* theta_sum,  // [K]
-        __global Float* beta,       // [K]
-        __global void* g_pi,        // [N, K]
-        __global void* vset /*EdgeSet*/, __global Edge* mini_batch_edges,
+    BOOST_COMPUTE_STRINGIZE_SOURCE(KERNEL void calculate_grads_partial(
+        GLOBAL Float* theta,      // [K, 2]
+        GLOBAL Float* theta_sum,  // [K]
+        GLOBAL Float* beta,       // [K]
+        GLOBAL void* g_pi,        // [N, K]
+        GLOBAL void* vset /*EdgeSet*/, GLOBAL Edge* mini_batch_edges,
         uint num_mini_batch_edges,
-        __global Float* probs,  // [num_mini_batch_edges * K]
-        __global Float* grads   // min(#edges, #num_threads) * [K, 2]
+        GLOBAL Float* probs,  // [num_mini_batch_edges * K]
+        GLOBAL Float* grads   // min(#edges, #num_threads) * [K, 2]
         ) {
-      uint i = get_global_id(0);
-      uint gsize = get_global_size(0);
+      uint i = GET_GLOBAL_ID();
+      uint gsize = GET_GLOBAL_SIZE();
       probs += i * K;
       grads += i * 2 * K;
       // reset grads
@@ -84,8 +84,8 @@ const std::string kSourceBeta =
         Vertex v = Vertex1(edge);
         edge = MakeEdge(min(u, v), max(u, v));
         uint y = Set_HasEdge(vset, edge) ? 1 : 0;
-        __global Float* pi_a = FloatRowPartitionedMatrix_Row(g_pi, u);
-        __global Float* pi_b = FloatRowPartitionedMatrix_Row(g_pi, v);
+        GLOBAL Float* pi_a = FloatRowPartitionedMatrix_Row(g_pi, u);
+        GLOBAL Float* pi_b = FloatRowPartitionedMatrix_Row(g_pi, v);
         Float pi_sum = 0;
         Float probs_sum = 0;
 
@@ -116,21 +116,21 @@ const std::string kSourceBetaWg =
     mcmc::algorithm::WorkGroupSum(compute::type_name<Float>()) + "\n" +
     "#define WG_SUM_Float WG_SUM_" +
     compute::type_name<Float>() + "\n" + kSourceBetaBase +
-    BOOST_COMPUTE_STRINGIZE_SOURCE(__kernel void calculate_grads_partial(
-        __global Float* theta,      // [K, 2]
-        __global Float* theta_sum,  // [K]
-        __global Float* beta,       // [K]
-        __global void* g_pi,        // [N, K]
-        __global void* vset /*EdgeSet*/, __global Edge* mini_batch_edges,
+    BOOST_COMPUTE_STRINGIZE_SOURCE(KERNEL void calculate_grads_partial(
+        GLOBAL Float* theta,      // [K, 2]
+        GLOBAL Float* theta_sum,  // [K]
+        GLOBAL Float* beta,       // [K]
+        GLOBAL void* g_pi,        // [N, K]
+        GLOBAL void* vset /*EdgeSet*/, GLOBAL Edge* mini_batch_edges,
         uint num_mini_batch_edges,
-        __global Float* probs,    // [num_mini_batch_edges * K]
-        __global Float* grads,    // min(#edges, #num_threads) * [K, 2]
-        __global Float* scratch,  // min(#edges, #num_threads) * [K]
-        __local Float* aux) {
-      uint i = get_group_id(0);
-      const uint gsize = get_num_groups(0);
-      const uint lid = get_local_id(0);
-      const uint lsize = get_local_size(0);
+        GLOBAL Float* probs,    // [num_mini_batch_edges * K]
+        GLOBAL Float* grads,    // min(#edges, #num_threads) * [K, 2]
+        GLOBAL Float* scratch,  // min(#edges, #num_threads) * [K]
+        LOCAL Float* aux) {
+      uint i = GET_GROUP_ID();
+      const uint gsize = GET_NUM_GROUPS();
+      const uint lid = GET_LOCAL_ID();
+      const uint lsize = GET_LOCAL_SIZE();
       probs += i * K;
       grads += i * 2 * K;
       scratch += i * K;
@@ -144,8 +144,8 @@ const std::string kSourceBetaWg =
         Vertex v = Vertex1(edge);
         edge = MakeEdge(min(u, v), max(u, v));
         uint y = Set_HasEdge(vset, edge) ? 1 : 0;
-        __global Float* pi_a = FloatRowPartitionedMatrix_Row(g_pi, u);
-        __global Float* pi_b = FloatRowPartitionedMatrix_Row(g_pi, v);
+        GLOBAL Float* pi_a = FloatRowPartitionedMatrix_Row(g_pi, u);
+        GLOBAL Float* pi_b = FloatRowPartitionedMatrix_Row(g_pi, v);
         Float pi_sum = 0;
         Float probs_sum = 0;
 

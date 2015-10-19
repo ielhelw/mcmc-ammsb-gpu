@@ -27,23 +27,23 @@ const std::string& Learner::GetBaseFuncs() {
                          } inline Edge MakeEdge(Vertex u,
                                                 Vertex v) {
                            return (((Edge)u) << 32) | v;
-                         } inline Float Beta(__global Float * g_beta,
+                         } inline Float Beta(GLOBAL Float * g_beta,
                                              uint k) {
                            return g_beta[(k << 1) + 1];
-                         } inline Float Theta0(__global Float * g_theta,
+                         } inline Float Theta0(GLOBAL Float * g_theta,
                                                uint k) {
                            return g_theta[k << 1];
-                         } inline Float Theta1(__global Float * g_theta,
+                         } inline Float Theta1(GLOBAL Float * g_theta,
                                                uint k) {
                            return g_theta[(k << 1) + 1];
-                         } inline void SetTheta0(__global Float * g_theta,
+                         } inline void SetTheta0(GLOBAL Float * g_theta,
                                                  uint k, Float v) {
                            g_theta[k << 1] = v;
-                         } inline void SetTheta1(__global Float * g_theta,
+                         } inline void SetTheta1(GLOBAL Float * g_theta,
                                                  uint k, Float v) {
                            g_theta[(k << 1) + 1] = v;
-                         } inline __global Float *
-                     Pi(__global Float * pi,
+                         } inline GLOBAL Float *
+                     Pi(GLOBAL Float * pi,
                         Vertex u) { return pi + u * K; } inline Float
                          get_eps_t(uint step_count) {
                    return EPS_A * pow(1 + step_count / EPS_B, -EPS_C);

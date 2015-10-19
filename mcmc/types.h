@@ -26,14 +26,7 @@ inline Edge MakeEdge(Vertex u, Vertex v) {
   return Edge((static_cast<Edge>(u) << 32) | static_cast<Edge>(v));
 }
 
-inline std::string GetClTypes() {
-  std::ostringstream out;
-  if (compute::type_name<Float>() == std::string("double")) {
-    out << "#pragma OPENCL EXTENSION cl_khr_fp64: enable " << std::endl;
-  }
-  out << "typedef " << compute::type_name<Float>() << " Float;" << std::endl;
-  return gen::MakeHeader("CL_TYPES", out.str());
-}
+std::string GetClTypes();
 
 }  // namespace mcmc
 

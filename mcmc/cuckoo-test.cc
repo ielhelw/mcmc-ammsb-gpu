@@ -45,11 +45,11 @@ TEST(CuckooSetTest, RandomMembership) {
 }
 
 std::string kSource = BOOST_COMPUTE_STRINGIZE_SOURCE(
-    __kernel void find(__global void *vset, __global uint64_t *in, uint32_t len,
-                       __global uint64_t *out) {
-      size_t id = get_global_id(0);
-      for (; id < len; id += get_global_size(0)) {
-        __global Set *set = (__global Set *)vset;
+    KERNEL void find(GLOBAL void *vset, GLOBAL uint64_t *in, uint32_t len,
+                       GLOBAL uint64_t *out) {
+      size_t id = GET_GLOBAL_ID();
+      for (; id < len; id += GET_GLOBAL_SIZE()) {
+        GLOBAL Set *set = (GLOBAL Set *)vset;
         out[id] = Set_HasEdge(set, in[id]) ? 1 : 0;
       }
     });
@@ -70,7 +70,7 @@ TEST(OpenClCuckooSetTest, RandomMembership) {
   compute::command_queue queue(context, dev,
                                compute::command_queue::enable_profiling);
   compute::program prog = compute::program::create_with_source(
-      OpenClSetFactory::GetHeader() + kSource, context);
+      OpenClSetFactory::GetHeader() + ::mcmc::GetClTypes() + kSource, context);
   try {
     prog.build();
   } catch (compute::opencl_error &e) {

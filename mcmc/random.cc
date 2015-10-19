@@ -14,7 +14,7 @@ const std::string GetRandomTypes() {
       typedef ulong2 gsl_rng; typedef gsl_rng random_seed_t;
 
       typedef struct {
-        __global random_seed_t* base_;
+        GLOBAL random_seed_t* base_;
         ulong num_seeds;
       } Random;
 
@@ -24,21 +24,22 @@ const std::string GetRandomTypes() {
 
 const std::string GetRandomSource() {
   static const std::string kClRandomSource =
+      ::mcmc::GetClTypes() +
       GetRandomTypes() +
       BOOST_COMPUTE_STRINGIZE_SOURCE(
-          __kernel void SizeOfRandom(__global ulong *
+          KERNEL void SizeOfRandom(GLOBAL ulong *
                                      size) { *size = sizeof(Random); }
 
-          __kernel void RandomInit(__global void* base, int num_random_seeds,
+          KERNEL void RandomInit(GLOBAL void* base, int num_random_seeds,
                                    random_seed_t random_seed,
-                                   __global random_seed_t* thread_random_seed) {
-            size_t id = get_global_id(0);
-            for (size_t i = id; i < num_random_seeds; i += get_global_size(0)) {
+                                   GLOBAL random_seed_t* thread_random_seed) {
+            size_t id = GET_GLOBAL_ID();
+            for (size_t i = id; i < num_random_seeds; i += GET_GLOBAL_SIZE()) {
               thread_random_seed[i].x = random_seed.x + i;
               thread_random_seed[i].y = random_seed.y + i;
             }
             if (id == 0) {
-              __global Random* random = (__global Random*)base;
+              GLOBAL Random* random = (GLOBAL Random*)base;
               random->base_ = thread_random_seed;
               random->num_seeds = num_random_seeds;
             }
@@ -98,30 +99,30 @@ OpenClRandomFactory::OpenClRandomFactory(compute::command_queue queue)
   compute::copy(size.begin(), size.end(), &sizeOfRandom_, queue_);
 }
 
-const std::string& GenerateGammaSource() {
+std::string GenerateGammaSource() {
   static const std::string kSource =
-      BOOST_COMPUTE_STRINGIZE_SOURCE(__kernel void generate_gamma(
-          __global void * vpi, __global void * vrand, TT a, TT b) {
-        __global TTRowPartitionedMatrix* pm =
-            (__global TTRowPartitionedMatrix*)vpi;
-        uint i = get_group_id(0);
-        uint gsize = get_num_groups(0);
-        uint lid = get_local_id(0);
-        uint lsize = get_local_size(0);
-        __global Random* seeds = (__global Random*)vrand;
+      BOOST_COMPUTE_STRINGIZE_SOURCE(KERNEL void generate_gamma(
+          GLOBAL void * vpi, GLOBAL void * vrand, TT a, TT b) {
+        GLOBAL TTRowPartitionedMatrix* pm =
+            (GLOBAL TTRowPartitionedMatrix*)vpi;
+        uint i = GET_GROUP_ID();
+        uint gsize = GET_NUM_GROUPS();
+        uint lid = GET_LOCAL_ID();
+        uint lsize = GET_LOCAL_SIZE();
+        GLOBAL Random* seeds = (GLOBAL Random*)vrand;
 
         if (i < pm->num_rows_) {
-          random_seed_t seed = seeds->base_[get_global_id(0)];
+          random_seed_t seed = seeds->base_[GET_GLOBAL_ID()];
           for (; i < pm->num_rows_; i += gsize) {
-            __global TT* row = TTRowPartitionedMatrix_Row(pm, i);
+            GLOBAL TT* row = TTRowPartitionedMatrix_Row(pm, i);
             for (uint j = lid; j < pm->num_cols_; j += lsize) {
               row[j] = rand_gamma(&seed, a, b);
             }
           }
-          seeds->base_[get_global_id(0)] = seed;
+          seeds->base_[GET_GLOBAL_ID()] = seed;
         }
       });
-  return kSource;
+  return ::mcmc::GetClTypes() + kSource;
 }
 
 void RandomGamma(compute::command_queue* queue, OpenClRandom* randv, Float eta0,
