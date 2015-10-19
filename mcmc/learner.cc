@@ -90,8 +90,17 @@ Learner::Learner(const Config& cfg, compute::command_queue queue)
     case NodeNonLink:
       sampler_ = sampleNodeNonLink;
       break;
-    case NodeStratified:
-      sampler_ = sampleNodeStratified;
+    case Node:
+      sampler_ = sampleNode;
+      break;
+    case BFLink:
+      sampler_ = sampleBreadthFirstLink;
+      break;
+    case BFNonLink:
+      sampler_ = sampleBreadthFirstNonLink;
+      break;
+    case BF:
+      sampler_ = sampleBreadthFirst;
       break;
     default:
       LOG(FATAL) << "Unkown sample strategy";
@@ -105,8 +114,8 @@ Learner::Learner(const Config& cfg, compute::command_queue queue)
   GenerateAndNormalize(&queue_, &gamma, phi_, pi_.get());
 }
 
-void Learner::sampleMiniBatch(std::vector<Edge>* edges, unsigned int* seed) {
-  sampler_(cfg_, edges, seed);
+Float Learner::sampleMiniBatch(std::vector<Edge>* edges, unsigned int* seed) {
+  return sampler_(cfg_, edges, seed);
 }
 
 void Learner::extractNodesFromMiniBatch(const std::vector<Edge>& edges,
@@ -147,13 +156,14 @@ void Learner::sampleNeighbors(const std::vector<Vertex>& nodes,
   }
 }
 
-void Learner::DoSample(Sample* sample) {
+Float Learner::DoSample(Sample* sample) {
   sample->edges.clear();
-  sampleMiniBatch(&sample->edges, &sample->seeds[0]);
+  Float weight = sampleMiniBatch(&sample->edges, &sample->seeds[0]);
   extractNodesFromMiniBatch(sample->edges, &sample->nodes_vec);
   LOG_IF(FATAL, sample->nodes_vec.size() == 0) << "mini-batch size = 0!";
   LOG_IF(FATAL, sample->nodes_vec.size() > 2*cfg_.mini_batch_size) << "mini-batch too big";
   sampleNeighbors(sample->nodes_vec, &sample->neighbors_vec, &sample->seeds);
+  return weight;
 }
 
 void Learner::run(uint32_t max_iters) {
@@ -164,7 +174,7 @@ void Learner::run(uint32_t max_iters) {
   uint64_t tpi = 0;
   uint64_t tbeta = 0;
   Sample samples[2] = {Sample(cfg_, queue_), Sample(cfg_, queue_)};
-  std::future<void> futures[2];
+  std::future<Float> futures[2];
   int phase = 0;
   auto T1 = high_resolution_clock::now();
   futures[phase] =
@@ -179,7 +189,7 @@ void Learner::run(uint32_t max_iters) {
                 << std::exp(ppx);
     }
     auto tsampling_start = high_resolution_clock::now();
-    futures[phase].wait();
+    Float weight = futures[phase].get();
     futures[1 - phase] = std::async(std::launch::async, &Learner::DoSample,
                                     this, &samples[1 - phase]);
     auto tsampling_end = high_resolution_clock::now();
@@ -205,7 +215,7 @@ void Learner::run(uint32_t max_iters) {
     tpi += duration_cast<nanoseconds>(tpi_end - tpi_start).count();
 
     auto tbeta_start = high_resolution_clock::now();
-    betaUpdater_(&samples[phase].dev_edges, samples[phase].edges.size(), cfg_.N);
+    betaUpdater_(&samples[phase].dev_edges, samples[phase].edges.size(), weight);
     auto tbeta_end = high_resolution_clock::now();
     tbeta += duration_cast<nanoseconds>(tbeta_end - tbeta_start).count();
  

@@ -85,6 +85,10 @@ std::ostream& operator<<(std::ostream& out, const Config& cfg) {
   out << "K: " << cfg.K << std::endl;
   out << "m: " << cfg.mini_batch_size << std::endl;
   out << "n: " << cfg.num_node_sample << std::endl;
+  out << "strategy: " << to_string(cfg.strategy) << std::endl;
+  out << "ppx-wg: : " << cfg.ppx_wg_size << std::endl;
+  out << "phi-wg: : " << cfg.phi_wg_size << std::endl;
+  out << "beta-wg: : " << cfg.beta_wg_size << std::endl;
   out << "|N|: " << cfg.N << std::endl;
   out << "|E|: " << cfg.E << std::endl;
   if (cfg.training)

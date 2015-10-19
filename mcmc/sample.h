@@ -25,18 +25,29 @@ struct Sample {
 };
 
 enum SampleStrategy {
+  Node,
   NodeLink,
   NodeNonLink,
-  NodeStratified,
+  BFLink,
+  BFNonLink,
+  BF,
 };
+
+std::string to_string(SampleStrategy s);
 
 std::istream& operator>>(std::istream& in, SampleStrategy& strategy);
 
-void sampleNodeStratified(const Config& cfg, std::vector<Edge>* edges, unsigned int* seed);
+Float sampleBreadthFirstLink(const Config& cfg, std::vector<Edge>* edges, unsigned int* seed);
 
-void sampleNodeLink(const Config& cfg, std::vector<Edge>* edges, unsigned int* seed);
+Float sampleBreadthFirstNonLink(const Config& cfg, std::vector<Edge>* edges, unsigned int* seed);
 
-void sampleNodeNonLink(const Config& cfg, std::vector<Edge>* edges, unsigned int* seed);
+Float sampleBreadthFirst(const Config& cfg, std::vector<Edge>* edges, unsigned int* seed);
+
+Float sampleNodeLink(const Config& cfg, std::vector<Edge>* edges, unsigned int* seed);
+
+Float sampleNodeNonLink(const Config& cfg, std::vector<Edge>* edges, unsigned int* seed);
+
+Float sampleNode(const Config& cfg, std::vector<Edge>* edges, unsigned int* seed);
 
 }  // namespace mcmc
 

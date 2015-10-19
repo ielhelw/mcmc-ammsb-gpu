@@ -23,7 +23,7 @@ class Learner {
 
   Float calculate_perplexity_heldout(uint32_t step_count);
 
-  void sampleMiniBatch(std::vector<Edge>* edges, unsigned int* seed);
+  Float sampleMiniBatch(std::vector<Edge>* edges, unsigned int* seed);
 
   void extractNodesFromMiniBatch(const std::vector<Edge>& edges,
                                  std::vector<Vertex>* nodes);
@@ -32,7 +32,7 @@ class Learner {
                        std::vector<Vertex>* neighbors,
                        std::vector<unsigned int>* seeds);
 
-  void DoSample(Sample* sample);
+  Float DoSample(Sample* sample);
 
   void run(uint32_t max_iters);
 
@@ -75,7 +75,7 @@ class Learner {
   PhiUpdater phiUpdater_;
   BetaUpdater betaUpdater_;
   
-  void (*sampler_)(const Config& cfg, std::vector<Edge>* edges, unsigned int* seed);
+  Float (*sampler_)(const Config& cfg, std::vector<Edge>* edges, unsigned int* seed);
 };
 
 template <class Generator>

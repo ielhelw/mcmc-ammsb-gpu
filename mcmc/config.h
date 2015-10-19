@@ -55,7 +55,7 @@ struct Config {
     phi_wg_size = 32;
     beta_wg_size = 32;
     phi_disable_noise = false;
-    strategy = NodeLink;
+    strategy = Node;
   }
 };
 
