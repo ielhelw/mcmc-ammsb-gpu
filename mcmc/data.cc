@@ -117,8 +117,8 @@ bool GenerateSetsFromEdges(uint64_t N, const std::vector<Edge>& vals,
           v = rand() % N;
         } while (u == v);  // no self links
         e = MakeEdge(std::min(u, v), std::max(u, v));
-      } while (fake_edges.find(e) != fake_edges.end() ||
-          (*heldout)->Has(e) || (*training)->Has(e));  // skip edge
+      } while (fake_edges.find(e) != fake_edges.end() || (*heldout)->Has(e) ||
+               (*training)->Has(e));  // skip edge
       fake_edges.insert(e);
       heldout_edges->push_back(e);
     }

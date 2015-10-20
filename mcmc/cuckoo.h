@@ -6,11 +6,6 @@
 #include <memory>
 #include <vector>
 
-#include <boost/compute/buffer.hpp>
-#include <boost/compute/container/vector.hpp>
-#include <boost/compute/types.hpp>
-#include <boost/compute/utility/source.hpp>
-
 #include "mcmc/types.h"
 
 namespace mcmc {
@@ -65,18 +60,18 @@ class OpenClSetFactory;
 
 class OpenClSet {
  public:
-  inline compute::buffer& Get() { return buf_; }
+  inline clcuda::Buffer<char>& Get() { return buf_; }
 
  private:
-  OpenClSet(std::shared_ptr<OpenClSetFactory> factory, compute::kernel* init,
-            compute::command_queue* queue, uint64_t sizeOfSet,
-            const std::vector<uint64_t>& data);
+  OpenClSet(std::shared_ptr<OpenClSetFactory> factory, clcuda::Kernel* init,
+            clcuda::Queue* queue, uint64_t sizeOfSet,
+            const std::vector<Edge>& data);
 
   std::shared_ptr<OpenClSetFactory> factory_;
-  compute::command_queue queue_;
-  compute::vector<uint64_t> data_;
+  clcuda::Queue queue_;
+  clcuda::Buffer<Edge> data_;
   uint64_t num_bins_;
-  compute::buffer buf_;
+  clcuda::Buffer<char> buf_;
 
   friend class OpenClSetFactory;
 };
@@ -85,16 +80,16 @@ class OpenClSetFactory : public std::enable_shared_from_this<OpenClSetFactory> {
  public:
   static const std::string& GetHeader();
 
-  static std::shared_ptr<OpenClSetFactory> New(compute::command_queue queue);
+  static std::shared_ptr<OpenClSetFactory> New(clcuda::Queue queue);
 
   OpenClSet* CreateSet(const std::vector<uint64_t>& data);
 
  private:
-  OpenClSetFactory(compute::command_queue queue);
+  OpenClSetFactory(clcuda::Queue queue);
 
-  compute::program prog_;
-  compute::command_queue queue_;
-  compute::kernel init_kernel_;
+  clcuda::Queue queue_;
+  clcuda::Program prog_;
+  std::unique_ptr<clcuda::Kernel> init_kernel_;
   uint64_t sizeOfSet_;
 };
 

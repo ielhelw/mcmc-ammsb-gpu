@@ -10,7 +10,7 @@
 #include <limits>
 
 using namespace mcmc::cuckoo;
-namespace compute = boost::compute;
+namespace clcuda = mcmc::clcuda;
 
 std::vector<uint64_t> GenerateRandom() {
   std::vector<Edge> edges(2 * 1024 * 1024);
@@ -44,7 +44,7 @@ TEST(CuckooSetTest, RandomMembership) {
   }
 }
 
-std::string kSource = BOOST_COMPUTE_STRINGIZE_SOURCE(
+std::string kSource = R"%%(
     KERNEL void find(GLOBAL void *vset, GLOBAL uint64_t *in, uint32_t len,
                        GLOBAL uint64_t *out) {
       size_t id = GET_GLOBAL_ID();
@@ -52,7 +52,7 @@ std::string kSource = BOOST_COMPUTE_STRINGIZE_SOURCE(
         GLOBAL Set *set = (GLOBAL Set *)vset;
         out[id] = Set_HasEdge(set, in[id]) ? 1 : 0;
       }
-    });
+    })%%";
 
 TEST(OpenClCuckooSetTest, RandomMembership) {
   std::vector<Edge> edges = GenerateRandom();
@@ -65,53 +65,53 @@ TEST(OpenClCuckooSetTest, RandomMembership) {
     ASSERT_TRUE(set.Insert(*it));
   }
   std::vector<Edge> serialized_set = set.Serialize();
-  compute::device dev = compute::system::default_device();
-  compute::context context(dev);
-  compute::command_queue queue(context, dev,
-                               compute::command_queue::enable_profiling);
-  compute::program prog = compute::program::create_with_source(
-      OpenClSetFactory::GetHeader() + ::mcmc::GetClTypes() + kSource, context);
-  try {
-    prog.build();
-  } catch (compute::opencl_error &e) {
-    LOG(FATAL) << prog.build_log();
-    ;
-  }
+  clcuda::Platform platform((size_t)0);
+  clcuda::Device dev(platform, 0);
+  clcuda::Context context(dev);
+  clcuda::Queue queue(context, dev);
+  clcuda::Program prog(
+      context, OpenClSetFactory::GetHeader() + ::mcmc::GetClTypes() + kSource);
+  std::vector<std::string> opts;
+  clcuda::BuildStatus status = prog.Build(dev, opts);
+  LOG_IF(FATAL, status != clcuda::BuildStatus::kSuccess)
+      << prog.GetBuildInfo(dev);
   auto set_factory = OpenClSetFactory::New(queue);
   std::unique_ptr<OpenClSet> dev_set(set_factory->CreateSet(serialized_set));
-  compute::vector<Edge> dev_input(edges.begin(), edges.begin() + in_len, queue);
-  compute::vector<Edge> dev_output(dev_input.size(), 0, queue);
-  compute::kernel kernel = prog.create_kernel("find");
+  std::unique_ptr<clcuda::Buffer<Edge>> dev_input(new clcuda::Buffer<Edge>(
+      context, queue, edges.begin(), edges.begin() + in_len));
+  std::unique_ptr<clcuda::Buffer<Edge>> dev_output(
+      new clcuda::Buffer<Edge>(context, in_len));
+  clcuda::Kernel kernel(prog, "find");
   int arg = 0;
-  kernel.set_arg(arg++, dev_set->Get());
-  kernel.set_arg(arg++, dev_input);
-  kernel.set_arg(arg++, static_cast<uint32_t>(dev_input.size()));
-  kernel.set_arg(arg++, dev_output);
+  kernel.SetArgument(arg++, dev_set->Get()());
+  kernel.SetArgument(arg++, *dev_input);
+  kernel.SetArgument(arg++, static_cast<uint32_t>(in_len));
+  kernel.SetArgument(arg++, *dev_output);
   uint64_t local = 64;
   uint64_t global = static_cast<uint64_t>(ceil((in_len + 0.0) / local) * local);
-  compute::event e = queue.enqueue_1d_range_kernel(kernel, 0, global, local);
-  e.wait();
-  std::vector<Edge> output(dev_output.size());
-  compute::copy(dev_output.begin(), dev_output.end(), output.begin(), queue);
+  clcuda::Event e;
+  kernel.Launch(queue, {global}, {local}, e);
+  queue.Finish();
+  std::vector<Edge> output(in_len);
+  dev_output->Read(queue, dev_output->GetSize() / sizeof(Edge), output.data());
   uint64_t count = 0;
   for (auto v : output) {
     if (v != 1) ++count;
   }
   ASSERT_EQ(count, 0);
-  dev_input.resize(out_len);
-  dev_output.resize(dev_input.size());
-  compute::copy(edges.begin() + in_len, edges.end(), dev_input.begin(), queue);
-  compute::fill(dev_output.begin(), dev_output.end(), 1, queue);
+  dev_input.reset(new clcuda::Buffer<Edge>(
+      context, queue, edges.begin() + in_len, edges.end()));
+  dev_output.reset(new clcuda::Buffer<Edge>(context, out_len));
   arg = 0;
-  kernel.set_arg(arg++, dev_set->Get());
-  kernel.set_arg(arg++, dev_input);
-  kernel.set_arg(arg++, static_cast<uint32_t>(dev_input.size()));
-  kernel.set_arg(arg++, dev_output);
+  kernel.SetArgument(arg++, dev_set->Get()());
+  kernel.SetArgument(arg++, *dev_input);
+  kernel.SetArgument(arg++, static_cast<uint32_t>(out_len));
+  kernel.SetArgument(arg++, *dev_output);
   global = static_cast<uint64_t>(ceil((out_len + 0.0) / local) * local);
-  e = queue.enqueue_1d_range_kernel(kernel, 0, global, local);
-  e.wait();
+  kernel.Launch(queue, {global}, {local}, e);
+  queue.Finish();
   output.resize(out_len);
-  compute::copy(dev_output.begin(), dev_output.end(), output.begin(), queue);
+  dev_output->Read(queue, out_len, output.data());
   count = 0;
   for (auto v : output) {
     if (v != 0) ++count;

@@ -23,13 +23,13 @@ inline std::string GetRowPartitionedMatrixSource() {
           } TTRowPartitionedMatrix;
 
           GLOBAL TT * TTRowPartitionedMatrix_Row(
-                            GLOBAL TTRowPartitionedMatrix * pm, uint row) {
-                          uint blockIdx = row / pm->num_rows_in_block_;
-                          GLOBAL TT* block = pm->blocks_[blockIdx];
-                          uint rowOffsetInBlock =
-                              (row % pm->num_rows_in_block_) * pm->num_cols_;
-                          return block + rowOffsetInBlock;
-                        }
+                          GLOBAL TTRowPartitionedMatrix * pm, uint row) {
+                        uint blockIdx = row / pm->num_rows_in_block_;
+                        GLOBAL TT* block = pm->blocks_[blockIdx];
+                        uint rowOffsetInBlock =
+                            (row % pm->num_rows_in_block_) * pm->num_cols_;
+                        return block + rowOffsetInBlock;
+                      }
 
               KERNEL void TTRowPartitionedMatrix_init(
                   GLOBAL void* vpm, uint num_rows_in_block, uint num_blocks,
@@ -49,8 +49,7 @@ inline std::string GetRowPartitionedMatrixSource() {
                 pm->blocks_[idx] = (GLOBAL TT*)block;
               }
 
-              KERNEL void TTRowPartitionedMatrixSizeof(GLOBAL ulong *
-                                                         size) {
+              KERNEL void TTRowPartitionedMatrixSizeof(GLOBAL ulong * size) {
             size[0] = sizeof(TTRowPartitionedMatrix);
           }
 

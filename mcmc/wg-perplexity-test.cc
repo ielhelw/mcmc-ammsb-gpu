@@ -44,14 +44,14 @@ class WgPerplexityTest : public ContextTest,
     for (auto it = edges.begin(); it != edges.end(); ++it) {
       ASSERT_TRUE(set.Insert(*it));
     }
-    factory_ = OpenClSetFactory::New(queue_);
+    factory_ = OpenClSetFactory::New(mcmc::clcuda::Queue(queue_.get()));
     dev_set_.reset(factory_->CreateSet(set.Serialize()));
     std::mt19937 mt19937;
     std::gamma_distribution<Float> gamma_dist(1, 1);
     auto gen = std::bind(gamma_dist, mt19937);
     std::vector<Float> pi(N_ * K_);
     std::generate(pi.begin(), pi.end(), gen);
-    std::vector<Float> beta(2*K_);
+    std::vector<Float> beta(2 * K_);
     std::generate(beta.begin(), beta.end(), gen);
     allocFactory = (RowPartitionedMatrixFactory<Float>::New(queue_));
     dev_pi_.reset(allocFactory->CreateMatrix(N_, K_));
@@ -59,7 +59,8 @@ class WgPerplexityTest : public ContextTest,
     ASSERT_EQ(pi.size(), dev_pi_->Blocks()[0].size());
     compute::copy(pi.begin(), pi.end(), dev_pi_->Blocks()[0].begin(), queue_);
     compute::vector<Float> phi(N_, context_);
-    mcmc::algorithm::PartitionedNormalizer<Float>(queue_, dev_pi_.get(), phi, K_)();
+    mcmc::algorithm::PartitionedNormalizer<Float>(queue_, dev_pi_.get(), phi,
+                                                  K_)();
     dev_beta_ = compute::vector<Float>(beta.begin(), beta.end(), queue_);
     mcmc::algorithm::Normalizer<Float>(queue_, &dev_beta_, 2, 1)();
     cfg_.K = K_;
@@ -117,7 +118,8 @@ TEST_P(WgPerplexityTest, Equal) {
     auto t1 = std::chrono::high_resolution_clock::now();
     ppxs2.push_back(ppxWg());
     auto t2 = std::chrono::high_resolution_clock::now();
-    ASSERT_NEAR(ppxs1[i], ppxs2[i], /*INCREASE ERROREVERY ITERATION */(i+1) * error * std::abs(ppxs1[i]));
+    ASSERT_NEAR(ppxs1[i], ppxs2[i], /*INCREASE ERROREVERY ITERATION */ (i + 1) *
+                                        error * std::abs(ppxs1[i]));
     ppx2_time += ppxWg.LastInvocationTime();
     ppx2_total_time +=
         std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count();

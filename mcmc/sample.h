@@ -37,17 +37,23 @@ std::string to_string(SampleStrategy s);
 
 std::istream& operator>>(std::istream& in, SampleStrategy& strategy);
 
-Float sampleBreadthFirstLink(const Config& cfg, std::vector<Edge>* edges, unsigned int* seed);
+Float sampleBreadthFirstLink(const Config& cfg, std::vector<Edge>* edges,
+                             unsigned int* seed);
 
-Float sampleBreadthFirstNonLink(const Config& cfg, std::vector<Edge>* edges, unsigned int* seed);
+Float sampleBreadthFirstNonLink(const Config& cfg, std::vector<Edge>* edges,
+                                unsigned int* seed);
 
-Float sampleBreadthFirst(const Config& cfg, std::vector<Edge>* edges, unsigned int* seed);
+Float sampleBreadthFirst(const Config& cfg, std::vector<Edge>* edges,
+                         unsigned int* seed);
 
-Float sampleNodeLink(const Config& cfg, std::vector<Edge>* edges, unsigned int* seed);
+Float sampleNodeLink(const Config& cfg, std::vector<Edge>* edges,
+                     unsigned int* seed);
 
-Float sampleNodeNonLink(const Config& cfg, std::vector<Edge>* edges, unsigned int* seed);
+Float sampleNodeNonLink(const Config& cfg, std::vector<Edge>* edges,
+                        unsigned int* seed);
 
-Float sampleNode(const Config& cfg, std::vector<Edge>* edges, unsigned int* seed);
+Float sampleNode(const Config& cfg, std::vector<Edge>* edges,
+                 unsigned int* seed);
 
 }  // namespace mcmc
 

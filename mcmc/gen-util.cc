@@ -9,7 +9,8 @@ std::string MakeHeaderFromTemplate(const std::string& guard,
                                    const std::string& source,
                                    const std::string& pattern,
                                    const std::string& replacement) {
-  return MakeHeader(guard, boost::replace_all_copy(source, pattern, replacement));
+  return MakeHeader(guard,
+                    boost::replace_all_copy(source, pattern, replacement));
 }
 
 std::string MakeHeader(const std::string& guard, const std::string& source) {

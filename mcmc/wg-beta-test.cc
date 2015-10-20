@@ -56,14 +56,15 @@ class WgBetaTest : public ContextTest,
     for (auto it = edges.begin(); it != edges.end(); ++it) {
       ASSERT_TRUE(set.Insert(*it));
     }
-    factory_ = OpenClSetFactory::New(queue_);
+    factory_ = OpenClSetFactory::New(mcmc::clcuda::Queue(queue_.get()));
     dev_set_.reset(factory_->CreateSet(set.Serialize()));
     theta_ = compute::vector<Float>(2 * cfg_.K, queue_.get_context());
     beta_ = compute::vector<Float>(2 * cfg_.K, queue_.get_context());
     allocFactory = RowPartitionedMatrixFactory<Float>::New(queue_);
     pi_.reset(allocFactory->CreateMatrix(cfg_.N, cfg_.K));
     compute::vector<Float> phi(cfg_.N, context_);
-    random::RandomGammaAndNormalize(&queue_, cfg_.eta0, cfg_.eta1, pi_.get(), &phi);
+    random::RandomGammaAndNormalize(&queue_, cfg_.eta0, cfg_.eta1, pi_.get(),
+                                    &phi);
   }
 
   void TearDown() override {
@@ -140,12 +141,14 @@ TEST_P(WgBetaTest, VerifyModes) {
 
   ASSERT_EQ(theta_sum1.size(), theta_sum2.size());
   for (uint32_t k = 0; k < theta_sum1.size(); ++k) {
-    ASSERT_NEAR(theta_sum1[k], theta_sum2[k], std::max(0.00001, 0.02 * std::abs(theta_sum1[k])));
+    ASSERT_NEAR(theta_sum1[k], theta_sum2[k],
+                std::max(0.00001, 0.02 * std::abs(theta_sum1[k])));
   }
 
   ASSERT_EQ(theta1.size(), theta2.size());
   for (uint32_t k = 0; k < theta1.size(); ++k) {
-    ASSERT_NEAR(theta1[k], theta2[k], std::max(0.00001, 0.02 * std::abs(theta1[k])));
+    ASSERT_NEAR(theta1[k], theta2[k],
+                std::max(0.00001, 0.02 * std::abs(theta1[k])));
   }
 }
 

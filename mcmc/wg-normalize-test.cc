@@ -151,7 +151,8 @@ TEST_F(WgNormalizeTest, PartitionedNormalizerClassTest) {
     }
   }
   compute::vector<Float> g_sum(rows, context_);
-  algorithm::PartitionedNormalizer<Float> normalizer(queue_, p.get(), g_sum, 32);
+  algorithm::PartitionedNormalizer<Float> normalizer(queue_, p.get(), g_sum,
+                                                     32);
   normalizer();
   Float sum = (cols * (cols + 1)) / 2;
   for (uint32_t i = 0; i < p->Blocks().size(); ++i) {

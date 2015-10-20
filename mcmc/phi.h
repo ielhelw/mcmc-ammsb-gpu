@@ -32,10 +32,10 @@ class PhiUpdater {
   compute::event phi_event_;
   compute::event pi_event_;
 
-  compute::vector<Float>& beta_;      // [K]
-  RowPartitionedMatrix<Float>* pi_;   // [N,K]
-  compute::vector<Float>& phi_;  // [N]
-  compute::vector<Float> phi_vec;  // [2*mini_batch, K]
+  compute::vector<Float>& beta_;     // [K]
+  RowPartitionedMatrix<Float>* pi_;  // [N,K]
+  compute::vector<Float>& phi_;      // [N]
+  compute::vector<Float> phi_vec;    // [2*mini_batch, K]
   OpenClSet* trainingSet_;
 
   std::shared_ptr<random::OpenClRandomFactory> randFactory_;

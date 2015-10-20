@@ -6,11 +6,12 @@
 #include <sstream>
 #include <tuple>
 
-#include "mcmc/gen-util.h"
+#include <clpp11.h>
 
 namespace mcmc {
 
 namespace compute = boost::compute;
+namespace clcuda = CLCudaAPI;
 
 typedef uint64_t Edge;
 typedef uint32_t Vertex;

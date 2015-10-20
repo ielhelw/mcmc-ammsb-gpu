@@ -37,8 +37,8 @@ const std::string kSource =
         }
 
         KERNEL void generate(GLOBAL void* vrand,
-                               GLOBAL Float* data,  // [#threads * K]
-                               uint K) {
+                             GLOBAL Float* data,  // [#threads * K]
+                             uint K) {
           uint gid = GET_GLOBAL_ID();
           data += gid * K;
           GLOBAL Random* rand = (GLOBAL Random*)vrand;

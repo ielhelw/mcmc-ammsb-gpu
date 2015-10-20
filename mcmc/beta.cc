@@ -10,14 +10,13 @@ const std::string kSourceBetaBase =
     random::GetRandomHeader() +
     BOOST_COMPUTE_STRINGIZE_SOURCE(
         KERNEL void sum_theta(GLOBAL Float* g_theta,     // [K, 2]
-                                GLOBAL Float* g_theta_sum  // [K]
-                                ) {
+                              GLOBAL Float* g_theta_sum  // [K]
+                              ) {
           uint gsize = GET_GLOBAL_SIZE();
           for (uint i = GET_GLOBAL_ID(); i < K; i += gsize) {
-            g_theta_sum[i] = Theta0(g_theta, i) + Theta1(g_theta,  i);
+            g_theta_sum[i] = Theta0(g_theta, i) + Theta1(g_theta, i);
           }
-        } KERNEL void sum_grads(GLOBAL Float* grads,
-                                  uint num_partial_sums) {
+        } KERNEL void sum_grads(GLOBAL Float* grads, uint num_partial_sums) {
           uint i = GET_GLOBAL_ID();
           uint gsize = GET_GLOBAL_SIZE();
           for (; i < 2 * K; i += gsize) {
@@ -28,8 +27,8 @@ const std::string kSourceBetaBase =
         }
 
         KERNEL void update_theta(GLOBAL Float* theta, GLOBAL Float* grads,
-                                   uint step_count, Float scale,
-                                   GLOBAL void* vrand) {
+                                 uint step_count, Float scale,
+                                 GLOBAL void* vrand) {
           const uint gid = GET_GLOBAL_ID();
           const uint gsize = GET_GLOBAL_SIZE();
           GLOBAL Random* random = (GLOBAL Random*)vrand;
@@ -38,19 +37,21 @@ const std::string kSourceBetaBase =
             Float eps_t = get_eps_t(step_count);
             for (uint k = gid; k < K; k += gsize) {
               Float r0 = randn(&rseed);
-              Float grads_k = grads[2*k];
+              Float grads_k = grads[2 * k];
               Float theta_k = Theta0(theta, k);
               Float f0 = sqrt(eps_t * theta_k);
-              SetTheta0(theta, k, fabs(theta_k +
-                              eps_t / 2.0 * (ETA0 - theta_k + scale * grads_k) +
-                              f0 * r0));
+              SetTheta0(theta, k,
+                        fabs(theta_k +
+                             eps_t / 2.0 * (ETA0 - theta_k + scale * grads_k) +
+                             f0 * r0));
               Float r1 = randn(&rseed);
-              Float grads_2k = grads[2*k + 1];
+              Float grads_2k = grads[2 * k + 1];
               Float theta_2k = Theta1(theta, k);
               Float f1 = sqrt(eps_t * theta_2k);
-              SetTheta1(theta, k, fabs(
-                  theta_2k +
-                  eps_t / 2.0 * (ETA1 - theta_2k + scale * grads_2k) + f1 * r1));
+              SetTheta1(theta, k, fabs(theta_2k +
+                                       eps_t / 2.0 * (ETA1 - theta_2k +
+                                                      scale * grads_2k) +
+                                       f1 * r1));
             }
             random->base_[gid] = rseed;
           }
@@ -106,16 +107,16 @@ const std::string kSourceBeta =
         for (uint k = 0; k < K; k++) {
           Float f = probs[k] / probs_sum;
           Float one_over_theta_sum = 1.0 / theta_sum[k];
-          grads[2*k] += f * ((1 - y) / Theta0(theta, k) - one_over_theta_sum);
-          grads[2*k + 1] += f * (y / Theta1(theta, k) - one_over_theta_sum);
+          grads[2 * k] += f * ((1 - y) / Theta0(theta, k) - one_over_theta_sum);
+          grads[2 * k + 1] += f * (y / Theta1(theta, k) - one_over_theta_sum);
         }
       }
     });
 
 const std::string kSourceBetaWg =
     mcmc::algorithm::WorkGroupSum(compute::type_name<Float>()) + "\n" +
-    "#define WG_SUM_Float WG_SUM_" +
-    compute::type_name<Float>() + "\n" + kSourceBetaBase +
+    "#define WG_SUM_Float WG_SUM_" + compute::type_name<Float>() + "\n" +
+    kSourceBetaBase +
     BOOST_COMPUTE_STRINGIZE_SOURCE(KERNEL void calculate_grads_partial(
         GLOBAL Float* theta,      // [K, 2]
         GLOBAL Float* theta_sum,  // [K]
@@ -173,8 +174,8 @@ const std::string kSourceBetaWg =
         for (uint k = lid; k < K; k += lsize) {
           Float f = probs[k] / probs_sum;
           Float one_over_theta_sum = 1.0 / theta_sum[k];
-          grads[2*k] += f * ((1 - y) / Theta0(theta, k) - one_over_theta_sum);
-          grads[2*k + 1] += f * (y / Theta1(theta, k) - one_over_theta_sum);
+          grads[2 * k] += f * ((1 - y) / Theta0(theta, k) - one_over_theta_sum);
+          grads[2 * k + 1] += f * (y / Theta1(theta, k) - one_over_theta_sum);
         }
       }
     });
@@ -222,7 +223,8 @@ BetaUpdater::BetaUpdater(
   } catch (compute::opencl_error& e) {
     LOG(FATAL) << prog_.build_log();
   }
-  LOG(INFO) << "####################### BETA LOG:" << std::endl << prog_.build_log();
+  LOG(INFO) << "####################### BETA LOG:" << std::endl
+            << prog_.build_log();
   theta_sum_kernel_ = prog_.create_kernel("sum_theta");
   theta_sum_kernel_.set_arg(0, theta_);
   theta_sum_kernel_.set_arg(1, theta_sum_);
@@ -232,7 +234,7 @@ BetaUpdater::BetaUpdater(
   grads_partial_kernel_.set_arg(1, theta_sum_);
   grads_partial_kernel_.set_arg(2, beta_);
   grads_partial_kernel_.set_arg(3, pi_->Get());
-  grads_partial_kernel_.set_arg(4, trainingSet->Get());
+  grads_partial_kernel_.set_arg(4, trainingSet->Get()());
   grads_partial_kernel_.set_arg(7, probs_);
   grads_partial_kernel_.set_arg(8, grads_);
   if (mode_ == EDGE_PER_WORKGROUP) {

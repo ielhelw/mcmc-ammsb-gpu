@@ -17,37 +17,31 @@ namespace mcmc {
 const std::string& Learner::GetBaseFuncs() {
   static const std::string kSourceBaseFuncs =
       GetSourceGuard() + GetClTypes() + "\n" + OpenClSetFactory::GetHeader() +
-      "\n" + BOOST_COMPUTE_STRINGIZE_SOURCE(
-                 typedef VERTEX_TYPE Vertex; typedef EDGE_TYPE Edge;
-                 inline Vertex Vertex0(Edge e) {
-                   return (Vertex)((e & 0xffffffff00000000) >> 32);
-                 } inline Vertex
-                         Vertex1(Edge e) {
-                           return (Vertex)((e & 0x00000000ffffffff));
-                         } inline Edge MakeEdge(Vertex u,
-                                                Vertex v) {
-                           return (((Edge)u) << 32) | v;
-                         } inline Float Beta(GLOBAL Float * g_beta,
-                                             uint k) {
-                           return g_beta[(k << 1) + 1];
-                         } inline Float Theta0(GLOBAL Float * g_theta,
-                                               uint k) {
-                           return g_theta[k << 1];
-                         } inline Float Theta1(GLOBAL Float * g_theta,
-                                               uint k) {
-                           return g_theta[(k << 1) + 1];
-                         } inline void SetTheta0(GLOBAL Float * g_theta,
-                                                 uint k, Float v) {
-                           g_theta[k << 1] = v;
-                         } inline void SetTheta1(GLOBAL Float * g_theta,
-                                                 uint k, Float v) {
-                           g_theta[(k << 1) + 1] = v;
-                         } inline GLOBAL Float *
-                     Pi(GLOBAL Float * pi,
-                        Vertex u) { return pi + u * K; } inline Float
-                         get_eps_t(uint step_count) {
-                   return EPS_A * pow(1 + step_count / EPS_B, -EPS_C);
-                 });
+      "\n" +
+      BOOST_COMPUTE_STRINGIZE_SOURCE(
+          typedef VERTEX_TYPE Vertex; typedef EDGE_TYPE Edge;
+          inline Vertex Vertex0(Edge e) {
+            return (Vertex)((e & 0xffffffff00000000) >> 32);
+          } inline Vertex Vertex1(Edge e) {
+            return (Vertex)((e & 0x00000000ffffffff));
+          } inline Edge MakeEdge(Vertex u, Vertex v) {
+            return (((Edge)u) << 32) | v;
+          } inline Float Beta(GLOBAL Float * g_beta, uint k) {
+            return g_beta[(k << 1) + 1];
+          } inline Float Theta0(GLOBAL Float * g_theta, uint k) {
+            return g_theta[k << 1];
+          } inline Float Theta1(GLOBAL Float * g_theta, uint k) {
+            return g_theta[(k << 1) + 1];
+          } inline void SetTheta0(GLOBAL Float * g_theta, uint k, Float v) {
+            g_theta[k << 1] = v;
+          } inline void SetTheta1(GLOBAL Float * g_theta, uint k, Float v) {
+            g_theta[(k << 1) + 1] = v;
+          } inline GLOBAL Float *
+              Pi(GLOBAL Float * pi, Vertex u) {
+                return pi + u * K;
+              } inline Float get_eps_t(uint step_count) {
+            return EPS_A * pow(1 + step_count / EPS_B, -EPS_C);
+          });
   return kSourceBaseFuncs;
 }
 
@@ -59,7 +53,7 @@ Learner::Learner(const Config& cfg, compute::command_queue queue)
       allocFactory_(RowPartitionedMatrixFactory<Float>::New(queue_)),
       pi_(allocFactory_->CreateMatrix(cfg_.N, cfg_.K)),
       phi_(cfg_.N, queue_.get_context()),
-      setFactory_(OpenClSetFactory::New(queue_)),
+      setFactory_(OpenClSetFactory::New(clcuda::Queue(queue_.get()))),
       trainingSet_(setFactory_->CreateSet(cfg_.training->Serialize())),
       heldoutSet_(setFactory_->CreateSet(cfg_.heldout->Serialize())),
       trainingEdges_(cfg_.training_edges.begin(), cfg_.training_edges.end(),
@@ -75,14 +69,13 @@ Learner::Learner(const Config& cfg, compute::command_queue queue)
       phiUpdater_((queue_.get_device().type() == CL_DEVICE_TYPE_GPU
                        ? PhiUpdater::NODE_PER_WORKGROUP
                        : PhiUpdater::NODE_PER_THREAD),
-                  cfg_, queue_, beta_, pi_.get(), phi_,
-                  trainingSet_.get(), compileFlags_, GetBaseFuncs()),
+                  cfg_, queue_, beta_, pi_.get(), phi_, trainingSet_.get(),
+                  compileFlags_, GetBaseFuncs()),
       betaUpdater_((queue_.get_device().type() == CL_DEVICE_TYPE_GPU
                         ? BetaUpdater::EDGE_PER_WORKGROUP
                         : BetaUpdater::EDGE_PER_THREAD),
                    cfg, queue_, theta_, beta_, pi_.get(), trainingSet_.get(),
                    compileFlags_, GetBaseFuncs()) {
-
   switch (cfg_.strategy) {
     case NodeLink:
       sampler_ = sampleNodeLink;
@@ -111,7 +104,8 @@ Learner::Learner(const Config& cfg, compute::command_queue queue)
   std::gamma_distribution<Float> gamma_distribution(cfg_.eta0, cfg_.eta1);
   auto gamma = std::bind(gamma_distribution, mt19937);
   random::RandomAndNormalize(&queue_, &gamma, &theta_, &beta_, 2);
-  random::RandomGammaAndNormalize(&queue_, cfg_.eta0, cfg_.eta1, pi_.get(), &phi_);
+  random::RandomGammaAndNormalize(&queue_, cfg_.eta0, cfg_.eta1, pi_.get(),
+                                  &phi_);
 }
 
 Float Learner::sampleMiniBatch(std::vector<Edge>* edges, unsigned int* seed) {
@@ -161,7 +155,8 @@ Float Learner::DoSample(Sample* sample) {
   Float weight = sampleMiniBatch(&sample->edges, &sample->seeds[0]);
   extractNodesFromMiniBatch(sample->edges, &sample->nodes_vec);
   LOG_IF(FATAL, sample->nodes_vec.size() == 0) << "mini-batch size = 0!";
-  LOG_IF(FATAL, sample->nodes_vec.size() > 2*cfg_.mini_batch_size) << "mini-batch too big";
+  LOG_IF(FATAL, sample->nodes_vec.size() > 2 * cfg_.mini_batch_size)
+      << "mini-batch too big";
   sampleNeighbors(sample->nodes_vec, &sample->neighbors_vec, &sample->seeds);
   return weight;
 }
@@ -215,10 +210,11 @@ void Learner::run(uint32_t max_iters) {
     tpi += duration_cast<nanoseconds>(tpi_end - tpi_start).count();
 
     auto tbeta_start = high_resolution_clock::now();
-    betaUpdater_(&samples[phase].dev_edges, samples[phase].edges.size(), weight);
+    betaUpdater_(&samples[phase].dev_edges, samples[phase].edges.size(),
+                 weight);
     auto tbeta_end = high_resolution_clock::now();
     tbeta += duration_cast<nanoseconds>(tbeta_end - tbeta_start).count();
- 
+
     phase = 1 - phase;
   }
   auto T2 = high_resolution_clock::now();

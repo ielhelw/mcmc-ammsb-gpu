@@ -49,7 +49,8 @@ class WgPhiTest : public ContextTest,
     std::gamma_distribution<Float> gamma_distribution(cfg_.eta0, cfg_.eta1);
     auto gamma = std::bind(gamma_distribution, mt19937);
     random::RandomAndNormalize(&queue_, &gamma, &theta_, &beta_, 2);
-    random::RandomGammaAndNormalize(&queue_, cfg_.eta0, cfg_.eta1, pi_.get(), &phi_);
+    random::RandomGammaAndNormalize(&queue_, cfg_.eta0, cfg_.eta1, pi_.get(),
+                                    &phi_);
   }
 
   void SetUp() override {
@@ -59,7 +60,7 @@ class WgPhiTest : public ContextTest,
     for (auto it = edges.begin(); it != edges.end(); ++it) {
       ASSERT_TRUE(set.Insert(*it));
     }
-    factory_ = OpenClSetFactory::New(queue_);
+    factory_ = OpenClSetFactory::New(mcmc::clcuda::Queue(queue_.get()));
     dev_set_.reset(factory_->CreateSet(set.Serialize()));
     theta_ = compute::vector<Float>(2 * cfg_.K, queue_.get_context());
     beta_ = compute::vector<Float>(2 * cfg_.K, queue_.get_context());
@@ -129,16 +130,14 @@ TEST_P(WgPhiTest, VerifyModes) {
   cfg_.phi_disable_noise = true;
   Run(PhiUpdater::NODE_PER_THREAD);
   std::vector<Float> host_phi1(cfg_.N);
-  compute::copy(phi_.begin(), phi_.end(),
-                host_phi1.begin(), queue_);
+  compute::copy(phi_.begin(), phi_.end(), host_phi1.begin(), queue_);
   std::vector<Float> host_pi1(cfg_.N * cfg_.K);
   compute::copy(pi_->Blocks()[0].begin(), pi_->Blocks()[0].end(),
                 host_pi1.begin(), queue_);
 
   Run(PhiUpdater::NODE_PER_WORKGROUP);
   std::vector<Float> host_phi2(cfg_.N);
-  compute::copy(phi_.begin(), phi_.end(),
-                host_phi2.begin(), queue_);
+  compute::copy(phi_.begin(), phi_.end(), host_phi2.begin(), queue_);
   std::vector<Float> host_pi2(cfg_.N * cfg_.K);
   compute::copy(pi_->Blocks()[0].begin(), pi_->Blocks()[0].end(),
                 host_pi2.begin(), queue_);

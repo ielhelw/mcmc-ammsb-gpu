@@ -12,23 +12,20 @@ namespace cuckoo {
 namespace internal {
 
 const std::string GetSetTypes() {
-  static const std::string kClSetTypes = BOOST_COMPUTE_STRINGIZE_SOURCE(
-
-      typedef ulong uint64_t; typedef uint uint32_t;
+  static const std::string kClSetTypes = R"%%(
 
       typedef struct {
         GLOBAL uint64_t* base_;
         uint64_t num_bins_;
       } Set;
 
-      );
+      )%%";
   return ::mcmc::GetClTypes() + kClSetTypes;
 }
 
 const std::string& GetSetHeader() {
-  static const std::string kClSetHeader =
-      GetSetTypes() +
-      BOOST_COMPUTE_STRINGIZE_SOURCE(
+  static const std::string kClSetHeader = GetSetTypes() +
+                                          R"%%(
 
           __constant uint64_t NUM_BUCKETS = 2;
           __constant uint64_t NUM_SLOTS = 4;
@@ -61,14 +58,13 @@ const std::string& GetSetHeader() {
             return false;
           }
 
-          );
+          )%%";
   return kClSetHeader;
 }
 
 const std::string& GetSetSource() {
-  static const std::string kClSetSource =
-      GetSetTypes() +
-      BOOST_COMPUTE_STRINGIZE_SOURCE(
+  static const std::string kClSetSource = GetSetTypes() +
+                                          R"%%(
 
           KERNEL void SizeOfSet(GLOBAL uint64_t *
                                   size) { *size = sizeof(Set); }
@@ -80,7 +76,7 @@ const std::string& GetSetSource() {
             set->num_bins_ = num_bins;
           }
 
-          );
+          )%%";
   return kClSetSource;
 }
 
@@ -196,52 +192,50 @@ std::vector<Edge> Set::Serialize() const {
 }
 
 OpenClSet::OpenClSet(std::shared_ptr<OpenClSetFactory> factory,
-                     compute::kernel* init, compute::command_queue* queue,
+                     clcuda::Kernel* init, clcuda::Queue* queue,
                      uint64_t sizeOfSet, const std::vector<uint64_t>& data)
     : factory_(factory),
       queue_(*queue),
-      data_(data, queue_),
-      num_bins_(data_.size() / (Set::NUM_BUCKETS * Set::NUM_SLOTS)),
-      buf_(compute::buffer(queue_.get_context(), sizeOfSet,
-                           compute::memory_object::read_write)) {
-  init->set_arg(0, buf_);
-  init->set_arg(1, data_);
-  init->set_arg(2, num_bins_);
-  auto e = queue_.enqueue_task(*init);
-  e.wait();
+      data_(queue_.GetContext(), data.size()),
+      num_bins_((data_.GetSize() / sizeof(Edge)) /
+                (Set::NUM_BUCKETS * Set::NUM_SLOTS)),
+      buf_(queue_.GetContext(), sizeOfSet) {
+  data_.Write(queue_, data.size(), data);
+  init->SetArgument(0, buf_);
+  init->SetArgument(1, data_);
+  init->SetArgument(2, num_bins_);
+  clcuda::Event e;
+  init->Launch(queue_, {1}, {1}, e);
+  queue_.Finish();
 }
 
 const std::string& OpenClSetFactory::GetHeader() {
   return internal::GetSetHeader();
 }
 
-std::shared_ptr<OpenClSetFactory> OpenClSetFactory::New(
-    compute::command_queue queue) {
+std::shared_ptr<OpenClSetFactory> OpenClSetFactory::New(clcuda::Queue queue) {
   return std::shared_ptr<OpenClSetFactory>(new OpenClSetFactory(queue));
 }
 
 OpenClSet* OpenClSetFactory::CreateSet(const std::vector<uint64_t>& data) {
-  return new OpenClSet(shared_from_this(), &init_kernel_, &queue_, sizeOfSet_,
-                       data);
+  return new OpenClSet(shared_from_this(), init_kernel_.get(), &queue_,
+                       sizeOfSet_, data);
 }
 
-OpenClSetFactory::OpenClSetFactory(compute::command_queue queue)
-    : queue_(queue) {
-  prog_ = compute::program::create_with_source(internal::GetSetSource(),
-                                               queue_.get_context());
-  try {
-    prog_.build();
-  } catch (compute::opencl_error& e) {
-    LOG(FATAL) << prog_.build_log();
-    ;
-  }
-  init_kernel_ = prog_.create_kernel("SetInit");
-  compute::kernel sizeOf_kernel = prog_.create_kernel("SizeOfSet");
-  compute::vector<uint64_t> size(1, (uint64_t)0, queue_);
-  sizeOf_kernel.set_arg(0, size);
-  auto e = queue_.enqueue_task(sizeOf_kernel);
-  e.wait();
-  compute::copy(size.begin(), size.end(), &sizeOfSet_, queue_);
+OpenClSetFactory::OpenClSetFactory(clcuda::Queue queue)
+    : queue_(queue), prog_(queue_.GetContext(), internal::GetSetSource()) {
+  std::vector<std::string> opts;
+  clcuda::BuildStatus status = prog_.Build(queue.GetDevice(), opts);
+  LOG_IF(FATAL, status != clcuda::BuildStatus::kSuccess)
+      << prog_.GetBuildInfo(queue.GetDevice());
+  init_kernel_.reset(new clcuda::Kernel(prog_, "SetInit"));
+  clcuda::Kernel sizeOf_kernel(prog_, "SizeOfSet");
+  clcuda::Buffer<uint64_t> size(queue_.GetContext(), 1);
+  sizeOf_kernel.SetArgument(0, size);
+  clcuda::Event e;
+  sizeOf_kernel.Launch(queue_, {1}, {1}, e);
+  queue.Finish();
+  size.Read(queue_, 1, &sizeOfSet_);
 }
 
 }  // namespace cuckoo

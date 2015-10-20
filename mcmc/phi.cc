@@ -12,11 +12,9 @@ const std::string kSourcePhi =
     BOOST_COMPUTE_STRINGIZE_SOURCE(
 
         void update_phi_for_node(GLOBAL Float* beta, GLOBAL void* g_pi,
-                                 GLOBAL Float* g_phi,
-                                 GLOBAL Float* phi_vec,
-                                 GLOBAL Set* edge_set,
-                                 Vertex node, GLOBAL Vertex* neighbors,
-                                 uint step_count,
+                                 GLOBAL Float* g_phi, GLOBAL Float* phi_vec,
+                                 GLOBAL Set* edge_set, Vertex node,
+                                 GLOBAL Vertex* neighbors, uint step_count,
                                  GLOBAL Float* grads,  // K
                                  GLOBAL Float* probs,  // K
                                  random_seed_t* rseed) {
@@ -36,28 +34,31 @@ const std::string kSourcePhi =
             Float e = (y == 1 ? EPSILON : 1.0 - EPSILON);
             Float probs_sum = 0;
             for (uint k = 0; k < K; ++k) {
-              Float f = (y == 1) ? (Beta(beta, k) - EPSILON) : (EPSILON - Beta(beta, k));
+              Float f = (y == 1) ? (Beta(beta, k) - EPSILON)
+                                 : (EPSILON - Beta(beta, k));
               Float probs_k = pi[k] * (pi_neighbor[k] * f + e);
               probs_sum += probs_k;
               probs[k] = probs_k;
             }
             for (uint k = 0; k < K; ++k) {
-              grads[k] += (probs[k] / probs_sum) / (pi[k]*phi_sum) - 1.0 / phi_sum;
+              grads[k] +=
+                  (probs[k] / probs_sum) / (pi[k] * phi_sum) - 1.0 / phi_sum;
             }
           }
           Float Nn = (1.0 * N) / NUM_NEIGHBORS;
           for (uint k = 0; k < K; ++k) {
             Float noise = PHI_RANDN(rseed);
-            Float phi_k = pi[k]*phi_sum;
-            phi_vec[k] = fabs(phi_k + eps_t / 2 * (ALPHA - phi_k + Nn * grads[k]) +
-                          sqrt(eps_t * phi_k) * noise);
+            Float phi_k = pi[k] * phi_sum;
+            phi_vec[k] =
+                fabs(phi_k + eps_t / 2 * (ALPHA - phi_k + Nn * grads[k]) +
+                     sqrt(eps_t * phi_k) * noise);
           }
         }
 
         KERNEL void update_phi(
             GLOBAL Float* g_beta, GLOBAL void* g_pi, GLOBAL Float* g_phi,
-            GLOBAL Float* g_phi_vec,
-            GLOBAL void* training_edge_set, GLOBAL Vertex* mini_batch_nodes,
+            GLOBAL Float* g_phi_vec, GLOBAL void* training_edge_set,
+            GLOBAL Vertex* mini_batch_nodes,
             GLOBAL Vertex*
                 neighbors,  // [mini_batch_nodes * num_neighbor_sample]
             uint num_mini_batch_nodes,
@@ -76,17 +77,17 @@ const std::string kSourcePhi =
               Vertex node = mini_batch_nodes[i];
               GLOBAL Vertex* node_neighbors = neighbors + i * NUM_NEIGHBORS;
               GLOBAL Float* phi_vec = g_phi_vec + i * K;
-              update_phi_for_node(g_beta, g_pi, g_phi, phi_vec, training_edge_set, node,
-                                  node_neighbors, step_count, grads, probs,
-                                  &rseed);
+              update_phi_for_node(g_beta, g_pi, g_phi, phi_vec,
+                                  training_edge_set, node, node_neighbors,
+                                  step_count, grads, probs, &rseed);
             }
             rand->base_[GET_GLOBAL_ID()] = rseed;
           }
         }
 
         KERNEL void update_pi(GLOBAL void* g_pi, GLOBAL Float* g_phi_vec,
-                                GLOBAL Vertex* mini_batch_nodes,
-                                uint num_mini_batch_nodes) {
+                              GLOBAL Vertex* mini_batch_nodes,
+                              uint num_mini_batch_nodes) {
           uint i = GET_GLOBAL_ID();
           uint gsize = GET_GLOBAL_SIZE();
           for (; i < num_mini_batch_nodes; i += gsize) {
@@ -115,9 +116,8 @@ const std::string kSourcePhiWg =
 
         void update_phi_for_nodeWG(GLOBAL Float* beta, GLOBAL void* g_pi,
                                    GLOBAL Float* g_phi, GLOBAL Float* phi_vec,
-                                   GLOBAL Set* edge_set,
-                                   Vertex node, GLOBAL Vertex* neighbors,
-                                   uint step_count,
+                                   GLOBAL Set* edge_set, Vertex node,
+                                   GLOBAL Vertex* neighbors, uint step_count,
                                    GLOBAL Float* grads,  // K
                                    GLOBAL Float* probs,  // K
                                    random_seed_t* rseed,
@@ -142,7 +142,8 @@ const std::string kSourcePhiWg =
             Float e = (y == 1 ? EPSILON : 1.0 - EPSILON);
             // probs
             for (uint k = lid; k < K; k += lsize) {
-              Float f = (y == 1) ? (Beta(beta, k) - EPSILON) : (EPSILON - Beta(beta, k));
+              Float f = (y == 1) ? (Beta(beta, k) - EPSILON)
+                                 : (EPSILON - Beta(beta, k));
               Float probs_k = pi[k] * (pi_neighbor[k] * f + e);
               probs[k] = probs_k;
             }
@@ -151,23 +152,25 @@ const std::string kSourcePhiWg =
             WG_SUM_Float(probs, aux, K);
             Float probs_sum = aux[0];
             for (uint k = lid; k < K; k += lsize) {
-              grads[k] += (probs[k] / probs_sum) / (pi[k]*phi_sum) - 1.0 / phi_sum;
+              grads[k] +=
+                  (probs[k] / probs_sum) / (pi[k] * phi_sum) - 1.0 / phi_sum;
             }
           }
           Float Nn = (1.0 * N) / NUM_NEIGHBORS;
           barrier(CLK_GLOBAL_MEM_FENCE);
           for (uint k = lid; k < K; k += lsize) {
             Float noise = PHI_RANDN(rseed);
-            Float phi_k = pi[k]*phi_sum;
-            phi_vec[k] = fabs(phi_k + eps_t / 2 * (ALPHA - phi_k + Nn * grads[k]) +
-                          sqrt(eps_t * phi_k) * noise);
+            Float phi_k = pi[k] * phi_sum;
+            phi_vec[k] =
+                fabs(phi_k + eps_t / 2 * (ALPHA - phi_k + Nn * grads[k]) +
+                     sqrt(eps_t * phi_k) * noise);
           }
         }
 
         KERNEL void update_phi(
             GLOBAL Float* g_beta, GLOBAL void* g_pi, GLOBAL Float* g_phi,
-            GLOBAL Float* g_phi_vec,
-            GLOBAL void* training_edge_set, GLOBAL Vertex* mini_batch_nodes,
+            GLOBAL Float* g_phi_vec, GLOBAL void* training_edge_set,
+            GLOBAL Vertex* mini_batch_nodes,
             GLOBAL Vertex*
                 neighbors,  // [mini_batch_nodes * num_neighbor_sample]
             uint num_mini_batch_nodes,
@@ -190,18 +193,19 @@ const std::string kSourcePhiWg =
               Vertex node = mini_batch_nodes[i];
               GLOBAL Vertex* node_neighbors = neighbors + i * NUM_NEIGHBORS;
               GLOBAL Float* phi_vec = g_phi_vec + i * K;
-              update_phi_for_nodeWG(g_beta, g_pi, g_phi, phi_vec, training_edge_set,
-                                    node, node_neighbors, step_count, grads,
-                                    probs, &rseed, scratch, aux);
+              update_phi_for_nodeWG(g_beta, g_pi, g_phi, phi_vec,
+                                    training_edge_set, node, node_neighbors,
+                                    step_count, grads, probs, &rseed, scratch,
+                                    aux);
             }
             rand->base_[GET_GLOBAL_ID()] = rseed;
           }
         }
 
         KERNEL void update_pi(GLOBAL void* g_pi, GLOBAL Float* g_phi_vec,
-                                GLOBAL Vertex* mini_batch_nodes,
-                                uint num_mini_batch_nodes,
-                                GLOBAL Float* scratch, LOCAL Float* aux) {
+                              GLOBAL Vertex* mini_batch_nodes,
+                              uint num_mini_batch_nodes, GLOBAL Float* scratch,
+                              LOCAL Float* aux) {
           uint i = GET_GROUP_ID();
           uint gsize = GET_NUM_GROUPS();
           uint lid = GET_LOCAL_ID();
@@ -233,7 +237,7 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg,
       beta_(beta),
       pi_(pi),
       phi_(phi),
-      phi_vec(2*cfg.mini_batch_size * cfg.K, queue_.get_context()),
+      phi_vec(2 * cfg.mini_batch_size * cfg.K, queue_.get_context()),
       trainingSet_(trainingSet),
       randFactory_(random::OpenClRandomFactory::New(queue_)),
       rand_(randFactory_->CreateRandom(
@@ -243,8 +247,7 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg,
       count_calls_(0),
       k_(cfg.K),
       local_(cfg.phi_wg_size),
-      grads_(2 * cfg.mini_batch_size * cfg.K,
-             queue_.get_context()),
+      grads_(2 * cfg.mini_batch_size * cfg.K, queue_.get_context()),
       probs_(grads_.size(), queue_.get_context()) {
   const std::string* src = nullptr;
   switch (mode_) {
@@ -264,9 +267,8 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg,
   } else {
     out << "#define PHI_RANDN(X) randn(X)" << std::endl;
   }
-  out << baseFuncs << std::endl
-      << GetRowPartitionedMatrixHeader<Float>() << std::endl
-      << "#define FloatRowPartitionedMatrix_Row "
+  out << baseFuncs << std::endl << GetRowPartitionedMatrixHeader<Float>()
+      << std::endl << "#define FloatRowPartitionedMatrix_Row "
       << compute::type_name<Float>() << "RowPartitionedMatrix_Row\n" << *src
       << std::endl;
   prog_ = compute::program::create_with_source(out.str(), queue_.get_context());
@@ -275,13 +277,14 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg,
   } catch (compute::opencl_error& e) {
     LOG(FATAL) << prog_.build_log();
   }
-  LOG(INFO) << "####################### PHI LOG:" << std::endl << prog_.build_log();
+  LOG(INFO) << "####################### PHI LOG:" << std::endl
+            << prog_.build_log();
   phi_kernel_ = prog_.create_kernel("update_phi");
   phi_kernel_.set_arg(0, beta_);
   phi_kernel_.set_arg(1, pi_->Get());
   phi_kernel_.set_arg(2, phi_);
   phi_kernel_.set_arg(3, phi_vec);
-  phi_kernel_.set_arg(4, trainingSet->Get());
+  phi_kernel_.set_arg(4, trainingSet->Get()());
 
   phi_kernel_.set_arg(9, grads_);
   phi_kernel_.set_arg(10, probs_);

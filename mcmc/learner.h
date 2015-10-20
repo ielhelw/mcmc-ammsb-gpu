@@ -18,7 +18,6 @@ namespace mcmc {
 
 class Learner {
  public:
-
   Learner(const Config& cfg, compute::command_queue queue);
 
   Float calculate_perplexity_heldout(uint32_t step_count);
@@ -46,8 +45,8 @@ class Learner {
   compute::vector<Float> theta_;  // [K]
 
   std::shared_ptr<RowPartitionedMatrixFactory<Float>> allocFactory_;
-  std::unique_ptr<RowPartitionedMatrix<Float>> pi_;   // [N,K]
-  compute::vector<Float> phi_;  // [N]
+  std::unique_ptr<RowPartitionedMatrix<Float>> pi_;  // [N,K]
+  compute::vector<Float> phi_;                       // [N]
 
   std::shared_ptr<OpenClSetFactory> setFactory_;
 
@@ -61,8 +60,9 @@ class Learner {
   PerplexityCalculator heldoutPerplexity_;
   PhiUpdater phiUpdater_;
   BetaUpdater betaUpdater_;
-  
-  Float (*sampler_)(const Config& cfg, std::vector<Edge>* edges, unsigned int* seed);
+
+  Float (*sampler_)(const Config& cfg, std::vector<Edge>* edges,
+                    unsigned int* seed);
 };
 
 }  // namespace mcmc

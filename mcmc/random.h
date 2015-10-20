@@ -61,15 +61,14 @@ const std::string GetRandomHeader();
 void RandomGamma(compute::command_queue* queue, OpenClRandom* randv, Float eta0,
                  Float eta1, RowPartitionedMatrix<Float>* norm);
 
-void RandomGammaAndNormalize(compute::command_queue* queue,
-                             Float eta0, Float eta1,
-                             RowPartitionedMatrix<Float>* norm,
+void RandomGammaAndNormalize(compute::command_queue* queue, Float eta0,
+                             Float eta1, RowPartitionedMatrix<Float>* norm,
                              compute::vector<Float>* sum);
 
 template <class Generator>
 void RandomAndNormalize(compute::command_queue* queue, Generator* gen,
-                             compute::vector<Float>* base,
-                             compute::vector<Float>* norm, uint32_t cols) {
+                        compute::vector<Float>* base,
+                        compute::vector<Float>* norm, uint32_t cols) {
   std::vector<Float> host_base(base->size());
   std::generate(host_base.begin(), host_base.end(), *gen);
   compute::copy(host_base.begin(), host_base.end(), base->begin(), *queue);

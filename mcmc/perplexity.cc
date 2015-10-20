@@ -9,8 +9,8 @@ namespace mcmc {
 
 const std::string kSourcePerplexity = BOOST_COMPUTE_STRINGIZE_SOURCE(
 
-    Float calculate_edge_likelihood(GLOBAL Float * pi_a, GLOBAL Float* pi_b,
-                                    GLOBAL Float* beta, bool is_edge) {
+    Float calculate_edge_likelihood(GLOBAL Float * pi_a, GLOBAL Float * pi_b,
+                                    GLOBAL Float * beta, bool is_edge) {
       Float s = 0;
       if (is_edge) {
         uint k = 0;
@@ -86,7 +86,7 @@ const std::string kSourcePerplexityWg =
     "\n" BOOST_COMPUTE_STRINGIZE_SOURCE(
 
         Float calculate_edge_likelihood_WG(
-            GLOBAL Float * pi_a, GLOBAL Float* pi_b, GLOBAL Float* beta,
+            GLOBAL Float * pi_a, GLOBAL Float * pi_b, GLOBAL Float * beta,
             bool is_edge, GLOBAL Float* scratch, LOCAL Float* aux) {
           uint lid = GET_LOCAL_ID();
           Float s = 0;
@@ -222,14 +222,15 @@ PerplexityCalculator::PerplexityCalculator(
   } catch (compute::opencl_error& e) {
     LOG(FATAL) << prog_.build_log();
   }
-  LOG(INFO) << "####################### PERPLEXITY LOG:" << std::endl << prog_.build_log();
+  LOG(INFO) << "####################### PERPLEXITY LOG:" << std::endl
+            << prog_.build_log();
   // ppx_kernel
   kernel_ = prog_.create_kernel("calculate_ppx_partial_for_edge");
   kernel_.set_arg(0, edges_);
   kernel_.set_arg(1, static_cast<compute::uint_>(edges_.size()));
   kernel_.set_arg(2, pi_->Get());
   kernel_.set_arg(3, beta_);
-  kernel_.set_arg(4, edgeSet_->Get());
+  kernel_.set_arg(4, edgeSet_->Get()());
   kernel_.set_arg(5, ppx_per_edge_);
   kernel_.set_arg(6, ppx_per_edge_link_likelihood_);
   kernel_.set_arg(7, ppx_per_edge_non_link_likelihood_);

@@ -24,15 +24,14 @@ const std::string GetRandomTypes() {
 
 const std::string GetRandomSource() {
   static const std::string kClRandomSource =
-      ::mcmc::GetClTypes() +
-      GetRandomTypes() +
+      ::mcmc::GetClTypes() + GetRandomTypes() +
       BOOST_COMPUTE_STRINGIZE_SOURCE(
           KERNEL void SizeOfRandom(GLOBAL ulong *
-                                     size) { *size = sizeof(Random); }
+                                   size) { *size = sizeof(Random); }
 
           KERNEL void RandomInit(GLOBAL void* base, int num_random_seeds,
-                                   random_seed_t random_seed,
-                                   GLOBAL random_seed_t* thread_random_seed) {
+                                 random_seed_t random_seed,
+                                 GLOBAL random_seed_t* thread_random_seed) {
             size_t id = GET_GLOBAL_ID();
             for (size_t i = id; i < num_random_seeds; i += GET_GLOBAL_SIZE()) {
               thread_random_seed[i].x = random_seed.x + i;
@@ -102,9 +101,8 @@ OpenClRandomFactory::OpenClRandomFactory(compute::command_queue queue)
 std::string GenerateGammaSource() {
   static const std::string kSource =
       BOOST_COMPUTE_STRINGIZE_SOURCE(KERNEL void generate_gamma(
-          GLOBAL void * vpi, GLOBAL void * vrand, TT a, TT b) {
-        GLOBAL TTRowPartitionedMatrix* pm =
-            (GLOBAL TTRowPartitionedMatrix*)vpi;
+          GLOBAL void* vpi, GLOBAL void* vrand, TT a, TT b) {
+        GLOBAL TTRowPartitionedMatrix* pm = (GLOBAL TTRowPartitionedMatrix*)vpi;
         uint i = GET_GROUP_ID();
         uint gsize = GET_NUM_GROUPS();
         uint lid = GET_LOCAL_ID();
@@ -140,8 +138,7 @@ void RandomGamma(compute::command_queue* queue, OpenClRandom* randv, Float eta0,
       compute::program::create_with_source(source, queue->get_context());
   try {
     prog.build();
-  }
-  catch (compute::opencl_error& e) {
+  } catch (compute::opencl_error& e) {
     LOG(FATAL) << prog.build_log();
   }
   compute::kernel kernel = prog.create_kernel("generate_gamma");
@@ -152,14 +149,12 @@ void RandomGamma(compute::command_queue* queue, OpenClRandom* randv, Float eta0,
   queue->enqueue_1d_range_kernel(kernel, 0, norm->Rows() * local, local).wait();
 }
 
-void RandomGammaAndNormalize(compute::command_queue* queue,
-                             Float eta0, Float eta1,
-                             RowPartitionedMatrix<Float>* norm,
+void RandomGammaAndNormalize(compute::command_queue* queue, Float eta0,
+                             Float eta1, RowPartitionedMatrix<Float>* norm,
                              compute::vector<Float>* sum) {
   auto randFactory = random::OpenClRandomFactory::New(*queue);
-  std::unique_ptr<random::OpenClRandom>
-    randv(randFactory->CreateRandom(norm->Rows() * 32,
-          random::random_seed_t{11, 113}));
+  std::unique_ptr<random::OpenClRandom> randv(randFactory->CreateRandom(
+      norm->Rows() * 32, random::random_seed_t{11, 113}));
   random::RandomGamma(queue, randv.get(), eta0, eta1, norm);
   mcmc::algorithm::PartitionedNormalizer<Float>(*queue, norm, *sum, 32)();
 }
