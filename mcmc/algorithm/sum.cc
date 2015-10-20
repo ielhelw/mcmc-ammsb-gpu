@@ -9,7 +9,7 @@
 namespace mcmc {
 namespace algorithm {
 
-static const std::string kSumSourceTemplate = BOOST_COMPUTE_STRINGIZE_SOURCE(
+static const std::string kSumSourceTemplate = R"%%(
     void WG_SUM_TT_LOCAL_(LOCAL TT* aux, uint len) {
       uint lid = GET_LOCAL_ID();
       for (uint s = GET_LOCAL_SIZE() >> 1; s > 0; s >>= 1) {
@@ -54,7 +54,7 @@ static const std::string kSumSourceTemplate = BOOST_COMPUTE_STRINGIZE_SOURCE(
       if (GET_LOCAL_ID() == 0) out[gid] = aux[0];
     }
 
-    );
+    )%%";
 
 std::string WorkGroupSum(const std::string& type) {
   return GetRowPartitionedMatrixHeader(type) +

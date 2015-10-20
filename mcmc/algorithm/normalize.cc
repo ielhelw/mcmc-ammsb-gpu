@@ -11,7 +11,7 @@ namespace mcmc {
 namespace algorithm {
 
 static const std::string kNormalizeSourceTemplate =
-    BOOST_COMPUTE_STRINGIZE_SOURCE(
+    R"%%(
 
         void WG_NORMALIZE_TT(GLOBAL TT* in,
                              LOCAL TT* aux, uint len) {
@@ -48,7 +48,7 @@ static const std::string kNormalizeSourceTemplate =
           if (lid == 0) g_sum[gid] = sum;
         }
 
-        );
+        )%%";
 
 std::string WorkGroupNormalizeProgram(const std::string& type) {
   return WorkGroupSum(type) + mcmc::gen::MakeHeaderFromTemplate(

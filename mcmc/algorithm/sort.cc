@@ -8,7 +8,7 @@
 namespace mcmc {
 namespace algorithm {
 
-const std::string kSortSourceTemplate = BOOST_COMPUTE_STRINGIZE_SOURCE(
+const std::string kSortSourceTemplate = R"%%(
 
     KERNEL void WG_SORT_TT(GLOBAL TT* in, GLOBAL TT* out, uint len,
                              LOCAL TT* aux) {
@@ -32,7 +32,7 @@ const std::string kSortSourceTemplate = BOOST_COMPUTE_STRINGIZE_SOURCE(
       out[i] = aux[i];
     }
 
-    );
+    )%%";
 
 std::string WorkGroupSort(const std::string& type) {
   return GetClTypes() + mcmc::gen::MakeHeaderFromTemplate(type + "_WG_SORT",

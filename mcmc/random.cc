@@ -9,7 +9,7 @@ namespace random {
 #include "mcmc/random.cl.inc"
 
 const std::string GetRandomTypes() {
-  static const std::string kClRandomTypes = BOOST_COMPUTE_STRINGIZE_SOURCE(
+  static const std::string kClRandomTypes = R"%%(
 
       typedef ulong2 gsl_rng; typedef gsl_rng random_seed_t;
 
@@ -18,14 +18,14 @@ const std::string GetRandomTypes() {
         ulong num_seeds;
       } Random;
 
-      );
+      )%%";
   return ::mcmc::gen::MakeHeader("RANDOM_TYPES", kClRandomTypes);
 }
 
 const std::string GetRandomSource() {
   static const std::string kClRandomSource =
       ::mcmc::GetClTypes() + GetRandomTypes() +
-      BOOST_COMPUTE_STRINGIZE_SOURCE(
+      R"%%(
           KERNEL void SizeOfRandom(GLOBAL ulong *
                                    size) { *size = sizeof(Random); }
 
@@ -42,7 +42,7 @@ const std::string GetRandomSource() {
               random->base_ = thread_random_seed;
               random->num_seeds = num_random_seeds;
             }
-          });
+          })%%";
   return ::mcmc::gen::MakeHeader("RANDOM_SOURCE", kClRandomSource);
 }
 
@@ -100,7 +100,8 @@ OpenClRandomFactory::OpenClRandomFactory(compute::command_queue queue)
 
 std::string GenerateGammaSource() {
   static const std::string kSource =
-      BOOST_COMPUTE_STRINGIZE_SOURCE(KERNEL void generate_gamma(
+      R"%%(
+      KERNEL void generate_gamma(
           GLOBAL void* vpi, GLOBAL void* vrand, TT a, TT b) {
         GLOBAL TTRowPartitionedMatrix* pm = (GLOBAL TTRowPartitionedMatrix*)vpi;
         uint i = GET_GROUP_ID();
@@ -119,7 +120,7 @@ std::string GenerateGammaSource() {
           }
           seeds->base_[GET_GLOBAL_ID()] = seed;
         }
-      });
+      })%%";
   return ::mcmc::GetClTypes() + kSource;
 }
 

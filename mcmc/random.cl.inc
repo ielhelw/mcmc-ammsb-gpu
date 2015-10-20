@@ -9,7 +9,7 @@ const std::string GetRandomHeader() {
       "\n" +
       ::mcmc::gen::MakeHeader(
           "RANDOM_IMPL",
-          BOOST_COMPUTE_STRINGIZE_SOURCE(
+          R"%%(
 
               // PSEUDORANDOM GENERATOR
               inline ulong xorshift_128plus(ulong2 * s) {
@@ -384,7 +384,7 @@ const std::string GetRandomHeader() {
 
               inline Float rand_gamma(gsl_rng * r, Float a, Float b) {
                 return gsl_ran_gamma(r, a, b);
-              }));
+              })%%");
 
   return kClRandomHeader;
 }

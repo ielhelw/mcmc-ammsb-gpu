@@ -18,7 +18,7 @@ const std::string& Learner::GetBaseFuncs() {
   static const std::string kSourceBaseFuncs =
       GetSourceGuard() + GetClTypes() + "\n" + OpenClSetFactory::GetHeader() +
       "\n" +
-      BOOST_COMPUTE_STRINGIZE_SOURCE(
+      R"%%(
           typedef VERTEX_TYPE Vertex; typedef EDGE_TYPE Edge;
           inline Vertex Vertex0(Edge e) {
             return (Vertex)((e & 0xffffffff00000000) >> 32);
@@ -41,7 +41,7 @@ const std::string& Learner::GetBaseFuncs() {
                 return pi + u * K;
               } inline Float get_eps_t(uint step_count) {
             return EPS_A * pow(1 + step_count / EPS_B, -EPS_C);
-          });
+          })%%";
   return kSourceBaseFuncs;
 }
 

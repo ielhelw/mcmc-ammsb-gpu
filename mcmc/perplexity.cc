@@ -7,7 +7,7 @@
 
 namespace mcmc {
 
-const std::string kSourcePerplexity = BOOST_COMPUTE_STRINGIZE_SOURCE(
+const std::string kSourcePerplexity = R"%%(
 
     Float calculate_edge_likelihood(GLOBAL Float * pi_a, GLOBAL Float * pi_b,
                                     GLOBAL Float * beta, bool is_edge) {
@@ -78,12 +78,12 @@ const std::string kSourcePerplexity = BOOST_COMPUTE_STRINGIZE_SOURCE(
       }
     }
 
-    );
+    )%%";
 
 const std::string kSourcePerplexityWg =
     mcmc::algorithm::WorkGroupSum(compute::type_name<Float>()) + "\n" +
     "#define WG_SUM_Float WG_SUM_" + compute::type_name<Float>() +
-    "\n" BOOST_COMPUTE_STRINGIZE_SOURCE(
+    "\n" R"%%(
 
         Float calculate_edge_likelihood_WG(
             GLOBAL Float * pi_a, GLOBAL Float * pi_b, GLOBAL Float * beta,
@@ -173,7 +173,7 @@ const std::string kSourcePerplexityWg =
           }
         }
 
-        );
+        )%%";
 
 PerplexityCalculator::PerplexityCalculator(
     Mode mode, const Config& cfg, compute::command_queue queue,

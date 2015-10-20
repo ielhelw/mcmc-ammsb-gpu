@@ -8,7 +8,7 @@ namespace mcmc {
 
 const std::string kSourceBetaBase =
     random::GetRandomHeader() +
-    BOOST_COMPUTE_STRINGIZE_SOURCE(
+    R"%%(
         KERNEL void sum_theta(GLOBAL Float* g_theta,     // [K, 2]
                               GLOBAL Float* g_theta_sum  // [K]
                               ) {
@@ -57,11 +57,12 @@ const std::string kSourceBetaBase =
           }
         }
 
-        );
+        )%%";
 
 const std::string kSourceBeta =
     kSourceBetaBase +
-    BOOST_COMPUTE_STRINGIZE_SOURCE(KERNEL void calculate_grads_partial(
+    R"%%(
+    KERNEL void calculate_grads_partial(
         GLOBAL Float* theta,      // [K, 2]
         GLOBAL Float* theta_sum,  // [K]
         GLOBAL Float* beta,       // [K]
@@ -111,13 +112,14 @@ const std::string kSourceBeta =
           grads[2 * k + 1] += f * (y / Theta1(theta, k) - one_over_theta_sum);
         }
       }
-    });
+    })%%";
 
 const std::string kSourceBetaWg =
     mcmc::algorithm::WorkGroupSum(compute::type_name<Float>()) + "\n" +
     "#define WG_SUM_Float WG_SUM_" + compute::type_name<Float>() + "\n" +
     kSourceBetaBase +
-    BOOST_COMPUTE_STRINGIZE_SOURCE(KERNEL void calculate_grads_partial(
+    R"%%(
+    KERNEL void calculate_grads_partial(
         GLOBAL Float* theta,      // [K, 2]
         GLOBAL Float* theta_sum,  // [K]
         GLOBAL Float* beta,       // [K]
@@ -178,7 +180,7 @@ const std::string kSourceBetaWg =
           grads[2 * k + 1] += f * (y / Theta1(theta, k) - one_over_theta_sum);
         }
       }
-    });
+    })%%";
 
 BetaUpdater::BetaUpdater(
     Mode mode, const Config& cfg, compute::command_queue queue,

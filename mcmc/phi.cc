@@ -9,7 +9,7 @@ namespace mcmc {
 
 const std::string kSourcePhi =
     random::GetRandomHeader() +
-    BOOST_COMPUTE_STRINGIZE_SOURCE(
+    R"%%(
 
         void update_phi_for_node(GLOBAL Float* beta, GLOBAL void* g_pi,
                                  GLOBAL Float* g_phi, GLOBAL Float* phi_vec,
@@ -104,7 +104,7 @@ const std::string kSourcePhi =
           }
         }
 
-        );
+        )%%";
 
 const std::string kSourcePhiWg =
     mcmc::algorithm::WorkGroupNormalizeProgram(compute::type_name<Float>()) +
@@ -112,7 +112,7 @@ const std::string kSourcePhiWg =
     "\n"
     "#define WG_NORMALIZE_Float WG_NORMALIZE_" +
     compute::type_name<Float>() + "\n" + random::GetRandomHeader() +
-    BOOST_COMPUTE_STRINGIZE_SOURCE(
+    R"%%(
 
         void update_phi_for_nodeWG(GLOBAL Float* beta, GLOBAL void* g_pi,
                                    GLOBAL Float* g_phi, GLOBAL Float* phi_vec,
@@ -223,7 +223,7 @@ const std::string kSourcePhiWg =
           }
         }
 
-        );
+        )%%";
 
 PhiUpdater::PhiUpdater(Mode mode, const Config& cfg,
                        compute::command_queue queue,

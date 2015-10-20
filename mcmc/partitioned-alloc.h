@@ -12,7 +12,7 @@ namespace mcmc {
 
 inline std::string GetRowPartitionedMatrixSource() {
   static const std::string kSourceRowPartitionedMatrix =
-      BOOST_COMPUTE_STRINGIZE_SOURCE(
+      R"%%(
 
           typedef struct {
             GLOBAL TT* blocks_[32];
@@ -53,7 +53,7 @@ inline std::string GetRowPartitionedMatrixSource() {
             size[0] = sizeof(TTRowPartitionedMatrix);
           }
 
-          );
+          )%%";
   return GetClTypes() + kSourceRowPartitionedMatrix;
 }
 
