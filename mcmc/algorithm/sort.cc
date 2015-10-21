@@ -11,11 +11,11 @@ namespace algorithm {
 const std::string kSortSourceTemplate = R"%%(
 
     KERNEL void WG_SORT_TT(GLOBAL TT* in, GLOBAL TT* out, uint len) {
-      LOCAL TT aux[1024];
+      LOCAL_DECLARE TT aux[WG_SIZE];
       size_t i = GET_LOCAL_ID();
       size_t wg = GET_LOCAL_SIZE();
       aux[i] = in[i];
-      barrier(CLK_LOCAL_MEM_FENCE);
+      BARRIER_LOCAL;
       for (size_t length = 1; length < wg; length <<= 1) {
         bool direction = ((i & (length << 1)) != 0);
         for (size_t inc = length; inc > 0; inc >>= 1) {
@@ -24,9 +24,9 @@ const std::string kSortSourceTemplate = R"%%(
           TT jdata = aux[j];
           bool smaller = (jdata < idata) || (jdata == idata && j < i);
           bool swap = smaller ^ (j < i) ^ direction;
-          barrier(CLK_LOCAL_MEM_FENCE);
+          BARRIER_LOCAL;
           aux[i] = swap ? jdata : idata;
-          barrier(CLK_LOCAL_MEM_FENCE);
+          BARRIER_LOCAL;
         }
       }
       out[i] = aux[i];
@@ -35,8 +35,8 @@ const std::string kSortSourceTemplate = R"%%(
     )%%";
 
 std::string WorkGroupSort(const std::string& type) {
-  return GetClTypes() + mcmc::gen::MakeHeaderFromTemplate(type + "_WG_SORT",
-                                           kSortSourceTemplate, "TT", type);
+  return GetClTypes() + mcmc::gen::MakeHeaderFromTemplate(
+                            type + "_WG_SORT", kSortSourceTemplate, "TT", type);
 }
 
 }  // namespace algorithm

@@ -21,10 +21,11 @@ class WgSumParameterizedTest : public WgSumTest,
 
 TEST_P(WgSumParameterizedTest, VaryLength) {
   uint32_t wg = GetParam();
+  BuildProgram(wg);
+  clcuda::Kernel kernel(*prog_, "WG_SUM_KERNEL_uint");
   std::vector<uint32_t> vals = {1,  2,   3,   4,    5,    6,    7,  11,
                                 31, 32,  33,  47,   48,   49,   63, 64,
                                 65, 127, 128, 1023, 1024, 11331};
-  clcuda::Kernel kernel(*prog_, "WG_SUM_KERNEL_uint");
   for (auto v : vals) {
     std::vector<uint32_t> host(v);
     for (uint32_t i = 0; i < host.size(); ++i) host[i] = i + 1;
@@ -42,8 +43,8 @@ TEST_P(WgSumParameterizedTest, VaryLength) {
   }
 }
 INSTANTIATE_TEST_CASE_P(WorkGroups, WgSumParameterizedTest,
-                        ::testing::ValuesIn(std::vector<uint32_t>({2, 4, 16, 32,
-                                                                   64})));
+                        ::testing::ValuesIn(std::vector<uint32_t>({2,  4, 16,
+                                                                   32, 64})));
 
 const uint32_t N = 1024;
 const uint32_t K = 1024;
@@ -56,6 +57,7 @@ TEST_F(WgSumTest, CustomSumPerformance) {
     in.Write(*queue_, host.size(), host, i * K);
   }
   uint32_t wg = 32;
+  BuildProgram(wg);
   clcuda::Buffer<uint32_t> out(*context_, N);
   auto t1 = std::chrono::high_resolution_clock::now();
   clcuda::Kernel kernel(*prog_, "WG_SUM_KERNEL_uint");
@@ -105,11 +107,13 @@ TEST_F(WgSumTest, PartitionedTest) {
   uint32_t n = 0;
   std::generate(host.begin(), host.end(), [&n]() { return ++n; });
   for (uint32_t i = 0; i < p->Blocks().size(); ++i) {
-    for (uint32_t j = 0; j < (p->Blocks()[i].GetSize()/sizeof(uint32_t)) / cols; ++j) {
+    for (uint32_t j = 0;
+         j < (p->Blocks()[i].GetSize() / sizeof(uint32_t)) / cols; ++j) {
       p->Blocks()[i].Write(*queue_, host.size(), host, j * cols);
     }
   }
   uint32_t wg = 32;
+  BuildProgram(wg);
   clcuda::Buffer<uint32_t> out(*context_, rows);
   clcuda::Kernel kernel(*prog_, "WG_SUM_PARTITIONED_KERNEL_uint");
   kernel.SetArgument(0, p->Get());

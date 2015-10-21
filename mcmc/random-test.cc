@@ -15,9 +15,8 @@ namespace clcuda = mcmc::clcuda;
 
 const std::string kSource =
     ::mcmc::random::GetRandomHeader() +
-
     BOOST_COMPUTE_STRINGIZE_SOURCE(
-        KERNEL void test(GLOBAL void* vrand, GLOBAL ulong* ok) {
+        KERNEL void test(GLOBAL void * vrand, GLOBAL ulong * ok) {
           GLOBAL Random* rand = (GLOBAL Random*)vrand;
           if (rand == 0) {
             *ok = 0;
@@ -34,11 +33,9 @@ const std::string kSource =
             }
           }
           *ok = 1;
-        }
-
-        KERNEL void generate(GLOBAL void* vrand,
-                             GLOBAL Float* data,  // [#threads * K]
-                             uint K) {
+        } KERNEL void generate(GLOBAL void * vrand,
+                               GLOBAL Float * data,  // [#threads * K]
+                               uint K) {
           uint gid = GET_GLOBAL_ID();
           data += gid * K;
           GLOBAL Random* rand = (GLOBAL Random*)vrand;
@@ -68,9 +65,10 @@ TEST(RandomTest, Check) {
   }
 
   clcuda::Program prog(context, kSource);
-  std::vector<std::string> opts;
+  std::vector<std::string> opts = ::mcmc::GetClFlags();
   clcuda::BuildStatus status = prog.Build(dev, opts);
-  LOG_IF(FATAL, status != clcuda::BuildStatus::kSuccess) << prog.GetBuildInfo(dev);
+  LOG_IF(FATAL, status != clcuda::BuildStatus::kSuccess)
+      << prog.GetBuildInfo(dev);
   clcuda::Buffer<uint64_t> dev_ok(context, 1);
   clcuda::Kernel kernel(prog, "test");
   kernel.SetArgument(0, random->Get());
@@ -89,7 +87,7 @@ TEST(RandomTest, Check) {
   generate.SetArgument(2, K);
   generate.Launch(queue, {host.size()}, {1}, e);
   queue.Finish();
-  std::vector<Float> hdata(data.GetSize()/sizeof(Float));
+  std::vector<Float> hdata(data.GetSize() / sizeof(Float));
   data.Read(queue, hdata.size(), hdata.data());
   Float sum = 0;
   for (auto v : hdata) sum += v;

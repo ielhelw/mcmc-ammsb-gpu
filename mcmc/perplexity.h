@@ -9,13 +9,16 @@ namespace mcmc {
 
 class PerplexityCalculator {
  public:
-  enum Mode { EDGE_PER_THREAD, EDGE_PER_WORKGROUP };
+  enum Mode {
+    EDGE_PER_THREAD,
+    EDGE_PER_WORKGROUP
+  };
 
   PerplexityCalculator(Mode mode, const Config& cfg, clcuda::Queue queue,
                        clcuda::Buffer<Float>& beta,
                        RowPartitionedMatrix<Float>* pi,
                        clcuda::Buffer<Edge>& edges, OpenClSet* edgeSet,
-                       const std::string& compileFlags,
+                       const std::vector<std::string>& compileFlags,
                        const std::string& baseFuncs);
 
   Float operator()();

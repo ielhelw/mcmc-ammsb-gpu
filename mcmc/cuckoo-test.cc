@@ -69,9 +69,10 @@ TEST(OpenClCuckooSetTest, RandomMembership) {
   clcuda::Device dev(platform, 0);
   clcuda::Context context(dev);
   clcuda::Queue queue(context, dev);
+  uint64_t local = 64;
   clcuda::Program prog(
       context, OpenClSetFactory::GetHeader() + ::mcmc::GetClTypes() + kSource);
-  std::vector<std::string> opts;
+  std::vector<std::string> opts = ::mcmc::GetClFlags(local);
   clcuda::BuildStatus status = prog.Build(dev, opts);
   LOG_IF(FATAL, status != clcuda::BuildStatus::kSuccess)
       << prog.GetBuildInfo(dev);
@@ -87,7 +88,6 @@ TEST(OpenClCuckooSetTest, RandomMembership) {
   kernel.SetArgument(arg++, *dev_input);
   kernel.SetArgument(arg++, static_cast<uint32_t>(in_len));
   kernel.SetArgument(arg++, *dev_output);
-  uint64_t local = 64;
   uint64_t global = static_cast<uint64_t>(ceil((in_len + 0.0) / local) * local);
   clcuda::Event e;
   kernel.Launch(queue, {global}, {local}, e);

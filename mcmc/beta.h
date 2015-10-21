@@ -9,12 +9,16 @@ namespace mcmc {
 
 class BetaUpdater {
  public:
-  enum Mode { EDGE_PER_THREAD, EDGE_PER_WORKGROUP };
+  enum Mode {
+    EDGE_PER_THREAD,
+    EDGE_PER_WORKGROUP
+  };
 
   BetaUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
               clcuda::Buffer<Float>& theta, clcuda::Buffer<Float>& beta,
               RowPartitionedMatrix<Float>* pi, OpenClSet* trainingSet,
-              const std::string& compileFlags, const std::string& baseFuncs);
+              const std::vector<std::string>& compileFlags,
+              const std::string& baseFuncs);
 
   void operator()(clcuda::Buffer<Edge>* edges, uint32_t num_edges, Float scale);
 

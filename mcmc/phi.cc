@@ -7,8 +7,7 @@
 
 namespace mcmc {
 
-const std::string kSourcePhi = random::GetRandomHeader() +
-                               R"%%(
+const std::string kSourcePhi = random::GetRandomHeader() + R"%%(
 
         void update_phi_for_node(GLOBAL Float* beta, GLOBAL void* g_pi,
                                  GLOBAL Float* g_phi, GLOBAL Float* phi_vec,
@@ -17,7 +16,7 @@ const std::string kSourcePhi = random::GetRandomHeader() +
                                  GLOBAL Float* grads,  // K
                                  GLOBAL Float* probs,  // K
                                  random_seed_t* rseed) {
-          GLOBAL Float* pi = FloatRowPartitionedMatrix_Row(g_pi, node);
+          GLOBAL Float* pi = FloatRowPartitionedMatrix_Row((GLOBAL FloatRowPartitionedMatrix*)g_pi, node);
           Float eps_t = get_eps_t(step_count);
           Float phi_sum = g_phi[node];
           for (uint k = 0; k < K; ++k) {
@@ -27,7 +26,7 @@ const std::string kSourcePhi = random::GetRandomHeader() +
           for (uint i = 0; i < NUM_NEIGHBORS; ++i) {
             Vertex neighbor = neighbors[i];
             GLOBAL Float* pi_neighbor =
-                FloatRowPartitionedMatrix_Row(g_pi, neighbor);
+                FloatRowPartitionedMatrix_Row((GLOBAL FloatRowPartitionedMatrix*)g_pi, neighbor);
             Edge edge = MakeEdge(min(node, neighbor), max(node, neighbor));
             bool y = Set_HasEdge(edge_set, edge);
             Float e = (y == 1 ? EPSILON : 1.0 - EPSILON);
@@ -77,7 +76,7 @@ const std::string kSourcePhi = random::GetRandomHeader() +
               GLOBAL Vertex* node_neighbors = neighbors + i * NUM_NEIGHBORS;
               GLOBAL Float* phi_vec = g_phi_vec + i * K;
               update_phi_for_node(g_beta, g_pi, g_phi, phi_vec,
-                                  training_edge_set, node, node_neighbors,
+                                  (GLOBAL Set*)training_edge_set, node, node_neighbors,
                                   step_count, grads, probs, &rseed);
             }
             rand->base_[GET_GLOBAL_ID()] = rseed;
@@ -91,7 +90,7 @@ const std::string kSourcePhi = random::GetRandomHeader() +
           uint gsize = GET_GLOBAL_SIZE();
           for (; i < num_mini_batch_nodes; i += gsize) {
             Vertex n = mini_batch_nodes[i];
-            GLOBAL Float* pi = FloatRowPartitionedMatrix_Row(g_pi, n);
+            GLOBAL Float* pi = FloatRowPartitionedMatrix_Row((GLOBAL FloatRowPartitionedMatrix*)g_pi, n);
             GLOBAL Float* phi = g_phi_vec + i * K;
             Float sum = 0;
             for (uint k = 0; k < K; ++k) {
@@ -110,8 +109,7 @@ const std::string kSourcePhiWg =
     "\n" + "#define WG_SUM_Float WG_SUM_" + compute::type_name<Float>() +
     "\n"
     "#define WG_NORMALIZE_Float WG_NORMALIZE_" +
-    compute::type_name<Float>() + "\n" + random::GetRandomHeader() +
-    R"%%(
+    compute::type_name<Float>() + "\n" + random::GetRandomHeader() + R"%%(
 
         void update_phi_for_nodeWG(GLOBAL Float* beta, GLOBAL void* g_pi,
                                    GLOBAL Float* g_phi, GLOBAL Float* phi_vec,
@@ -122,7 +120,7 @@ const std::string kSourcePhiWg =
                                    random_seed_t* rseed,
                                    GLOBAL Float* scratch,  // K
                                    LOCAL Float* aux) {
-          GLOBAL Float* pi = FloatRowPartitionedMatrix_Row(g_pi, node);
+          GLOBAL Float* pi = FloatRowPartitionedMatrix_Row((GLOBAL FloatRowPartitionedMatrix*)g_pi, node);
           Float eps_t = get_eps_t(step_count);
           uint lid = GET_LOCAL_ID();
           uint lsize = GET_LOCAL_SIZE();
@@ -135,7 +133,7 @@ const std::string kSourcePhiWg =
           for (uint i = 0; i < NUM_NEIGHBORS; ++i) {
             Vertex neighbor = neighbors[i];
             GLOBAL Float* pi_neighbor =
-                FloatRowPartitionedMatrix_Row(g_pi, neighbor);
+                FloatRowPartitionedMatrix_Row((GLOBAL FloatRowPartitionedMatrix*)g_pi, neighbor);
             Edge edge = MakeEdge(min(node, neighbor), max(node, neighbor));
             bool y = Set_HasEdge(edge_set, edge);
             Float e = (y == 1 ? EPSILON : 1.0 - EPSILON);
@@ -147,7 +145,7 @@ const std::string kSourcePhiWg =
               probs[k] = probs_k;
             }
             // probs sum
-            barrier(CLK_GLOBAL_MEM_FENCE);
+            BARRIER_GLOBAL;
             WG_SUM_Float(probs, aux, K);
             Float probs_sum = aux[0];
             for (uint k = lid; k < K; k += lsize) {
@@ -156,7 +154,7 @@ const std::string kSourcePhiWg =
             }
           }
           Float Nn = (1.0 * N) / NUM_NEIGHBORS;
-          barrier(CLK_GLOBAL_MEM_FENCE);
+          BARRIER_GLOBAL;
           for (uint k = lid; k < K; k += lsize) {
             Float noise = PHI_RANDN(rseed);
             Float phi_k = pi[k] * phi_sum;
@@ -179,7 +177,7 @@ const std::string kSourcePhiWg =
             GLOBAL void* vrand,
             GLOBAL Float* scratch  // [num local threads * K]
             ) {
-          LOCAL Float aux[1024];
+          LOCAL_DECLARE Float aux[WG_SIZE];
           uint i = GET_GROUP_ID();
           uint gsize = GET_NUM_GROUPS();
           GLOBAL Random* rand = (GLOBAL Random*)vrand;
@@ -193,7 +191,7 @@ const std::string kSourcePhiWg =
               GLOBAL Vertex* node_neighbors = neighbors + i * NUM_NEIGHBORS;
               GLOBAL Float* phi_vec = g_phi_vec + i * K;
               update_phi_for_nodeWG(g_beta, g_pi, g_phi, phi_vec,
-                                    training_edge_set, node, node_neighbors,
+                                    (GLOBAL Set*)training_edge_set, node, node_neighbors,
                                     step_count, grads, probs, &rseed, scratch,
                                     aux);
             }
@@ -204,7 +202,7 @@ const std::string kSourcePhiWg =
         KERNEL void update_pi(GLOBAL void* g_pi, GLOBAL Float* g_phi_vec,
                               GLOBAL Vertex* mini_batch_nodes,
                               uint num_mini_batch_nodes, GLOBAL Float* scratch) {
-          LOCAL Float aux[1024];
+          LOCAL_DECLARE Float aux[WG_SIZE];
           uint i = GET_GROUP_ID();
           uint gsize = GET_NUM_GROUPS();
           uint lid = GET_LOCAL_ID();
@@ -212,12 +210,12 @@ const std::string kSourcePhiWg =
           scratch += i * K;
           for (; i < num_mini_batch_nodes; i += gsize) {
             Vertex n = mini_batch_nodes[i];
-            GLOBAL Float* pi = FloatRowPartitionedMatrix_Row(g_pi, n);
+            GLOBAL Float* pi = FloatRowPartitionedMatrix_Row((GLOBAL FloatRowPartitionedMatrix*)g_pi, n);
             GLOBAL Float* phi = g_phi_vec + i * K;
             for (uint k = lid; k < K; k += lsize) {
               pi[k] = phi[k];
             }
-            barrier(CLK_GLOBAL_MEM_FENCE);
+            BARRIER_GLOBAL;
             WG_NORMALIZE_Float(pi, aux, K);
           }
         }
@@ -228,7 +226,7 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
                        clcuda::Buffer<Float>& beta,
                        RowPartitionedMatrix<Float>* pi,
                        clcuda::Buffer<Float>& phi, OpenClSet* trainingSet,
-                       const std::string& compileFlags,
+                       const std::vector<std::string>& compileFlags,
                        const std::string& baseFuncs)
     : mode_(mode),
       queue_(queue),
@@ -267,11 +265,14 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
     out << "#define PHI_RANDN(X) randn(X)" << std::endl;
   }
   out << baseFuncs << std::endl << GetRowPartitionedMatrixHeader<Float>()
-      << std::endl << "#define FloatRowPartitionedMatrix_Row "
-      << compute::type_name<Float>() << "RowPartitionedMatrix_Row\n" << *src
-      << std::endl;
+      << std::endl << "#define FloatRowPartitionedMatrix "
+      << compute::type_name<Float>() << "RowPartitionedMatrix\n"
+      << "#define FloatRowPartitionedMatrix_Row " << compute::type_name<Float>()
+      << "RowPartitionedMatrix_Row\n" << *src << std::endl;
   prog_.reset(new clcuda::Program(queue_.GetContext(), out.str()));
-  std::vector<std::string> opts(1, compileFlags);
+  std::vector<std::string> opts =
+      ::mcmc::GetClFlags(mode == NODE_PER_WORKGROUP ? local_ : 0);
+  opts.insert(opts.end(), compileFlags.begin(), compileFlags.end());
   clcuda::BuildStatus status = prog_->Build(queue_.GetDevice(), opts);
   LOG_IF(FATAL, status != clcuda::BuildStatus::kSuccess)
       << prog_->GetBuildInfo(queue_.GetDevice());

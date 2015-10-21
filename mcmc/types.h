@@ -6,7 +6,13 @@
 #include <sstream>
 #include <tuple>
 
+#define USE_CL
+
+#ifdef USE_CL
 #include <clpp11.h>
+#else
+#include <cupp11.h>
+#endif
 
 namespace mcmc {
 
@@ -28,6 +34,8 @@ inline Edge MakeEdge(Vertex u, Vertex v) {
 }
 
 std::string GetClTypes();
+
+std::vector<std::string> GetClFlags(uint32_t wg = 0);
 
 }  // namespace mcmc
 

@@ -21,6 +21,7 @@ class WgSortTest : public ContextTest {
 };
 
 TEST_F(WgSortTest, Sort) {
+  BuildProgram(256);
   clcuda::Kernel kernel(*prog_, "WG_SORT_uint");
   clcuda::Buffer<uint32_t> in(*context_, 256);
   clcuda::Buffer<uint32_t> out(*context_, in.GetSize() / sizeof(uint32_t));

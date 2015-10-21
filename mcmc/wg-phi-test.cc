@@ -43,9 +43,10 @@ class WgPhiTest : public ContextTest,
     std::mt19937 mt19937;
     std::gamma_distribution<Float> gamma_distribution(cfg_.eta0, cfg_.eta1);
     auto gamma = std::bind(gamma_distribution, mt19937);
-    random::RandomAndNormalize(queue_.get(), &gamma, theta_.get(), beta_.get(), 2);
-    random::RandomGammaAndNormalize(queue_.get(), cfg_.eta0, cfg_.eta1, pi_.get(),
-                                    phi_.get());
+    random::RandomAndNormalize(queue_.get(), &gamma, theta_.get(), beta_.get(),
+                               2);
+    random::RandomGammaAndNormalize(queue_.get(), cfg_.eta0, cfg_.eta1,
+                                    pi_.get(), phi_.get());
   }
 
   void SetUp() override {
@@ -154,8 +155,8 @@ TEST_P(WgPhiTest, NodePerWorkGroup) {
 }
 
 INSTANTIATE_TEST_CASE_P(WorkGroups, WgPhiTest,
-                        ::testing::ValuesIn(std::vector<uint32_t>({32, 64, 128,
-                                                                   256})));
+                        ::testing::ValuesIn(std::vector<uint32_t>({32,  64,
+                                                                   128, 256})));
 //                            {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024})));
 
 }  // namespace test

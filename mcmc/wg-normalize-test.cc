@@ -23,10 +23,12 @@ class WgNormalizeParameterizedTest
 
 TEST_P(WgNormalizeParameterizedTest, VaryLength) {
   uint32_t wg = GetParam();
+  BuildProgram(wg);
+  clcuda::Kernel kernel(*prog_, std::string("WG_NORMALIZE_KERNEL_") +
+                                    compute::type_name<Float>());
   std::vector<uint32_t> vals = {1,  2,   3,   4,    5,    6,    7,  11,
                                 31, 32,  33,  47,   48,   49,   63, 64,
                                 65, 127, 128, 1023, 1024, 11331};
-  clcuda::Kernel kernel(*prog_, std::string("WG_NORMALIZE_KERNEL_") + compute::type_name<Float>());
   for (auto v : vals) {
     std::vector<Float> host(v);
     for (uint32_t i = 0; i < host.size(); ++i) host[i] = i + 1;
@@ -44,8 +46,8 @@ TEST_P(WgNormalizeParameterizedTest, VaryLength) {
   }
 }
 INSTANTIATE_TEST_CASE_P(WorkGroups, WgNormalizeParameterizedTest,
-                        ::testing::ValuesIn(std::vector<uint32_t>({2, 4, 16, 32,
-                                                                   64})));
+                        ::testing::ValuesIn(std::vector<uint32_t>({2,  4, 16,
+                                                                   32, 64})));
 
 const uint32_t N = 64;
 const uint32_t K = 1024;
@@ -80,7 +82,9 @@ TEST_F(WgNormalizeTest, CustomNormalizePerformance) {
     in.Write(*queue_, host.size(), host, i * K);
   }
   uint32_t wg = 32;
-  clcuda::Kernel kernel(*prog_, std::string("WG_NORMALIZE_KERNEL_") + compute::type_name<Float>());
+  BuildProgram(wg);
+  clcuda::Kernel kernel(*prog_, std::string("WG_NORMALIZE_KERNEL_") +
+                                    compute::type_name<Float>());
   kernel.SetArgument(0, in);
   kernel.SetArgument(1, static_cast<uint32_t>(K));
   clcuda::Event e;
@@ -137,7 +141,8 @@ TEST_F(WgNormalizeTest, PartitionedNormalizerClassTest) {
   uint32_t n = 0;
   std::generate(host.begin(), host.end(), [&n]() { return ++n; });
   for (uint32_t i = 0; i < p->Blocks().size(); ++i) {
-    for (uint32_t j = 0; j < (p->Blocks()[i].GetSize() / sizeof(Float)) / cols; ++j) {
+    for (uint32_t j = 0; j < (p->Blocks()[i].GetSize() / sizeof(Float)) / cols;
+         ++j) {
       p->Blocks()[i].Write(*queue_, host.size(), host, j * cols);
     }
   }
@@ -150,7 +155,8 @@ TEST_F(WgNormalizeTest, PartitionedNormalizerClassTest) {
   Float sum = (cols * (cols + 1)) / 2;
   for (uint32_t i = 0; i < p->Blocks().size(); ++i) {
     ASSERT_FLOAT_EQ(sum, host_sum[i]);
-    for (uint32_t j = 0; j < (p->Blocks()[i].GetSize() / sizeof(Float)) / cols; ++j) {
+    for (uint32_t j = 0; j < (p->Blocks()[i].GetSize() / sizeof(Float)) / cols;
+         ++j) {
       p->Blocks()[i].Read(*queue_, cols, host, j * cols);
       for (uint32_t k = 0; k < cols; ++k) {
         ASSERT_FLOAT_EQ((k + 1) / static_cast<Float>(sum), host[k]);

@@ -9,12 +9,16 @@ namespace mcmc {
 
 class PhiUpdater {
  public:
-  enum Mode { NODE_PER_THREAD, NODE_PER_WORKGROUP };
+  enum Mode {
+    NODE_PER_THREAD,
+    NODE_PER_WORKGROUP
+  };
 
   PhiUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
              clcuda::Buffer<Float>& beta, RowPartitionedMatrix<Float>* pi,
              clcuda::Buffer<Float>& phi, OpenClSet* trainingSet,
-             const std::string& compileFlags, const std::string& baseFuncs);
+             const std::vector<std::string>& compileFlags,
+             const std::string& baseFuncs);
 
   void operator()(
       clcuda::Buffer<Vertex>& mini_batch_nodes,  // [X <= 2*MINI_BATCH_SIZE]

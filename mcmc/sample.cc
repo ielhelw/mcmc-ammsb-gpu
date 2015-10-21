@@ -81,9 +81,8 @@ Float sampleBreadthFirstNonLink(const Config& cfg, std::vector<Edge>* edges,
       for (uint32_t i = 0; i < 32 && set.size() < cfg.mini_batch_size; ++i) {
         do {
           v = rand_r(seed) % cfg.N;
-        } while (u == v ||
-                 std::find(neighbors.begin(), neighbors.end(), v) !=
-                     neighbors.end());
+        } while (u == v || std::find(neighbors.begin(), neighbors.end(), v) !=
+                               neighbors.end());
         q.push(v);
         set.insert(MakeEdge(std::min(u, v), std::max(u, v)));
       }

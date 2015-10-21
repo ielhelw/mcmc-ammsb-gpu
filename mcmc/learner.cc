@@ -16,8 +16,7 @@ namespace mcmc {
 const std::string& Learner::GetBaseFuncs() {
   static const std::string kSourceBaseFuncs =
       GetSourceGuard() + GetClTypes() + "\n" + OpenClSetFactory::GetHeader() +
-      "\n" +
-      R"%%(
+      "\n" + R"%%(
           typedef VERTEX_TYPE Vertex; typedef EDGE_TYPE Edge;
           inline Vertex Vertex0(Edge e) {
             return (Vertex)((e & 0xffffffff00000000) >> 32);
@@ -97,7 +96,7 @@ Learner::Learner(const Config& cfg, clcuda::Queue queue)
     default:
       LOG(FATAL) << "Unkown sample strategy";
   }
-  LOG(INFO) << "LEARNER FLAGS = " << compileFlags_;
+  //  LOG(INFO) << "LEARNER FLAGS = " << compileFlags_;
   // gamma generator
   std::mt19937 mt19937(6342455113);
   std::gamma_distribution<Float> gamma_distribution(cfg_.eta0, cfg_.eta1);

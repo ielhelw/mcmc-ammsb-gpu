@@ -52,27 +52,23 @@ const std::string& GetSourceGuard() {
   return kSourceGuards;
 }
 
-std::string MakeCompileFlags(const Config& cfg) {
-  std::ostringstream out;
-  out << "-DFLOAT_TYPE=" << compute::type_name<Float>() << " "
-      << "-DVERTEX_TYPE="
-      << "uint"
-      << " "
-      << "-DEDGE_TYPE="
-      << "ulong"
-      << " "
-      << "-DK=" << cfg.K << " "
-      << "-DN=" << cfg.N << " "
-      << "-DE=" << cfg.E << " "
-      << "-DALPHA_=" << cfg.a << " "
-      << "-DEPS_A_=" << cfg.a << " "
-      << "-DEPS_B_=" << cfg.b << " "
-      << "-DEPS_C_=" << cfg.c << " "
-      << "-DEPSILON_=" << cfg.epsilon << " "
-      << "-DETA0_=" << cfg.eta0 << " "
-      << "-DETA1_=" << cfg.eta1 << " "
-      << "-DNUM_NEIGHBORS=" << cfg.num_node_sample << " ";
-  return out.str();
+std::vector<std::string> MakeCompileFlags(const Config& cfg) {
+  std::vector<std::string> ret = {
+      std::string("-DFLOAT_TYPE=") + compute::type_name<Float>(),
+      "-DVERTEX_TYPE=uint",
+      "-DEDGE_TYPE=ulong",
+      std::string("-DK=") + std::to_string(cfg.K),
+      std::string("-DN=") + std::to_string(cfg.N),
+      std::string("-DE=") + std::to_string(cfg.E),
+      std::string("-DALPHA_=") + std::to_string(cfg.alpha),
+      std::string("-DEPS_A_=") + std::to_string(cfg.a),
+      std::string("-DEPS_B_=") + std::to_string(cfg.b),
+      std::string("-DEPS_C_=") + std::to_string(cfg.c),
+      std::string("-DEPSILON_=") + std::to_string(cfg.epsilon),
+      std::string("-DETA0_=") + std::to_string(cfg.eta0),
+      std::string("-DETA1_=") + std::to_string(cfg.eta1),
+      std::string("-DNUM_NEIGHBORS=") + std::to_string(cfg.num_node_sample)};
+  return ret;
 }
 
 std::ostream& operator<<(std::ostream& out, const Config& cfg) {

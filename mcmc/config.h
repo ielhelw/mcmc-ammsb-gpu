@@ -61,7 +61,7 @@ struct Config {
 
 std::ostream& operator<<(std::ostream& out, const Config& cfg);
 
-std::string MakeCompileFlags(const Config& cfg);
+std::vector<std::string> MakeCompileFlags(const Config& cfg);
 
 const std::string& GetSourceGuard();
 

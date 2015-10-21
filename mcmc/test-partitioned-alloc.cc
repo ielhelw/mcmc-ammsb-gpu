@@ -63,7 +63,7 @@ TEST_F(PartitionedAllocTest, RetrieveElements) {
 
   clcuda::Program prog(*context_,
                        GetRowPartitionedMatrixHeader<uint32_t>() + kSource);
-  std::vector<std::string> opts;
+  std::vector<std::string> opts = GetClFlags();
   LOG_IF(FATAL, prog.Build(*device_, opts) != clcuda::BuildStatus::kSuccess)
       << prog.GetBuildInfo(*device_);
   std::vector<uint32_t> host(2);
@@ -82,8 +82,8 @@ TEST_F(PartitionedAllocTest, RetrieveElements) {
     fetch.SetArgument(1, r);
     fetch.SetArgument(2, c);
     // copy data there
-    p->Blocks()[r / num_rows_in_block].Write(
-        *queue_, host.size(), host, (r % num_rows_in_block) * cols + c);
+    p->Blocks()[r / num_rows_in_block]
+        .Write(*queue_, host.size(), host, (r % num_rows_in_block) * cols + c);
     clcuda::Event e;
     fetch.Launch(*queue_, {1}, {1}, e);
     queue_->Finish();

@@ -23,9 +23,8 @@ const std::string GetRandomTypes() {
 }
 
 const std::string GetRandomSource() {
-  static const std::string kClRandomSource = ::mcmc::GetClTypes() +
-                                             GetRandomTypes() +
-                                             R"%%(
+  static const std::string kClRandomSource =
+      ::mcmc::GetClTypes() + GetRandomTypes() + R"%%(
           KERNEL void SizeOfRandom(GLOBAL ulong *
                                    size) { *size = sizeof(Random); }
 
@@ -82,7 +81,7 @@ OpenClRandom* OpenClRandomFactory::CreateRandom(uint64_t size,
 
 OpenClRandomFactory::OpenClRandomFactory(clcuda::Queue queue)
     : queue_(queue), prog_(queue_.GetContext(), GetRandomSource()) {
-  std::vector<std::string> opts;
+  std::vector<std::string> opts = ::mcmc::GetClFlags();
   clcuda::BuildStatus status = prog_.Build(queue_.GetDevice(), opts);
   LOG_IF(FATAL, status != clcuda::BuildStatus::kSuccess)
       << prog_.GetBuildInfo(queue_.GetDevice());
@@ -97,8 +96,7 @@ OpenClRandomFactory::OpenClRandomFactory(clcuda::Queue queue)
 }
 
 std::string GenerateGammaSource() {
-  static const std::string kSource =
-      R"%%(
+  static const std::string kSource = R"%%(
       KERNEL void generate_gamma(
           GLOBAL void* vpi, GLOBAL void* vrand, TT a, TT b) {
         GLOBAL TTRowPartitionedMatrix* pm = (GLOBAL TTRowPartitionedMatrix*)vpi;
@@ -125,7 +123,8 @@ std::string GenerateGammaSource() {
 void RandomGamma(clcuda::Queue* queue, OpenClRandom* randv, Float eta0,
                  Float eta1, RowPartitionedMatrix<Float>* norm) {
   uint32_t local = 32;
-  LOG_IF(FATAL, randv->GetSeeds().GetSize()/sizeof(random_seed_t) < local * norm->Rows())
+  LOG_IF(FATAL, randv->GetSeeds().GetSize() / sizeof(random_seed_t) <
+                    local * norm->Rows())
       << "RandomSeeds vector too small";
   std::ostringstream out;
   out << random::GetRandomHeader() << std::endl;
@@ -134,9 +133,10 @@ void RandomGamma(clcuda::Queue* queue, OpenClRandom* randv, Float eta0,
   std::string source = gen::MakeHeaderFromTemplate(
       "GenAndNorm", out.str(), "TT", compute::type_name<Float>());
   clcuda::Program prog(queue->GetContext(), source);
-  std::vector<std::string> opts;
+  std::vector<std::string> opts = ::mcmc::GetClFlags();
   clcuda::BuildStatus status = prog.Build(queue->GetDevice(), opts);
-  LOG_IF(FATAL, status != clcuda::BuildStatus::kSuccess) << prog.GetBuildInfo(queue->GetDevice());
+  LOG_IF(FATAL, status != clcuda::BuildStatus::kSuccess)
+      << prog.GetBuildInfo(queue->GetDevice());
   clcuda::Kernel kernel(prog, "generate_gamma");
   kernel.SetArgument(0, norm->Get());
   kernel.SetArgument(1, randv->Get());

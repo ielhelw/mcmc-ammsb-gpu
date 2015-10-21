@@ -9,8 +9,7 @@
 namespace mcmc {
 
 inline std::string GetRowPartitionedMatrixSource() {
-  static const std::string kSourceRowPartitionedMatrix =
-      R"%%(
+  static const std::string kSourceRowPartitionedMatrix = R"%%(
 
           typedef struct {
             GLOBAL TT* blocks_[32];
@@ -161,7 +160,7 @@ class RowPartitionedMatrixFactory
   RowPartitionedMatrixFactory(clcuda::Queue queue)
       : queue_(queue),
         prog_(queue_.GetContext(), GetRowPartitionedMatrixHeader<T>()) {
-    std::vector<std::string> opts;
+    std::vector<std::string> opts = ::mcmc::GetClFlags();
     clcuda::BuildStatus status = prog_.Build(queue_.GetDevice(), opts);
     LOG_IF(FATAL, status != clcuda::BuildStatus::kSuccess)
         << prog_.GetBuildInfo(queue_.GetDevice());

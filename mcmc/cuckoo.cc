@@ -24,11 +24,10 @@ const std::string GetSetTypes() {
 }
 
 const std::string& GetSetHeader() {
-  static const std::string kClSetHeader = GetSetTypes() +
-                                          R"%%(
+  static const std::string kClSetHeader = GetSetTypes() + R"%%(
 
-          __constant uint64_t NUM_BUCKETS = 2;
-          __constant uint64_t NUM_SLOTS = 4;
+          CONSTANT uint64_t NUM_BUCKETS = 2;
+          CONSTANT uint64_t NUM_SLOTS = 4;
 
           uint64_t hash1(uint64_t num_bins,
                          uint64_t k) { return (1003 * k) % num_bins; }
@@ -63,8 +62,7 @@ const std::string& GetSetHeader() {
 }
 
 const std::string& GetSetSource() {
-  static const std::string kClSetSource = GetSetTypes() +
-                                          R"%%(
+  static const std::string kClSetSource = GetSetTypes() + R"%%(
 
           KERNEL void SizeOfSet(GLOBAL uint64_t *
                                   size) { *size = sizeof(Set); }
@@ -224,7 +222,7 @@ OpenClSet* OpenClSetFactory::CreateSet(const std::vector<uint64_t>& data) {
 
 OpenClSetFactory::OpenClSetFactory(clcuda::Queue queue)
     : queue_(queue), prog_(queue_.GetContext(), internal::GetSetSource()) {
-  std::vector<std::string> opts;
+  std::vector<std::string> opts = ::mcmc::GetClFlags();
   clcuda::BuildStatus status = prog_.Build(queue.GetDevice(), opts);
   LOG_IF(FATAL, status != clcuda::BuildStatus::kSuccess)
       << prog_.GetBuildInfo(queue.GetDevice());

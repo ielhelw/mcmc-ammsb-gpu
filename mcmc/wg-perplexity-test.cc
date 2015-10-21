@@ -34,7 +34,8 @@ class WgPerplexityTest : public ContextTest,
   void SetUp() override {
     ContextTest::SetUp();
     std::vector<Edge> edges = GenerateRandomEdges(1024, N_ - 1);
-    dev_edges_.reset(new clcuda::Buffer<Edge>(*context_, *queue_, edges.begin(), edges.end()));
+    dev_edges_.reset(new clcuda::Buffer<Edge>(*context_, *queue_, edges.begin(),
+                                              edges.end()));
     Set set(edges.size());
     for (auto it = edges.begin(); it != edges.end(); ++it) {
       ASSERT_TRUE(set.Insert(*it));
@@ -56,7 +57,8 @@ class WgPerplexityTest : public ContextTest,
     clcuda::Buffer<Float> phi(*context_, N_);
     mcmc::algorithm::PartitionedNormalizer<Float>(*queue_, dev_pi_.get(), phi,
                                                   K_)();
-    dev_beta_.reset(new clcuda::Buffer<Float>(*context_, *queue_, beta.begin(), beta.end()));
+    dev_beta_.reset(new clcuda::Buffer<Float>(*context_, *queue_, beta.begin(),
+                                              beta.end()));
     mcmc::algorithm::Normalizer<Float>(*queue_, dev_beta_.get(), 2, 1)();
     cfg_.K = K_;
   }
@@ -113,7 +115,7 @@ TEST_P(WgPerplexityTest, Equal) {
     auto t1 = std::chrono::high_resolution_clock::now();
     ppxs2.push_back(ppxWg());
     auto t2 = std::chrono::high_resolution_clock::now();
-    ASSERT_NEAR(ppxs1[i], ppxs2[i], /*INCREASE ERROREVERY ITERATION */ (i + 1) *
+    ASSERT_NEAR(ppxs1[i], ppxs2[i], /*INCREASE ERROREVERY ITERATION */(i + 1) *
                                         error * std::abs(ppxs1[i]));
     ppx2_time += ppxWg.LastInvocationTime();
     ppx2_total_time +=

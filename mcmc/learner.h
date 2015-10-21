@@ -43,7 +43,7 @@ class Learner {
 
   std::shared_ptr<RowPartitionedMatrixFactory<Float>> allocFactory_;
   std::unique_ptr<RowPartitionedMatrix<Float>> pi_;  // [N,K]
-  clcuda::Buffer<Float> phi_;                       // [N]
+  clcuda::Buffer<Float> phi_;                        // [N]
 
   std::shared_ptr<OpenClSetFactory> setFactory_;
 
@@ -52,7 +52,7 @@ class Learner {
   clcuda::Buffer<Edge> trainingEdges_;
   clcuda::Buffer<Edge> heldoutEdges_;
 
-  std::string compileFlags_;
+  std::vector<std::string> compileFlags_;
 
   PerplexityCalculator heldoutPerplexity_;
   PhiUpdater phiUpdater_;

@@ -41,7 +41,8 @@ class WgBetaTest : public ContextTest,
     std::mt19937 mt19937(42);
     std::gamma_distribution<Float> gamma_distribution(cfg_.eta0, cfg_.eta1);
     auto gamma = std::bind(gamma_distribution, mt19937);
-    random::RandomAndNormalize(queue_.get(), &gamma, theta_.get(), beta_.get(), 2);
+    random::RandomAndNormalize(queue_.get(), &gamma, theta_.get(), beta_.get(),
+                               2);
   }
 
   void SetUp() override {
@@ -58,8 +59,8 @@ class WgBetaTest : public ContextTest,
     allocFactory = RowPartitionedMatrixFactory<Float>::New(*queue_);
     pi_.reset(allocFactory->CreateMatrix(cfg_.N, cfg_.K));
     clcuda::Buffer<Float> phi(*context_, cfg_.N);
-    random::RandomGammaAndNormalize(queue_.get(), cfg_.eta0, cfg_.eta1, pi_.get(),
-                                    &phi);
+    random::RandomGammaAndNormalize(queue_.get(), cfg_.eta0, cfg_.eta1,
+                                    pi_.get(), &phi);
   }
 
   void TearDown() override {
@@ -74,20 +75,22 @@ class WgBetaTest : public ContextTest,
   }
 
   void Run(BetaUpdater::Mode mode) {
-    std::vector<Float> host_theta(theta_->GetSize()/sizeof(Float));
+    std::vector<Float> host_theta(theta_->GetSize() / sizeof(Float));
     std::vector<Float> host_theta_sum(cfg_.K);
-    updater_.reset(new BetaUpdater(mode, cfg_, *queue_, *theta_, *beta_, pi_.get(),
-                                   dev_set_.get(), MakeCompileFlags(cfg_),
-                                   Learner::GetBaseFuncs()));
+    updater_.reset(new BetaUpdater(
+        mode, cfg_, *queue_, *theta_, *beta_, pi_.get(), dev_set_.get(),
+        MakeCompileFlags(cfg_), Learner::GetBaseFuncs()));
     std::vector<Edge> random_edges = GenerateRandomEdges(1024);
-    clcuda::Buffer<Edge> edges(*context_, *queue_, random_edges.begin(), random_edges.end());
+    clcuda::Buffer<Edge> edges(*context_, *queue_, random_edges.begin(),
+                               random_edges.end());
     double time = 0;
     for (uint32_t i = 0; i < num_tries_; ++i) {
       Reset();
       theta_->Read(*queue_, host_theta.size(), host_theta);
       (*updater_)(&edges, edges.GetSize() / sizeof(Edge), 0.01);
       time += updater_->LastInvocationTime();
-      updater_->GetThetaSum().Read(*queue_, host_theta_sum.size(), host_theta_sum);
+      updater_->GetThetaSum().Read(*queue_, host_theta_sum.size(),
+                                   host_theta_sum);
     }
     LOG(INFO) << "WG=" << cfg_.beta_wg_size << ", nano=" << time / num_tries_;
   }
@@ -109,7 +112,8 @@ TEST_P(WgBetaTest, VerifyModes) {
 
   LOG(INFO) << "CALL 1";
   Run(BetaUpdater::EDGE_PER_THREAD);
-  std::vector<Float> theta_sum1(updater_->GetThetaSum().GetSize() / sizeof(Float));
+  std::vector<Float> theta_sum1(updater_->GetThetaSum().GetSize() /
+                                sizeof(Float));
   updater_->GetThetaSum().Read(*queue_, theta_sum1.size(), theta_sum1);
   std::vector<Float> grads1(2 * cfg_.K);
   updater_->GetGrads().Read(*queue_, 2 * cfg_.K, grads1);
@@ -118,7 +122,8 @@ TEST_P(WgBetaTest, VerifyModes) {
 
   LOG(INFO) << "CALL 2";
   Run(BetaUpdater::EDGE_PER_WORKGROUP);
-  std::vector<Float> theta_sum2(updater_->GetThetaSum().GetSize() / sizeof(Float));
+  std::vector<Float> theta_sum2(updater_->GetThetaSum().GetSize() /
+                                sizeof(Float));
   updater_->GetThetaSum().Read(*queue_, theta_sum2.size(), theta_sum2);
   std::vector<Float> grads2(2 * cfg_.K);
   updater_->GetGrads().Read(*queue_, 2 * cfg_.K, grads2);

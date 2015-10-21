@@ -7,9 +7,7 @@ const std::string GetRandomHeader() {
       "#define gsl_rng_uniform(randomState) random(randomState) \n"
       "#define gsl_rng_uniform_int(randomState, n) randint(randomState, 0, n) "
       "\n" +
-      ::mcmc::gen::MakeHeader(
-          "RANDOM_IMPL",
-          R"%%(
+      ::mcmc::gen::MakeHeader("RANDOM_IMPL", R"%%(
 
               // PSEUDORANDOM GENERATOR
               inline ulong xorshift_128plus(ulong2 * s) {
@@ -64,7 +62,7 @@ const std::string GetRandomHeader() {
                * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
                */
 
-              constant Float gsl_ytab[128] = {
+              CONSTANT Float gsl_ytab[128] = {
                   1, 0.963598623011, 0.936280813353, 0.913041104253,
                   0.892278506696, 0.873239356919, 0.855496407634,
                   0.838778928349, 0.822902083699, 0.807732738234,
@@ -108,7 +106,7 @@ const std::string GetRandomHeader() {
               /* tabulated values for 2^24 times x[i]/x[i+1],
                * used to accept for U*x[i+1]<=x[i] without any floating point
                * operations */
-              constant ulong gsl_ktab[128] = {
+              CONSTANT ulong gsl_ktab[128] = {
                   0, 12590644, 14272653, 14988939, 15384584, 15635009, 15807561,
                   15933577, 16029594, 16105155, 16166147, 16216399, 16258508,
                   16294295, 16325078, 16351831, 16375291, 16396026, 16414479,
@@ -133,7 +131,7 @@ const std::string GetRandomHeader() {
                   15472926};
 
               /* tabulated values of 2^{-24}*x[i] */
-              constant Float gsl_wtab[128] = {
+              CONSTANT Float gsl_wtab[128] = {
                   1.62318314817e-08, 2.16291505214e-08, 2.54246305087e-08,
                   2.84579525938e-08, 3.10340022482e-08, 3.33011726243e-08,
                   3.53439060345e-08, 3.72152672658e-08, 3.8950989572e-08,
