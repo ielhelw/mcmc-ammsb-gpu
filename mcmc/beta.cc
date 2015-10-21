@@ -6,9 +6,8 @@
 
 namespace mcmc {
 
-const std::string kSourceBetaBase =
-    random::GetRandomHeader() +
-    R"%%(
+const std::string kSourceBetaBase = random::GetRandomHeader() +
+                                    R"%%(
         KERNEL void sum_theta(GLOBAL Float* g_theta,     // [K, 2]
                               GLOBAL Float* g_theta_sum  // [K]
                               ) {
@@ -59,9 +58,8 @@ const std::string kSourceBetaBase =
 
         )%%";
 
-const std::string kSourceBeta =
-    kSourceBetaBase +
-    R"%%(
+const std::string kSourceBeta = kSourceBetaBase +
+                                R"%%(
     KERNEL void calculate_grads_partial(
         GLOBAL Float* theta,      // [K, 2]
         GLOBAL Float* theta_sum,  // [K]
@@ -128,8 +126,9 @@ const std::string kSourceBetaWg =
         uint num_mini_batch_edges,
         GLOBAL Float* probs,    // [num_mini_batch_edges * K]
         GLOBAL Float* grads,    // min(#edges, #num_threads) * [K, 2]
-        GLOBAL Float* scratch,  // min(#edges, #num_threads) * [K]
-        LOCAL Float* aux) {
+        GLOBAL Float* scratch  // min(#edges, #num_threads) * [K]
+      ) {
+      LOCAL Float aux[1024];
       uint i = GET_GROUP_ID();
       const uint gsize = GET_NUM_GROUPS();
       const uint lid = GET_LOCAL_ID();
@@ -182,11 +181,13 @@ const std::string kSourceBetaWg =
       }
     })%%";
 
-BetaUpdater::BetaUpdater(
-    Mode mode, const Config& cfg, compute::command_queue queue,
-    compute::vector<Float>& theta, compute::vector<Float>& beta,
-    RowPartitionedMatrix<Float>* pi, OpenClSet* trainingSet,
-    const std::string& compileFlags, const std::string& baseFuncs)
+BetaUpdater::BetaUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
+                         clcuda::Buffer<Float>& theta,
+                         clcuda::Buffer<Float>& beta,
+                         RowPartitionedMatrix<Float>* pi,
+                         OpenClSet* trainingSet,
+                         const std::string& compileFlags,
+                         const std::string& baseFuncs)
     : mode_(mode),
       queue_(queue),
       theta_(theta),
@@ -199,99 +200,92 @@ BetaUpdater::BetaUpdater(
       count_calls_(0),
       k_(cfg.K),
       local_(cfg.beta_wg_size),
-      theta_sum_(cfg.K, queue_.get_context()),
-      grads_(cfg.mini_batch_size * 2 * cfg.K, queue_.get_context()),
-      probs_(cfg.mini_batch_size * cfg.K, queue_.get_context()) {
+      theta_sum_(queue_.GetContext(), cfg.K),
+      grads_(queue_.GetContext(), cfg.mini_batch_size * 2 * cfg.K),
+      probs_(queue_.GetContext(), cfg.mini_batch_size * cfg.K) {
   const std::string* src = nullptr;
   switch (mode) {
     case EDGE_PER_THREAD:
       src = &kSourceBeta;
       break;
     case EDGE_PER_WORKGROUP:
-      scratch_ = compute::vector<Float>(cfg.mini_batch_size * 2 * cfg.K,
-                                        queue_.get_context());
+      scratch_.reset(new clcuda::Buffer<Float>(
+          queue_.GetContext(), cfg.mini_batch_size * 2 * cfg.K));
       src = &kSourceBetaWg;
       break;
     default:
       LOG(FATAL) << "Failed to recognize mode";
   }
-  prog_ = compute::program::create_with_source(
-      baseFuncs + GetRowPartitionedMatrixHeader<Float>() +
-          "#define FloatRowPartitionedMatrix_Row " +
-          compute::type_name<Float>() + "RowPartitionedMatrix_Row\n" + *src,
-      queue_.get_context());
-  try {
-    prog_.build(compileFlags);
-  } catch (compute::opencl_error& e) {
-    LOG(FATAL) << prog_.build_log();
-  }
+  prog_.reset(new clcuda::Program(
+      queue_.GetContext(), baseFuncs + GetRowPartitionedMatrixHeader<Float>() +
+                               "#define FloatRowPartitionedMatrix_Row " +
+                               compute::type_name<Float>() +
+                               "RowPartitionedMatrix_Row\n" + *src));
+  std::vector<std::string> opts(1, compileFlags);
+  clcuda::BuildStatus status = prog_->Build(queue_.GetDevice(), opts);
+  LOG_IF(FATAL, status != clcuda::BuildStatus::kSuccess)
+      << prog_->GetBuildInfo(queue_.GetDevice());
   LOG(INFO) << "####################### BETA LOG:" << std::endl
-            << prog_.build_log();
-  theta_sum_kernel_ = prog_.create_kernel("sum_theta");
-  theta_sum_kernel_.set_arg(0, theta_);
-  theta_sum_kernel_.set_arg(1, theta_sum_);
+            << prog_->GetBuildInfo(queue_.GetDevice());
+  theta_sum_kernel_.reset(new clcuda::Kernel(*prog_, "sum_theta"));
+  theta_sum_kernel_->SetArgument(0, theta_);
+  theta_sum_kernel_->SetArgument(1, theta_sum_);
 
-  grads_partial_kernel_ = prog_.create_kernel("calculate_grads_partial");
-  grads_partial_kernel_.set_arg(0, theta_);
-  grads_partial_kernel_.set_arg(1, theta_sum_);
-  grads_partial_kernel_.set_arg(2, beta_);
-  grads_partial_kernel_.set_arg(3, pi_->Get());
-  grads_partial_kernel_.set_arg(4, trainingSet->Get()());
-  grads_partial_kernel_.set_arg(7, probs_);
-  grads_partial_kernel_.set_arg(8, grads_);
+  grads_partial_kernel_.reset(
+      new clcuda::Kernel(*prog_, "calculate_grads_partial"));
+  grads_partial_kernel_->SetArgument(0, theta_);
+  grads_partial_kernel_->SetArgument(1, theta_sum_);
+  grads_partial_kernel_->SetArgument(2, beta_);
+  grads_partial_kernel_->SetArgument(3, pi_->Get());
+  grads_partial_kernel_->SetArgument(4, trainingSet->Get()());
+  grads_partial_kernel_->SetArgument(7, probs_);
+  grads_partial_kernel_->SetArgument(8, grads_);
   if (mode_ == EDGE_PER_WORKGROUP) {
-    grads_partial_kernel_.set_arg(9, scratch_);
-    grads_partial_kernel_.set_arg(10, local_ * sizeof(Float), 0);
+    grads_partial_kernel_->SetArgument(9, *scratch_);
   }
 
-  grads_sum_kernel_ = prog_.create_kernel("sum_grads");
-  grads_sum_kernel_.set_arg(0, grads_);
+  grads_sum_kernel_.reset(new clcuda::Kernel(*prog_, "sum_grads"));
+  grads_sum_kernel_->SetArgument(0, grads_);
 
-  update_theta_kernel_ = prog_.create_kernel("update_theta");
-  update_theta_kernel_.set_arg(0, theta_);
-  update_theta_kernel_.set_arg(1, grads_);
-  update_theta_kernel_.set_arg(4, rand_->Get());
+  update_theta_kernel_.reset(new clcuda::Kernel(*prog_, "update_theta"));
+  update_theta_kernel_->SetArgument(0, theta_);
+  update_theta_kernel_->SetArgument(1, grads_);
+  update_theta_kernel_->SetArgument(4, rand_->Get());
 }
 
-void BetaUpdater::operator()(compute::vector<Edge>* edges, uint32_t num_edges,
+void BetaUpdater::operator()(clcuda::Buffer<Edge>* edges, uint32_t num_edges,
                              Float scale) {
   ++count_calls_;
   {
-    theta_sum_event_ =
-        queue_.enqueue_1d_range_kernel(theta_sum_kernel_, 0, k_, 0);
-    theta_sum_event_.wait();
+    theta_sum_kernel_->Launch(queue_, {k_}, {1/*FIXME*/}, theta_sum_event_);
+    queue_.Finish();
   }
   {
     uint32_t global = 0;
-    grads_partial_kernel_.set_arg(5, *edges);
-    grads_partial_kernel_.set_arg(6, num_edges);
+    grads_partial_kernel_->SetArgument(5, *edges);
+    grads_partial_kernel_->SetArgument(6, num_edges);
     if (mode_ == EDGE_PER_THREAD) {
       global = (num_edges / local_ + (num_edges % local_ ? 1 : 0)) * local_;
-      grads_partial_event_ = queue_.enqueue_1d_range_kernel(
-          grads_partial_kernel_, 0, global, local_);
     } else {
       global = num_edges * local_;
-      grads_partial_event_ = queue_.enqueue_1d_range_kernel(
-          grads_partial_kernel_, 0, global, local_);
     }
-    grads_partial_event_.wait();
+    grads_partial_kernel_->Launch(queue_, {global}, {local_}, grads_partial_event_);
+    queue_.Finish();
 
     uint32_t num_partials = std::min(global, num_edges);
-    grads_sum_kernel_.set_arg(1, num_partials);
-    grads_sum_event_ =
-        queue_.enqueue_1d_range_kernel(grads_sum_kernel_, 0, 2 * k_, 0);
-    grads_sum_event_.wait();
+    grads_sum_kernel_->SetArgument(1, num_partials);
+    grads_sum_kernel_->Launch(queue_, {2 * k_}, {1/*FIXME*/}, grads_sum_event_);
+    queue_.Finish();
   }
   {
-    update_theta_kernel_.set_arg(2, count_calls_);
-    update_theta_kernel_.set_arg(3, scale);
-    update_theta_event_ =
-        queue_.enqueue_1d_range_kernel(update_theta_kernel_, 0, k_, 0);
-    update_theta_event_.wait();
+    update_theta_kernel_->SetArgument(2, count_calls_);
+    update_theta_kernel_->SetArgument(3, scale);
+    update_theta_kernel_->Launch(queue_, {k_}, {1/*FIXME*/}, update_theta_event_);
+    queue_.Finish();
   }
   {
     auto t1 = std::chrono::high_resolution_clock::now();
-    compute::copy(theta_.begin(), theta_.end(), beta_.begin(), queue_);
+    theta_.CopyTo(queue_, theta_.GetSize()/sizeof(Float), beta_);
     normalizer_();
     auto t2 = std::chrono::high_resolution_clock::now();
     normalize_time_ =
@@ -312,10 +306,11 @@ void BetaUpdater::operator()(compute::vector<Edge>* edges, uint32_t num_edges,
 }
 
 uint64_t BetaUpdater::LastInvocationTime() const {
-  return theta_sum_event_.duration<boost::chrono::nanoseconds>().count() +
-         grads_partial_event_.duration<boost::chrono::nanoseconds>().count() +
-         grads_sum_event_.duration<boost::chrono::nanoseconds>().count() +
-         update_theta_event_.duration<boost::chrono::nanoseconds>().count();
+  return theta_sum_event_.GetElapsedTime() +
+         grads_partial_event_.GetElapsedTime() +
+         grads_sum_event_.GetElapsedTime() +
+         update_theta_event_.GetElapsedTime() +
+         normalize_time_;
 }
 
 }  // namespace mcmc

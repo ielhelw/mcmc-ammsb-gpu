@@ -1,11 +1,6 @@
 #include <gtest/gtest.h>
 #include <glog/logging.h>
 
-#include <boost/compute/container/vector.hpp>
-#include <boost/compute/random.hpp>
-#include <boost/compute/system.hpp>
-#include <boost/compute/types.hpp>
-#include <boost/compute/utility/source.hpp>
 #include <chrono>
 
 #include "mcmc/test.h"
@@ -39,12 +34,12 @@ class WgPerplexityTest : public ContextTest,
   void SetUp() override {
     ContextTest::SetUp();
     std::vector<Edge> edges = GenerateRandomEdges(1024, N_ - 1);
-    dev_edges_ = compute::vector<Edge>(edges.begin(), edges.end(), queue_);
+    dev_edges_.reset(new clcuda::Buffer<Edge>(*context_, *queue_, edges.begin(), edges.end()));
     Set set(edges.size());
     for (auto it = edges.begin(); it != edges.end(); ++it) {
       ASSERT_TRUE(set.Insert(*it));
     }
-    factory_ = OpenClSetFactory::New(mcmc::clcuda::Queue(queue_.get()));
+    factory_ = OpenClSetFactory::New(*queue_);
     dev_set_.reset(factory_->CreateSet(set.Serialize()));
     std::mt19937 mt19937;
     std::gamma_distribution<Float> gamma_dist(1, 1);
@@ -53,38 +48,38 @@ class WgPerplexityTest : public ContextTest,
     std::generate(pi.begin(), pi.end(), gen);
     std::vector<Float> beta(2 * K_);
     std::generate(beta.begin(), beta.end(), gen);
-    allocFactory = (RowPartitionedMatrixFactory<Float>::New(queue_));
+    allocFactory = (RowPartitionedMatrixFactory<Float>::New(*queue_));
     dev_pi_.reset(allocFactory->CreateMatrix(N_, K_));
     ASSERT_EQ(1, dev_pi_->Blocks().size());
-    ASSERT_EQ(pi.size(), dev_pi_->Blocks()[0].size());
-    compute::copy(pi.begin(), pi.end(), dev_pi_->Blocks()[0].begin(), queue_);
-    compute::vector<Float> phi(N_, context_);
-    mcmc::algorithm::PartitionedNormalizer<Float>(queue_, dev_pi_.get(), phi,
+    ASSERT_EQ(pi.size(), dev_pi_->Blocks()[0].GetSize() / sizeof(Float));
+    dev_pi_->Blocks()[0].Write(*queue_, pi.size(), pi);
+    clcuda::Buffer<Float> phi(*context_, N_);
+    mcmc::algorithm::PartitionedNormalizer<Float>(*queue_, dev_pi_.get(), phi,
                                                   K_)();
-    dev_beta_ = compute::vector<Float>(beta.begin(), beta.end(), queue_);
-    mcmc::algorithm::Normalizer<Float>(queue_, &dev_beta_, 2, 1)();
+    dev_beta_.reset(new clcuda::Buffer<Float>(*context_, *queue_, beta.begin(), beta.end()));
+    mcmc::algorithm::Normalizer<Float>(*queue_, dev_beta_.get(), 2, 1)();
     cfg_.K = K_;
   }
 
   void TearDown() override {
-    dev_edges_ = compute::vector<Edge>();
+    dev_edges_.reset();
     factory_.reset();
     dev_set_.reset();
     dev_pi_.reset();
     allocFactory.reset();
-    dev_beta_ = compute::vector<Float>();
+    dev_beta_.reset();
     ContextTest::TearDown();
   }
 
   uint32_t N_;
   uint32_t K_;
   uint32_t num_tries_;
-  compute::vector<Edge> dev_edges_;
+  std::unique_ptr<clcuda::Buffer<Edge>> dev_edges_;
   std::shared_ptr<OpenClSetFactory> factory_;
   std::unique_ptr<OpenClSet> dev_set_;
   std::shared_ptr<RowPartitionedMatrixFactory<Float>> allocFactory;
   std::unique_ptr<RowPartitionedMatrix<Float>> dev_pi_;
-  compute::vector<Float> dev_beta_;
+  std::unique_ptr<clcuda::Buffer<Float>> dev_beta_;
   Config cfg_;
 };
 
@@ -92,8 +87,8 @@ TEST_P(WgPerplexityTest, Equal) {
   num_tries_ = 1;
   cfg_.ppx_wg_size = GetParam();
   mcmc::PerplexityCalculator ppxSimple(
-      mcmc::PerplexityCalculator::EDGE_PER_THREAD, cfg_, queue_, dev_beta_,
-      dev_pi_.get(), dev_edges_, dev_set_.get(), MakeCompileFlags(cfg_),
+      mcmc::PerplexityCalculator::EDGE_PER_THREAD, cfg_, *queue_, *dev_beta_,
+      dev_pi_.get(), *dev_edges_, dev_set_.get(), MakeCompileFlags(cfg_),
       Learner::GetBaseFuncs());
   Float error = 0.05;
   double ppx1_time = 0;
@@ -108,8 +103,8 @@ TEST_P(WgPerplexityTest, Equal) {
         std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count();
   }
   mcmc::PerplexityCalculator ppxWg(
-      mcmc::PerplexityCalculator::EDGE_PER_WORKGROUP, cfg_, queue_, dev_beta_,
-      dev_pi_.get(), dev_edges_, dev_set_.get(), MakeCompileFlags(cfg_),
+      mcmc::PerplexityCalculator::EDGE_PER_WORKGROUP, cfg_, *queue_, *dev_beta_,
+      dev_pi_.get(), *dev_edges_, dev_set_.get(), MakeCompileFlags(cfg_),
       Learner::GetBaseFuncs());
   double ppx2_time = 0;
   double ppx2_total_time = 0;

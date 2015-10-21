@@ -23,9 +23,9 @@ const std::string GetRandomTypes() {
 }
 
 const std::string GetRandomSource() {
-  static const std::string kClRandomSource =
-      ::mcmc::GetClTypes() + GetRandomTypes() +
-      R"%%(
+  static const std::string kClRandomSource = ::mcmc::GetClTypes() +
+                                             GetRandomTypes() +
+                                             R"%%(
           KERNEL void SizeOfRandom(GLOBAL ulong *
                                    size) { *size = sizeof(Random); }
 
@@ -47,55 +47,53 @@ const std::string GetRandomSource() {
 }
 
 OpenClRandom::OpenClRandom(std::shared_ptr<OpenClRandomFactory> factory,
-                           compute::kernel* init, compute::command_queue* queue,
+                           clcuda::Kernel* init, clcuda::Queue* queue,
                            uint64_t sizeOfRandom, uint64_t size,
                            random_seed_t seed)
     : factory_(factory),
       queue_(*queue),
-      data_(size, queue_.get_context()),
-      buf_(queue_.get_context(), sizeOfRandom,
-           compute::memory_object::read_write),
+      data_(queue_.GetContext(), size),
+      buf_(queue_.GetContext(), sizeOfRandom),
       init_kernel_(*init) {
   SetSeed(seed);
 }
 
 void OpenClRandom::SetSeed(random_seed_t seed) {
-  init_kernel_.set_arg(0, buf_);
-  init_kernel_.set_arg(1, static_cast<compute::int_>(data_.size()));
-  init_kernel_.set_arg(2, seed);
-  init_kernel_.set_arg(3, data_);
-  auto e = queue_.enqueue_task(init_kernel_);
-  e.wait();
+  init_kernel_.SetArgument(0, buf_);
+  init_kernel_.SetArgument(
+      1, static_cast<int32_t>(data_.GetSize() / sizeof(random_seed_t)));
+  init_kernel_.SetArgument(2, seed);
+  init_kernel_.SetArgument(3, data_);
+  clcuda::Event e;
+  init_kernel_.Launch(queue_, {1}, {1}, e);
+  queue_.Finish();
 }
 
 std::shared_ptr<OpenClRandomFactory> OpenClRandomFactory::New(
-    compute::command_queue queue) {
+    clcuda::Queue queue) {
   return std::shared_ptr<OpenClRandomFactory>(new OpenClRandomFactory(queue));
 }
 
 OpenClRandom* OpenClRandomFactory::CreateRandom(uint64_t size,
                                                 random_seed_t seed) {
-  return new OpenClRandom(shared_from_this(), &init_kernel_, &queue_,
+  return new OpenClRandom(shared_from_this(), init_kernel_.get(), &queue_,
                           sizeOfRandom_, size, seed);
 }
 
-OpenClRandomFactory::OpenClRandomFactory(compute::command_queue queue)
-    : queue_(queue) {
-  prog_ = compute::program::create_with_source(GetRandomSource(),
-                                               queue_.get_context());
-  try {
-    prog_.build();
-  } catch (compute::opencl_error& e) {
-    LOG(FATAL) << prog_.build_log();
-    ;
-  }
-  init_kernel_ = prog_.create_kernel("RandomInit");
-  compute::kernel sizeOf_kernel = prog_.create_kernel("SizeOfRandom");
-  compute::vector<uint64_t> size(1, (uint64_t)0, queue_);
-  sizeOf_kernel.set_arg(0, size);
-  auto e = queue_.enqueue_task(sizeOf_kernel);
-  e.wait();
-  compute::copy(size.begin(), size.end(), &sizeOfRandom_, queue_);
+OpenClRandomFactory::OpenClRandomFactory(clcuda::Queue queue)
+    : queue_(queue), prog_(queue_.GetContext(), GetRandomSource()) {
+  std::vector<std::string> opts;
+  clcuda::BuildStatus status = prog_.Build(queue_.GetDevice(), opts);
+  LOG_IF(FATAL, status != clcuda::BuildStatus::kSuccess)
+      << prog_.GetBuildInfo(queue_.GetDevice());
+  init_kernel_.reset(new clcuda::Kernel(prog_, "RandomInit"));
+  clcuda::Kernel sizeOf_kernel(prog_, "SizeOfRandom");
+  clcuda::Buffer<uint64_t> size(queue_.GetContext(), 1);
+  sizeOf_kernel.SetArgument(0, size);
+  clcuda::Event e;
+  sizeOf_kernel.Launch(queue_, {1}, {1}, e);
+  queue_.Finish();
+  size.Read(queue_, 1, &sizeOfRandom_);
 }
 
 std::string GenerateGammaSource() {
@@ -124,10 +122,10 @@ std::string GenerateGammaSource() {
   return ::mcmc::GetClTypes() + kSource;
 }
 
-void RandomGamma(compute::command_queue* queue, OpenClRandom* randv, Float eta0,
+void RandomGamma(clcuda::Queue* queue, OpenClRandom* randv, Float eta0,
                  Float eta1, RowPartitionedMatrix<Float>* norm) {
   uint32_t local = 32;
-  LOG_IF(FATAL, randv->GetSeeds().size() < local * norm->Rows())
+  LOG_IF(FATAL, randv->GetSeeds().GetSize()/sizeof(random_seed_t) < local * norm->Rows())
       << "RandomSeeds vector too small";
   std::ostringstream out;
   out << random::GetRandomHeader() << std::endl;
@@ -135,24 +133,23 @@ void RandomGamma(compute::command_queue* queue, OpenClRandom* randv, Float eta0,
   out << GenerateGammaSource() << std::endl;
   std::string source = gen::MakeHeaderFromTemplate(
       "GenAndNorm", out.str(), "TT", compute::type_name<Float>());
-  compute::program prog =
-      compute::program::create_with_source(source, queue->get_context());
-  try {
-    prog.build();
-  } catch (compute::opencl_error& e) {
-    LOG(FATAL) << prog.build_log();
-  }
-  compute::kernel kernel = prog.create_kernel("generate_gamma");
-  kernel.set_arg(0, norm->Get());
-  kernel.set_arg(1, randv->Get());
-  kernel.set_arg(2, eta0);
-  kernel.set_arg(3, eta1);
-  queue->enqueue_1d_range_kernel(kernel, 0, norm->Rows() * local, local).wait();
+  clcuda::Program prog(queue->GetContext(), source);
+  std::vector<std::string> opts;
+  clcuda::BuildStatus status = prog.Build(queue->GetDevice(), opts);
+  LOG_IF(FATAL, status != clcuda::BuildStatus::kSuccess) << prog.GetBuildInfo(queue->GetDevice());
+  clcuda::Kernel kernel(prog, "generate_gamma");
+  kernel.SetArgument(0, norm->Get());
+  kernel.SetArgument(1, randv->Get());
+  kernel.SetArgument(2, eta0);
+  kernel.SetArgument(3, eta1);
+  clcuda::Event e;
+  kernel.Launch(*queue, {norm->Rows() * local}, {local}, e);
+  queue->Finish();
 }
 
-void RandomGammaAndNormalize(compute::command_queue* queue, Float eta0,
-                             Float eta1, RowPartitionedMatrix<Float>* norm,
-                             compute::vector<Float>* sum) {
+void RandomGammaAndNormalize(clcuda::Queue* queue, Float eta0, Float eta1,
+                             RowPartitionedMatrix<Float>* norm,
+                             clcuda::Buffer<Float>* sum) {
   auto randFactory = random::OpenClRandomFactory::New(*queue);
   std::unique_ptr<random::OpenClRandom> randv(randFactory->CreateRandom(
       norm->Rows() * 32, random::random_seed_t{11, 113}));

@@ -1,8 +1,6 @@
 #ifndef __MCMC_PARTITIONED_ALLOC_H__
 #define __MCMC_PARTITIONED_ALLOC_H__
 
-#include <boost/compute/container/vector.hpp>
-#include <boost/compute/utility/source.hpp>
 #include <glog/logging.h>
 
 #include "mcmc/gen-util.h"
@@ -82,58 +80,63 @@ class RowPartitionedMatrix {
 
   uint32_t RowsPerBlock() const { return rows_per_alloc_; }
 
-  std::vector<compute::vector<T>>& Blocks() { return blocks_; }
+  std::vector<clcuda::Buffer<T>>& Blocks() { return blocks_; }
 
-  compute::buffer& Get() { return base_; }
+  clcuda::Buffer<char>& Get() { return base_; }
 
  private:
-  RowPartitionedMatrix(compute::command_queue queue, uint32_t rows,
-                       uint32_t cols, uint32_t sizeOf, compute::kernel init,
-                       compute::kernel set, uint32_t rowsInBlock = 0)
+  RowPartitionedMatrix(clcuda::Queue queue, uint32_t rows, uint32_t cols,
+                       uint32_t sizeOf, clcuda::Kernel init, clcuda::Kernel set,
+                       uint32_t rowsInBlock = 0)
       : queue_(queue),
         rows_(rows),
         cols_(cols),
         rows_per_alloc_(rowsInBlock == 0
-                            ? GetMaxRowsInBlock(queue.get_device(), cols_)
+                            ? GetMaxRowsInBlock(queue.GetDevice(), cols_)
                             : rowsInBlock),
-        base_(queue_.get_context(), sizeOf) {
+        base_(queue_.GetContext(), sizeOf) {
     for (uint32_t i = 0; i < rows_ / rows_per_alloc_; ++i) {
       blocks_.push_back(
-          compute::vector<T>(rows_per_alloc_ * cols_, queue_.get_context()));
+          clcuda::Buffer<T>(queue_.GetContext(), rows_per_alloc_ * cols_));
     }
     if (rows_ % rows_per_alloc_) {
-      blocks_.push_back(compute::vector<T>((rows_ % rows_per_alloc_) * cols_,
-                                           queue_.get_context()));
+      blocks_.push_back(clcuda::Buffer<T>(queue_.GetContext(),
+                                          (rows_ % rows_per_alloc_) * cols_));
     }
-    init.set_arg(0, base_);
-    init.set_arg(1, rows_per_alloc_);
-    init.set_arg(2, static_cast<uint32_t>(blocks_.size()));
-    init.set_arg(3, rows_);
-    init.set_arg(4, cols_);
-    auto e = queue_.enqueue_task(init);
-    e.wait();
-    set.set_arg(0, base_);
+    init.SetArgument(0, base_);
+    init.SetArgument(1, rows_per_alloc_);
+    init.SetArgument(2, static_cast<uint32_t>(blocks_.size()));
+    init.SetArgument(3, rows_);
+    init.SetArgument(4, cols_);
+    clcuda::Event e;
+    init.Launch(queue_, {1}, {1}, e);
+    queue_.Finish();
+    set.SetArgument(0, base_);
     for (uint32_t i = 0; i < blocks_.size(); ++i) {
-      set.set_arg(1, blocks_[i]);
-      set.set_arg(2, i);
-      e = queue_.enqueue_task(set);
-      e.wait();
+      set.SetArgument(1, blocks_[i]);
+      set.SetArgument(2, i);
+      set.Launch(queue, {1}, {1}, e);
+      queue_.Finish();
     }
   }
 
-  uint64_t GetMaxRowsInBlock(compute::device dev, uint32_t cols) {
+  uint64_t GetMaxRowsInBlock(clcuda::Device dev, uint32_t cols) {
+    // FIXME FIXME
+    return 1024 * 1024;
+#if 0
     uint64_t row_size = cols * sizeof(T);
     compute::ulong_ max_alloc =
         dev.get_info<compute::ulong_>(CL_DEVICE_MAX_MEM_ALLOC_SIZE);
     return max_alloc / row_size;
+#endif
   }
 
-  compute::command_queue queue_;
+  clcuda::Queue queue_;
   uint32_t rows_;
   uint32_t cols_;
   uint32_t rows_per_alloc_;
-  std::vector<compute::vector<T>> blocks_;
-  compute::buffer base_;
+  std::vector<clcuda::Buffer<T>> blocks_;
+  clcuda::Buffer<char> base_;
 
   friend class RowPartitionedMatrixFactory<T>;
 };
@@ -142,8 +145,7 @@ template <class T>
 class RowPartitionedMatrixFactory
     : public std::enable_shared_from_this<RowPartitionedMatrixFactory<T>> {
  public:
-  static std::shared_ptr<RowPartitionedMatrixFactory> New(
-      compute::command_queue queue) {
+  static std::shared_ptr<RowPartitionedMatrixFactory> New(clcuda::Queue queue) {
     return std::shared_ptr<RowPartitionedMatrixFactory>(
         new RowPartitionedMatrixFactory(queue));
   }
@@ -151,37 +153,39 @@ class RowPartitionedMatrixFactory
   RowPartitionedMatrix<T>* CreateMatrix(uint32_t rows, uint32_t cols,
                                         uint32_t rowsInBlock = 0) {
     RowPartitionedMatrix<T>* rpm = new RowPartitionedMatrix<T>(
-        queue_, rows, cols, sizeOf_, init_kernel_, set_kernel_, rowsInBlock);
+        queue_, rows, cols, sizeOf_, *init_kernel_, *set_kernel_, rowsInBlock);
     return rpm;
   }
 
  private:
-  RowPartitionedMatrixFactory(compute::command_queue queue) : queue_(queue) {
-    prog_ = compute::program::create_with_source(
-        GetRowPartitionedMatrixHeader<T>(), queue_.get_context());
-    try {
-      prog_.build();
-    } catch (compute::opencl_error& e) {
-      LOG(FATAL) << prog_.build_log();
-    }
-    compute::vector<compute::ulong_> sizeOf(1, queue_.get_context());
-    compute::kernel sizeofKernel = prog_.create_kernel(
-        std::string(compute::type_name<T>()) + "RowPartitionedMatrixSizeof");
-    sizeofKernel.set_arg(0, sizeOf);
-    auto e = queue_.enqueue_task(sizeofKernel);
-    e.wait();
-    compute::copy(sizeOf.begin(), sizeOf.begin() + 1, &sizeOf_, queue_);
-    init_kernel_ = prog_.create_kernel(std::string(compute::type_name<T>()) +
-                                       "RowPartitionedMatrix_init");
-    set_kernel_ = prog_.create_kernel(std::string(compute::type_name<T>()) +
-                                      "RowPartitionedMatrix_set");
+  RowPartitionedMatrixFactory(clcuda::Queue queue)
+      : queue_(queue),
+        prog_(queue_.GetContext(), GetRowPartitionedMatrixHeader<T>()) {
+    std::vector<std::string> opts;
+    clcuda::BuildStatus status = prog_.Build(queue_.GetDevice(), opts);
+    LOG_IF(FATAL, status != clcuda::BuildStatus::kSuccess)
+        << prog_.GetBuildInfo(queue_.GetDevice());
+    clcuda::Buffer<uint64_t> sizeOf(queue_.GetContext(), 1);
+    clcuda::Kernel sizeofKernel(prog_, std::string(compute::type_name<T>()) +
+                                           "RowPartitionedMatrixSizeof");
+    sizeofKernel.SetArgument(0, sizeOf);
+    clcuda::Event e;
+    sizeofKernel.Launch(queue, {1}, {1}, e);
+    queue_.Finish();
+    sizeOf.Read(queue_, 1, &sizeOf_);
+    init_kernel_.reset(new clcuda::Kernel(
+        prog_,
+        std::string(compute::type_name<T>()) + "RowPartitionedMatrix_init"));
+    set_kernel_.reset(new clcuda::Kernel(
+        prog_,
+        std::string(compute::type_name<T>()) + "RowPartitionedMatrix_set"));
   }
 
-  compute::command_queue queue_;
-  compute::program prog_;
-  compute::kernel init_kernel_;
-  compute::kernel set_kernel_;
-  compute::ulong_ sizeOf_;
+  clcuda::Queue queue_;
+  clcuda::Program prog_;
+  std::unique_ptr<clcuda::Kernel> init_kernel_;
+  std::unique_ptr<clcuda::Kernel> set_kernel_;
+  uint64_t sizeOf_;
 };
 
 }  // namespace mcmc

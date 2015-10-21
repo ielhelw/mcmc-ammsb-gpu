@@ -1,5 +1,6 @@
 #include "mcmc/sample.h"
 
+#include <boost/algorithm/string/predicate.hpp>
 #include <glog/logging.h>
 #include <unordered_set>
 #include <queue>
@@ -8,11 +9,11 @@
 
 namespace mcmc {
 
-Sample::Sample(const Config& cfg, compute::command_queue queue)
-    : dev_edges(cfg.mini_batch_size, queue.get_context()),
-      dev_nodes(2 * cfg.mini_batch_size, queue.get_context()),
-      dev_neighbors(2 * cfg.mini_batch_size * cfg.num_node_sample,
-                    queue.get_context()),
+Sample::Sample(const Config& cfg, clcuda::Queue queue)
+    : dev_edges(queue.GetContext(), cfg.mini_batch_size),
+      dev_nodes(queue.GetContext(), 2 * cfg.mini_batch_size),
+      dev_neighbors(queue.GetContext(),
+                    2 * cfg.mini_batch_size * cfg.num_node_sample),
       seeds(2 * cfg.mini_batch_size) {
   std::generate(seeds.begin(), seeds.end(), rand);
 }

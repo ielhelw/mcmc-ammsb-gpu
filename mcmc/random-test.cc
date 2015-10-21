@@ -10,8 +10,8 @@
 #include <limits>
 
 using namespace mcmc::random;
-namespace compute = boost::compute;
 using mcmc::Float;
+namespace clcuda = mcmc::clcuda;
 
 const std::string kSource =
     ::mcmc::random::GetRandomHeader() +
@@ -50,10 +50,10 @@ const std::string kSource =
         });
 
 TEST(RandomTest, Check) {
-  compute::device dev = compute::system::default_device();
-  compute::context context(dev);
-  compute::command_queue queue(context, dev,
-                               compute::command_queue::enable_profiling);
+  clcuda::Platform platform((size_t)0);
+  clcuda::Device dev(platform, 0);
+  clcuda::Context context(dev);
+  clcuda::Queue queue(context, dev);
   random_seed_t seed;
   seed[0] = 42;
   seed[1] = 43;
@@ -61,39 +61,36 @@ TEST(RandomTest, Check) {
   auto factory = OpenClRandomFactory::New(queue);
   std::unique_ptr<OpenClRandom> random(
       factory->CreateRandom(host.size(), seed));
-  compute::copy(random->GetSeeds().begin(), random->GetSeeds().end(),
-                host.begin(), queue);
+  random->GetSeeds().Read(queue, host.size(), host.data());
   for (size_t i = 0; i < host.size(); ++i) {
     ASSERT_EQ(seed[0] + i, host[i][0]);
     ASSERT_EQ(seed[1] + i, host[i][1]);
   }
 
-  compute::program prog =
-      compute::program::create_with_source(kSource, context);
-  try {
-    prog.build();
-  } catch (compute::opencl_error& e) {
-    LOG(FATAL) << prog.build_log();
-  }
-  compute::vector<uint64_t> dev_ok(1, static_cast<uint64_t>(0), queue);
-  compute::kernel kernel = prog.create_kernel("test");
-  kernel.set_arg(0, random->Get());
-  kernel.set_arg(1, dev_ok);
-  compute::event e = queue.enqueue_task(kernel);
-  e.wait();
-  std::vector<uint64_t> ok(dev_ok.size(), 0);
-  compute::copy(dev_ok.begin(), dev_ok.end(), ok.begin(), queue);
+  clcuda::Program prog(context, kSource);
+  std::vector<std::string> opts;
+  clcuda::BuildStatus status = prog.Build(dev, opts);
+  LOG_IF(FATAL, status != clcuda::BuildStatus::kSuccess) << prog.GetBuildInfo(dev);
+  clcuda::Buffer<uint64_t> dev_ok(context, 1);
+  clcuda::Kernel kernel(prog, "test");
+  kernel.SetArgument(0, random->Get());
+  kernel.SetArgument(1, dev_ok);
+  clcuda::Event e;
+  kernel.Launch(queue, {1}, {1}, e);
+  queue.Finish();
+  std::vector<uint64_t> ok(1, 0);
+  dev_ok.Read(queue, 1, ok.data());
   ASSERT_EQ(1, ok[0]);
   uint32_t K = 10000;
-  compute::vector<Float> data(host.size() * K, context);
-  compute::kernel generate = prog.create_kernel("generate");
-  generate.set_arg(0, random->Get());
-  generate.set_arg(1, data);
-  generate.set_arg(2, K);
-  e = queue.enqueue_1d_range_kernel(generate, 0, host.size(), 0);
-  e.wait();
-  std::vector<Float> hdata(data.size());
-  compute::copy(data.begin(), data.end(), hdata.begin(), queue);
+  clcuda::Buffer<Float> data(context, host.size() * K);
+  clcuda::Kernel generate(prog, "generate");
+  generate.SetArgument(0, random->Get());
+  generate.SetArgument(1, data);
+  generate.SetArgument(2, K);
+  generate.Launch(queue, {host.size()}, {1}, e);
+  queue.Finish();
+  std::vector<Float> hdata(data.GetSize()/sizeof(Float));
+  data.Read(queue, hdata.size(), hdata.data());
   Float sum = 0;
   for (auto v : hdata) sum += v;
   Float mean = sum / hdata.size();

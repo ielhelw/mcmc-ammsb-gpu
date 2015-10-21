@@ -1,9 +1,6 @@
 #ifndef __MCMC_LEARNER_H__
 #define __MCMC_LEARNER_H__
 
-#include <boost/compute/system.hpp>
-#include <boost/compute/container/array.hpp>
-#include <boost/compute/container/vector.hpp>
 #include <boost/program_options.hpp>
 #include <ostream>
 
@@ -18,7 +15,7 @@ namespace mcmc {
 
 class Learner {
  public:
-  Learner(const Config& cfg, compute::command_queue queue);
+  Learner(const Config& cfg, clcuda::Queue queue);
 
   Float calculate_perplexity_heldout(uint32_t step_count);
 
@@ -40,20 +37,20 @@ class Learner {
  private:
   const Config& cfg_;
 
-  compute::command_queue queue_;
-  compute::vector<Float> beta_;   // [K]
-  compute::vector<Float> theta_;  // [K]
+  clcuda::Queue queue_;
+  clcuda::Buffer<Float> beta_;   // [K]
+  clcuda::Buffer<Float> theta_;  // [K]
 
   std::shared_ptr<RowPartitionedMatrixFactory<Float>> allocFactory_;
   std::unique_ptr<RowPartitionedMatrix<Float>> pi_;  // [N,K]
-  compute::vector<Float> phi_;                       // [N]
+  clcuda::Buffer<Float> phi_;                       // [N]
 
   std::shared_ptr<OpenClSetFactory> setFactory_;
 
   std::unique_ptr<OpenClSet> trainingSet_;
   std::unique_ptr<OpenClSet> heldoutSet_;
-  compute::vector<Edge> trainingEdges_;
-  compute::vector<Edge> heldoutEdges_;
+  clcuda::Buffer<Edge> trainingEdges_;
+  clcuda::Buffer<Edge> heldoutEdges_;
 
   std::string compileFlags_;
 

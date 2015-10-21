@@ -1,7 +1,5 @@
 #include "mcmc/algorithm/normalize.h"
 
-#include <boost/compute/utility/source.hpp>
-
 #include "mcmc/algorithm/sum.h"
 #include "mcmc/gen-util.h"
 #include "mcmc/partitioned-alloc.h"
@@ -25,7 +23,8 @@ static const std::string kNormalizeSourceTemplate =
         }
 
         KERNEL void WG_NORMALIZE_KERNEL_TT(
-            GLOBAL TT* in, LOCAL TT* aux, uint len) {
+            GLOBAL TT* in, uint len) {
+          LOCAL TT aux[1024];
           uint gid = GET_GROUP_ID();
           uint stride = GET_LOCAL_SIZE();
           in += gid * len;
@@ -33,7 +32,8 @@ static const std::string kNormalizeSourceTemplate =
         }
 
         KERNEL void WG_NORMALIZE_PARTITIONED_KERNEL_TT(
-            GLOBAL void* in, GLOBAL TT* g_sum, LOCAL TT* aux) {
+            GLOBAL void* in, GLOBAL TT* g_sum) {
+          LOCAL TT aux[1024];
           uint lsize = GET_LOCAL_SIZE();
           uint lid = GET_LOCAL_ID();
           uint gid = GET_GROUP_ID();

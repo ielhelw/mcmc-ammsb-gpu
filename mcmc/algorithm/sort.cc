@@ -10,8 +10,8 @@ namespace algorithm {
 
 const std::string kSortSourceTemplate = R"%%(
 
-    KERNEL void WG_SORT_TT(GLOBAL TT* in, GLOBAL TT* out, uint len,
-                             LOCAL TT* aux) {
+    KERNEL void WG_SORT_TT(GLOBAL TT* in, GLOBAL TT* out, uint len) {
+      LOCAL TT aux[1024];
       size_t i = GET_LOCAL_ID();
       size_t wg = GET_LOCAL_SIZE();
       aux[i] = in[i];

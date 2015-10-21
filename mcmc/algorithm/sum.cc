@@ -1,7 +1,5 @@
 #include "mcmc/algorithm/sum.h"
 
-#include <boost/compute/utility/source.hpp>
-
 #include "mcmc/gen-util.h"
 #include "mcmc/types.h"
 #include "mcmc/partitioned-alloc.h"
@@ -34,8 +32,8 @@ static const std::string kSumSourceTemplate = R"%%(
     }
 
     KERNEL void WG_SUM_KERNEL_TT(GLOBAL TT* in, GLOBAL TT* out,
-                                   LOCAL TT* aux,
                                    uint len) {
+      LOCAL TT aux[1024];
       uint gid = GET_GROUP_ID();
       in += len * gid;
       WG_SUM_TT(in, aux, len);
@@ -43,8 +41,8 @@ static const std::string kSumSourceTemplate = R"%%(
     }
 
     KERNEL void WG_SUM_PARTITIONED_KERNEL_TT(
-        GLOBAL void* in, GLOBAL TT* out,
-        LOCAL TT* aux) {
+        GLOBAL void* in, GLOBAL TT* out) {
+      LOCAL TT aux[1024];
       uint lsize = GET_LOCAL_SIZE();
       uint gid = GET_GROUP_ID();
       GLOBAL TTRowPartitionedMatrix* pm =

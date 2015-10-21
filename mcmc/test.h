@@ -1,7 +1,6 @@
 #ifndef __MCMC_TEST_H__
 #define __MCMC_TEST_H__
 
-#include <boost/compute/system.hpp>
 #include "mcmc/types.h"
 
 namespace mcmc {
@@ -14,33 +13,31 @@ class ContextTest : public ::testing::Test {
   ContextTest(const std::string& source) : source_(source) {}
 
   void SetUp() override {
-    device_ = compute::system::default_device();
-    LOG(INFO) << "DEVICE: " << device_.name() << " | "
-              << device_.platform().name();
-    context_ = compute::context(device_);
-    queue_ = compute::command_queue(context_, device_,
-                                    compute::command_queue::enable_profiling);
+    clcuda::Platform platform((size_t)0);
+    device_.reset(new clcuda::Device(platform, 0));
+    LOG(INFO) << "DEVICE: " << device_->Name() << " | " << device_->Vendor();
+    context_.reset(new clcuda::Context(*device_));
+    queue_.reset(new clcuda::Queue(*context_, *device_));
     if (!source_.empty()) {
-      prog_ = compute::program::create_with_source(source_, context_);
-      try {
-        prog_.build();
-      } catch (compute::opencl_error& e) {
-        LOG(FATAL) << prog_.build_log();
-      }
+      prog_.reset(new clcuda::Program(*context_, source_));
+      std::vector<std::string> opts;
+      clcuda::BuildStatus status = prog_->Build(*device_, opts);
+      LOG_IF(FATAL, status != clcuda::BuildStatus::kSuccess)
+          << prog_->GetBuildInfo(*device_);
     }
   }
 
   void TearDown() override {
-    prog_ = compute::program();
-    device_ = compute::device();
-    context_ = compute::context();
-    queue_ = compute::command_queue();
+    prog_.reset();
+    device_.reset();
+    context_.reset();
+    queue_.reset();
   }
 
-  compute::device device_;
-  compute::context context_;
-  compute::command_queue queue_;
-  compute::program prog_;
+  std::unique_ptr<clcuda::Device> device_;
+  std::unique_ptr<clcuda::Context> context_;
+  std::unique_ptr<clcuda::Queue> queue_;
+  std::unique_ptr<clcuda::Program> prog_;
   std::string source_;
 };
 

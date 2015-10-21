@@ -1,7 +1,6 @@
 #include "mcmc/learner.h"
 
 #include <algorithm>
-#include <boost/compute/algorithm/reduce.hpp>
 #include <future>
 #include <glog/logging.h>
 #include <random>
@@ -45,37 +44,37 @@ const std::string& Learner::GetBaseFuncs() {
   return kSourceBaseFuncs;
 }
 
-Learner::Learner(const Config& cfg, compute::command_queue queue)
+Learner::Learner(const Config& cfg, clcuda::Queue queue)
     : cfg_(cfg),
       queue_(queue),
-      beta_(2 * cfg_.K, queue_.get_context()),
-      theta_(2 * cfg_.K, queue_.get_context()),
+      beta_(queue_.GetContext(), 2 * cfg_.K),
+      theta_(queue_.GetContext(), 2 * cfg_.K),
       allocFactory_(RowPartitionedMatrixFactory<Float>::New(queue_)),
       pi_(allocFactory_->CreateMatrix(cfg_.N, cfg_.K)),
-      phi_(cfg_.N, queue_.get_context()),
-      setFactory_(OpenClSetFactory::New(clcuda::Queue(queue_.get()))),
+      phi_(queue_.GetContext(), cfg_.N),
+      setFactory_(OpenClSetFactory::New(queue_)),
       trainingSet_(setFactory_->CreateSet(cfg_.training->Serialize())),
       heldoutSet_(setFactory_->CreateSet(cfg_.heldout->Serialize())),
-      trainingEdges_(cfg_.training_edges.begin(), cfg_.training_edges.end(),
-                     queue_),
-      heldoutEdges_(cfg_.heldout_edges.begin(), cfg_.heldout_edges.end(),
-                    queue_),
+      trainingEdges_(queue_.GetContext(), queue_, cfg_.training_edges.begin(),
+                     cfg_.training_edges.end()),
+      heldoutEdges_(queue_.GetContext(), queue_, cfg_.heldout_edges.begin(),
+                    cfg_.heldout_edges.end()),
       compileFlags_(MakeCompileFlags(cfg_)),
-      heldoutPerplexity_((queue_.get_device().type() == CL_DEVICE_TYPE_GPU
+      heldoutPerplexity_((queue_.GetDevice().Type() == "GPU"
                               ? PerplexityCalculator::EDGE_PER_WORKGROUP
                               : PerplexityCalculator::EDGE_PER_THREAD),
                          cfg_, queue_, beta_, pi_.get(), heldoutEdges_,
                          heldoutSet_.get(), compileFlags_, GetBaseFuncs()),
-      phiUpdater_((queue_.get_device().type() == CL_DEVICE_TYPE_GPU
-                       ? PhiUpdater::NODE_PER_WORKGROUP
-                       : PhiUpdater::NODE_PER_THREAD),
-                  cfg_, queue_, beta_, pi_.get(), phi_, trainingSet_.get(),
-                  compileFlags_, GetBaseFuncs()),
-      betaUpdater_((queue_.get_device().type() == CL_DEVICE_TYPE_GPU
-                        ? BetaUpdater::EDGE_PER_WORKGROUP
-                        : BetaUpdater::EDGE_PER_THREAD),
-                   cfg, queue_, theta_, beta_, pi_.get(), trainingSet_.get(),
-                   compileFlags_, GetBaseFuncs()) {
+      phiUpdater_(
+          (queue_.GetDevice().Type() == "GPU" ? PhiUpdater::NODE_PER_WORKGROUP
+                                              : PhiUpdater::NODE_PER_THREAD),
+          cfg_, queue_, beta_, pi_.get(), phi_, trainingSet_.get(),
+          compileFlags_, GetBaseFuncs()),
+      betaUpdater_(
+          (queue_.GetDevice().Type() == "GPU" ? BetaUpdater::EDGE_PER_WORKGROUP
+                                              : BetaUpdater::EDGE_PER_THREAD),
+          cfg, queue_, theta_, beta_, pi_.get(), trainingSet_.get(),
+          compileFlags_, GetBaseFuncs()) {
   switch (cfg_.strategy) {
     case NodeLink:
       sampler_ = sampleNodeLink;
@@ -192,14 +191,13 @@ void Learner::run(uint32_t max_iters) {
         duration_cast<nanoseconds>(tsampling_end - tsampling_start).count();
 
     auto tstaging_start = high_resolution_clock::now();
-    compute::copy(samples[phase].edges.begin(), samples[phase].edges.end(),
-                  samples[phase].dev_edges.begin(), queue_);
-    compute::copy(samples[phase].nodes_vec.begin(),
-                  samples[phase].nodes_vec.end(),
-                  samples[phase].dev_nodes.begin(), queue_);
-    compute::copy(samples[phase].neighbors_vec.begin(),
-                  samples[phase].neighbors_vec.end(),
-                  samples[phase].dev_neighbors.begin(), queue_);
+    samples[phase].dev_edges.Write(queue_, samples[phase].edges.size(),
+                                   samples[phase].edges.data());
+    samples[phase].dev_nodes.Write(queue_, samples[phase].nodes_vec.size(),
+                                   samples[phase].nodes_vec.data());
+    samples[phase].dev_neighbors.Write(queue_,
+                                       samples[phase].neighbors_vec.size(),
+                                       samples[phase].neighbors_vec.data());
     auto tstaging_end = high_resolution_clock::now();
     tstaging +=
         duration_cast<nanoseconds>(tstaging_end - tstaging_start).count();

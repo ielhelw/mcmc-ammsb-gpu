@@ -1,11 +1,6 @@
 #include <gtest/gtest.h>
 #include <glog/logging.h>
 
-#include <boost/compute/container/vector.hpp>
-#include <boost/compute/random.hpp>
-#include <boost/compute/system.hpp>
-#include <boost/compute/types.hpp>
-#include <boost/compute/utility/source.hpp>
 #include <chrono>
 
 #include "mcmc/test.h"
@@ -48,9 +43,9 @@ class WgPhiTest : public ContextTest,
     std::mt19937 mt19937;
     std::gamma_distribution<Float> gamma_distribution(cfg_.eta0, cfg_.eta1);
     auto gamma = std::bind(gamma_distribution, mt19937);
-    random::RandomAndNormalize(&queue_, &gamma, &theta_, &beta_, 2);
-    random::RandomGammaAndNormalize(&queue_, cfg_.eta0, cfg_.eta1, pi_.get(),
-                                    &phi_);
+    random::RandomAndNormalize(queue_.get(), &gamma, theta_.get(), beta_.get(), 2);
+    random::RandomGammaAndNormalize(queue_.get(), cfg_.eta0, cfg_.eta1, pi_.get(),
+                                    phi_.get());
   }
 
   void SetUp() override {
@@ -60,12 +55,12 @@ class WgPhiTest : public ContextTest,
     for (auto it = edges.begin(); it != edges.end(); ++it) {
       ASSERT_TRUE(set.Insert(*it));
     }
-    factory_ = OpenClSetFactory::New(mcmc::clcuda::Queue(queue_.get()));
+    factory_ = OpenClSetFactory::New(*queue_);
     dev_set_.reset(factory_->CreateSet(set.Serialize()));
-    theta_ = compute::vector<Float>(2 * cfg_.K, queue_.get_context());
-    beta_ = compute::vector<Float>(2 * cfg_.K, queue_.get_context());
-    allocFactory = RowPartitionedMatrixFactory<Float>::New(queue_);
-    phi_ = compute::vector<Float>(cfg_.N, context_);
+    theta_.reset(new clcuda::Buffer<Float>(*context_, 2 * cfg_.K));
+    beta_.reset(new clcuda::Buffer<Float>(*context_, 2 * cfg_.K));
+    allocFactory = RowPartitionedMatrixFactory<Float>::New(*queue_);
+    phi_.reset(new clcuda::Buffer<Float>(*context_, cfg_.N));
     pi_.reset(allocFactory->CreateMatrix(cfg_.N, cfg_.K));
     ASSERT_EQ(1, pi_->Blocks().size());
   }
@@ -75,15 +70,15 @@ class WgPhiTest : public ContextTest,
     dev_set_.reset();
     allocFactory.reset();
     pi_.reset();
-    phi_ = compute::vector<Float>();
-    theta_ = compute::vector<Float>();
-    beta_ = compute::vector<Float>();
+    phi_.reset();
+    theta_.reset();
+    beta_.reset();
     ContextTest::TearDown();
   }
 
   void Run(PhiUpdater::Mode mode) {
     Float delta = 1.0 / cfg_.K;
-    PhiUpdater updater(mode, cfg_, queue_, beta_, pi_.get(), phi_,
+    PhiUpdater updater(mode, cfg_, *queue_, *beta_, pi_.get(), *phi_,
                        dev_set_.get(), MakeCompileFlags(cfg_),
                        Learner::GetBaseFuncs());
     // generate random mini-batch nodes
@@ -93,21 +88,19 @@ class WgPhiTest : public ContextTest,
     std::vector<uint> hn(hmbn.size() * cfg_.num_node_sample);
     srand(42);
     std::generate(hn.begin(), hn.end(), [this]() { return rand() % cfg_.N; });
-    compute::vector<uint> mbn(hmbn.begin(), hmbn.end(), queue_);
-    compute::vector<uint> n(hn.begin(), hn.end(), queue_);
+    clcuda::Buffer<uint> mbn(*context_, *queue_, hmbn.begin(), hmbn.end());
+    clcuda::Buffer<uint> n(*context_, *queue_, hn.begin(), hn.end());
     std::vector<Float> host_pi_tmp(cfg_.N * cfg_.K);
     std::vector<Float> host_pi(cfg_.N * cfg_.K);
     double time = 0;
     for (uint32_t i = 0; i < num_tries_; ++i) {
       Reset();
-      updater(mbn, n, static_cast<uint32_t>(mbn.size()));
+      updater(mbn, n, static_cast<uint32_t>(hmbn.size()));
       time += updater.LastInvocationTime();
       if (i == 0) {
-        compute::copy(pi_->Blocks()[0].begin(), pi_->Blocks()[0].end(),
-                      host_pi.begin(), queue_);
+        pi_->Blocks()[0].Read(*queue_, host_pi.size(), host_pi);
       } else {
-        compute::copy(pi_->Blocks()[0].begin(), pi_->Blocks()[0].end(),
-                      host_pi_tmp.begin(), queue_);
+        pi_->Blocks()[0].Read(*queue_, host_pi_tmp.size(), host_pi_tmp);
       }
     }
     LOG(INFO) << "WG=" << cfg_.phi_wg_size << ", nano=" << time / num_tries_;
@@ -118,9 +111,9 @@ class WgPhiTest : public ContextTest,
   std::unique_ptr<OpenClSet> dev_set_;
   std::shared_ptr<RowPartitionedMatrixFactory<Float>> allocFactory;
   std::unique_ptr<RowPartitionedMatrix<Float>> pi_;
-  compute::vector<Float> phi_;
-  compute::vector<Float> beta_;
-  compute::vector<Float> theta_;
+  std::unique_ptr<clcuda::Buffer<Float>> phi_;
+  std::unique_ptr<clcuda::Buffer<Float>> beta_;
+  std::unique_ptr<clcuda::Buffer<Float>> theta_;
   Config cfg_;
 };
 
@@ -130,17 +123,15 @@ TEST_P(WgPhiTest, VerifyModes) {
   cfg_.phi_disable_noise = true;
   Run(PhiUpdater::NODE_PER_THREAD);
   std::vector<Float> host_phi1(cfg_.N);
-  compute::copy(phi_.begin(), phi_.end(), host_phi1.begin(), queue_);
+  phi_->Read(*queue_, host_phi1.size(), host_phi1);
   std::vector<Float> host_pi1(cfg_.N * cfg_.K);
-  compute::copy(pi_->Blocks()[0].begin(), pi_->Blocks()[0].end(),
-                host_pi1.begin(), queue_);
+  pi_->Blocks()[0].Read(*queue_, host_pi1.size(), host_pi1);
 
   Run(PhiUpdater::NODE_PER_WORKGROUP);
   std::vector<Float> host_phi2(cfg_.N);
-  compute::copy(phi_.begin(), phi_.end(), host_phi2.begin(), queue_);
+  phi_->Read(*queue_, host_phi2.size(), host_phi2);
   std::vector<Float> host_pi2(cfg_.N * cfg_.K);
-  compute::copy(pi_->Blocks()[0].begin(), pi_->Blocks()[0].end(),
-                host_pi2.begin(), queue_);
+  pi_->Blocks()[0].Read(*queue_, host_pi2.size(), host_pi2);
 
   for (uint32_t k = 0; k < host_phi1.size(); ++k) {
     ASSERT_NEAR(host_phi1[k], host_phi2[k],

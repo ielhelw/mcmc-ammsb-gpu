@@ -20,21 +20,21 @@ class OpenClRandomFactory;
 
 class OpenClRandom {
  public:
-  inline compute::buffer& Get() { return buf_; }
-  inline compute::vector<random_seed_t>& GetSeeds() { return data_; }
+  inline clcuda::Buffer<char>& Get() { return buf_; }
+  inline clcuda::Buffer<random_seed_t>& GetSeeds() { return data_; }
 
  private:
   OpenClRandom(std::shared_ptr<OpenClRandomFactory> factory,
-               compute::kernel* init, compute::command_queue* queue,
+               clcuda::Kernel* init, clcuda::Queue* queue,
                uint64_t sizeOfRandom, uint64_t size, random_seed_t seed);
 
   void SetSeed(random_seed_t seed);
 
   std::shared_ptr<OpenClRandomFactory> factory_;
-  compute::command_queue queue_;
-  compute::vector<random_seed_t> data_;
-  compute::buffer buf_;
-  compute::kernel init_kernel_;
+  clcuda::Queue queue_;
+  clcuda::Buffer<random_seed_t> data_;
+  clcuda::Buffer<char> buf_;
+  clcuda::Kernel init_kernel_;
 
   friend class OpenClRandomFactory;
 };
@@ -42,37 +42,37 @@ class OpenClRandom {
 class OpenClRandomFactory
     : public std::enable_shared_from_this<OpenClRandomFactory> {
  public:
-  static std::shared_ptr<OpenClRandomFactory> New(compute::command_queue queue);
+  static std::shared_ptr<OpenClRandomFactory> New(clcuda::Queue queue);
 
   OpenClRandom* CreateRandom(uint64_t size, random_seed_t seed);
 
  private:
-  OpenClRandomFactory(compute::command_queue queue);
+  OpenClRandomFactory(clcuda::Queue queue);
 
-  compute::program prog_;
-  compute::command_queue queue_;
-  compute::kernel init_kernel_;
+  clcuda::Queue queue_;
+  clcuda::Program prog_;
+  std::unique_ptr<clcuda::Kernel> init_kernel_;
   uint64_t sizeOfRandom_;
 };
 
 const std::string GetRandomTypes();
 const std::string GetRandomHeader();
 
-void RandomGamma(compute::command_queue* queue, OpenClRandom* randv, Float eta0,
+void RandomGamma(clcuda::Queue* queue, OpenClRandom* randv, Float eta0,
                  Float eta1, RowPartitionedMatrix<Float>* norm);
 
-void RandomGammaAndNormalize(compute::command_queue* queue, Float eta0,
-                             Float eta1, RowPartitionedMatrix<Float>* norm,
-                             compute::vector<Float>* sum);
+void RandomGammaAndNormalize(clcuda::Queue* queue, Float eta0, Float eta1,
+                             RowPartitionedMatrix<Float>* norm,
+                             clcuda::Buffer<Float>* sum);
 
 template <class Generator>
-void RandomAndNormalize(compute::command_queue* queue, Generator* gen,
-                        compute::vector<Float>* base,
-                        compute::vector<Float>* norm, uint32_t cols) {
-  std::vector<Float> host_base(base->size());
+void RandomAndNormalize(clcuda::Queue* queue, Generator* gen,
+                        clcuda::Buffer<Float>* base,
+                        clcuda::Buffer<Float>* norm, uint32_t cols) {
+  std::vector<Float> host_base(base->GetSize() / sizeof(Float));
   std::generate(host_base.begin(), host_base.end(), *gen);
-  compute::copy(host_base.begin(), host_base.end(), base->begin(), *queue);
-  compute::copy(base->begin(), base->end(), norm->begin(), *queue);
+  base->Write(*queue, host_base.size(), host_base.data());
+  norm->Write(*queue, host_base.size(), host_base.data());
   mcmc::algorithm::Normalizer<Float>(*queue, norm, cols, 1)();
 }
 

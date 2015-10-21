@@ -1,7 +1,6 @@
 #include <iostream>
 #include <memory>
 #include <glog/logging.h>
-#include <boost/compute/system.hpp>
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
 
@@ -9,13 +8,17 @@
 #include "mcmc/data.h"
 
 using namespace std;
-namespace compute = boost::compute;
 namespace po = boost::program_options;
 namespace fs = boost::filesystem;
+namespace clcuda = mcmc::clcuda;
 
 struct State {};
 
-compute::device ChooseDevice() {
+clcuda::Device ChooseDevice() {
+  // FIXME FIXME
+  clcuda::Platform platform((size_t)0);
+  return clcuda::Device(platform, 0);
+#if 0
   auto devices = compute::system::devices();
   if (devices.size() == 1) {
     return devices[0];
@@ -29,6 +32,7 @@ compute::device ChooseDevice() {
   uint32_t choice;
   cin >> choice;
   return devices[choice];
+#endif
 }
 
 int main(int argc, char **argv) {
@@ -70,15 +74,13 @@ int main(int argc, char **argv) {
   LOG_IF(FATAL, !fs::exists(filename) || fs::is_directory(filename))
       << "Failed to detect file: " << filename;
 
-  compute::device dev = ChooseDevice();
-  compute::context context(dev);
-  compute::command_queue queue(context, dev,
-                               compute::command_queue::enable_profiling |
-                               compute::command_queue::enable_out_of_order_execution);
+  clcuda::Device dev = ChooseDevice();
+  clcuda::Context context(dev);
+  clcuda::Queue queue(context, dev);
   LOG(INFO) << "OpenCL:" << endl
-    << "  Platform: " << dev.platform().name() << endl
-    << "  Device: " << dev.name() << endl
-    << "  Device Driver: " << dev.driver_version();
+    << "  Platform: " << dev.Vendor() << endl
+    << "  Device: " << dev.Name() << endl
+    << "  Device Driver: " << dev.Version();
   std::vector<mcmc::Edge> unique_edges;
   if (!mcmc::GetUniqueEdgesFromFile(filename, &cfg.N, &unique_edges) ||
       !mcmc::GenerateSetsFromEdges(cfg.N, unique_edges, cfg.heldout_ratio,

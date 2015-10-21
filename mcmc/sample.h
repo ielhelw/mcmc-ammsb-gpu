@@ -1,8 +1,6 @@
 #ifndef __MCMC_SAMPLE_H__
 #define __MCMC_SAMPLE_H__
 
-#include <boost/compute/system.hpp>
-#include <boost/compute/container/vector.hpp>
 #include <boost/program_options.hpp>
 #include <ostream>
 
@@ -14,14 +12,14 @@ struct Config;
 
 struct Sample {
   std::vector<Edge> edges;
-  compute::vector<Edge> dev_edges;
+  clcuda::Buffer<Edge> dev_edges;
   std::vector<Vertex> nodes_vec;
-  compute::vector<Vertex> dev_nodes;
+  clcuda::Buffer<Vertex> dev_nodes;
   std::vector<Vertex> neighbors_vec;
-  compute::vector<Vertex> dev_neighbors;
+  clcuda::Buffer<Vertex> dev_neighbors;
   std::vector<unsigned int> seeds;
 
-  Sample(const Config& cfg, compute::command_queue queue);
+  Sample(const Config& cfg, clcuda::Queue queue);
 };
 
 enum SampleStrategy {

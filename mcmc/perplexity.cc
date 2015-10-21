@@ -1,6 +1,6 @@
 #include "mcmc/perplexity.h"
 
-#include <boost/compute/algorithm/reduce.hpp>
+#include <algorithm>
 #include <glog/logging.h>
 #include "mcmc/algorithm/sum.h"
 #include "mcmc/algorithm/normalize.h"
@@ -83,7 +83,8 @@ const std::string kSourcePerplexity = R"%%(
 const std::string kSourcePerplexityWg =
     mcmc::algorithm::WorkGroupSum(compute::type_name<Float>()) + "\n" +
     "#define WG_SUM_Float WG_SUM_" + compute::type_name<Float>() +
-    "\n" R"%%(
+    "\n"
+    R"%%(
 
         Float calculate_edge_likelihood_WG(
             GLOBAL Float * pi_a, GLOBAL Float * pi_b, GLOBAL Float * beta,
@@ -160,8 +161,9 @@ const std::string kSourcePerplexityWg =
             GLOBAL uint* g_link_count,            // [num work groups]
             GLOBAL uint* g_non_link_count,        // [num work groups]
             uint avg_count,
-            GLOBAL Float* scratch,  // [num work groups * K]
-            LOCAL Float* aux) {
+            GLOBAL Float* scratch  // [num work groups * K]
+            ) {
+          LOCAL Float aux[1024];
           size_t i = GET_GROUP_ID();
           scratch += GET_GROUP_ID() * K;
           for (; i < num_edges; i += GET_NUM_GROUPS()) {
@@ -176,22 +178,20 @@ const std::string kSourcePerplexityWg =
         )%%";
 
 PerplexityCalculator::PerplexityCalculator(
-    Mode mode, const Config& cfg, compute::command_queue queue,
-    compute::vector<Float>& beta, RowPartitionedMatrix<Float>* pi,
-    compute::vector<Edge>& edges, OpenClSet* edgeSet,
+    Mode mode, const Config& cfg, clcuda::Queue queue,
+    clcuda::Buffer<Float>& beta, RowPartitionedMatrix<Float>* pi,
+    clcuda::Buffer<Edge>& edges, OpenClSet* edgeSet,
     const std::string& compileFlags, const std::string& baseFuncs)
     : queue_(queue),
       beta_(beta),
       pi_(pi),
       edges_(edges),
       edgeSet_(edgeSet),
-      ppx_per_edge_(edges_.size(), 0, queue_),
-      ppx_per_edge_link_likelihood_(edges.size(), 0, queue_),
-      ppx_per_edge_non_link_likelihood_(edges.size(), 0, queue_),
-      ppx_per_edge_link_count_(edges.size(), static_cast<compute::uint_>(0),
-                               queue_),
-      ppx_per_edge_non_link_count_(edges.size(), static_cast<compute::uint_>(0),
-                                   queue_),
+      ppx_per_edge_(queue_.GetContext(), edges_.GetSize() / sizeof(Edge)),
+      ppx_per_edge_link_likelihood_(queue_.GetContext(), edges.GetSize() / sizeof(Edge)),
+      ppx_per_edge_non_link_likelihood_(queue_.GetContext(), edges.GetSize() / sizeof(Edge)),
+      ppx_per_edge_link_count_(queue_.GetContext(), edges.GetSize() / sizeof(Edge)),
+      ppx_per_edge_non_link_count_(queue_.GetContext(), edges.GetSize() / sizeof(Edge)),
       link_count_(1),
       non_link_count_(1),
       link_likelihood_(1),
@@ -202,58 +202,82 @@ PerplexityCalculator::PerplexityCalculator(
   switch (mode) {
     case EDGE_PER_THREAD:
       src = &kSourcePerplexity;
-      global_ =
-          (edges_.size() / local_ + (edges_.size() % local_ ? 1 : 0)) * local_;
+      global_ = ((edges_.GetSize() / sizeof(Edge)) / local_ +
+                 ((edges_.GetSize() / sizeof(Edge)) % local_ ? 1 : 0)) *
+                local_;
       break;
     case EDGE_PER_WORKGROUP:
       src = &kSourcePerplexityWg;
-      global_ = edges.size() * local_;
+      global_ = (edges.GetSize()/sizeof(Edge)) * local_;
       break;
     default:
       LOG(FATAL) << "Cannot recognize mode: " << mode;
   }
-  prog_ = compute::program::create_with_source(
-      baseFuncs + GetRowPartitionedMatrixHeader<Float>() +
-          "#define FloatRowPartitionedMatrix_Row " +
-          compute::type_name<Float>() + "RowPartitionedMatrix_Row\n" + *src,
-      queue_.get_context());
-  try {
-    prog_.build(compileFlags);
-  } catch (compute::opencl_error& e) {
-    LOG(FATAL) << prog_.build_log();
-  }
+  prog_.reset(new clcuda::Program(
+      queue_.GetContext(), baseFuncs + GetRowPartitionedMatrixHeader<Float>() +
+                               "#define FloatRowPartitionedMatrix_Row " +
+                               compute::type_name<Float>() +
+                               "RowPartitionedMatrix_Row\n" + *src));
+  std::vector<std::string> opts(1, compileFlags);
+  clcuda::BuildStatus status = prog_->Build(queue_.GetDevice(), opts);
+  LOG_IF(FATAL, status != clcuda::BuildStatus::kSuccess)
+      << prog_->GetBuildInfo(queue_.GetDevice());
   LOG(INFO) << "####################### PERPLEXITY LOG:" << std::endl
-            << prog_.build_log();
+            << prog_->GetBuildInfo(queue_.GetDevice());
   // ppx_kernel
-  kernel_ = prog_.create_kernel("calculate_ppx_partial_for_edge");
-  kernel_.set_arg(0, edges_);
-  kernel_.set_arg(1, static_cast<compute::uint_>(edges_.size()));
-  kernel_.set_arg(2, pi_->Get());
-  kernel_.set_arg(3, beta_);
-  kernel_.set_arg(4, edgeSet_->Get()());
-  kernel_.set_arg(5, ppx_per_edge_);
-  kernel_.set_arg(6, ppx_per_edge_link_likelihood_);
-  kernel_.set_arg(7, ppx_per_edge_non_link_likelihood_);
-  kernel_.set_arg(8, ppx_per_edge_link_count_);
-  kernel_.set_arg(9, ppx_per_edge_non_link_count_);
-  // kernel_.set_arg(10, count_calls_);
+  kernel_.reset(new clcuda::Kernel(*prog_, "calculate_ppx_partial_for_edge"));
+  kernel_->SetArgument(0, edges_);
+  kernel_->SetArgument(1,
+                       static_cast<uint32_t>(edges_.GetSize() / sizeof(Edge)));
+  kernel_->SetArgument(2, pi_->Get());
+  kernel_->SetArgument(3, beta_);
+  kernel_->SetArgument(4, edgeSet_->Get()());
+  kernel_->SetArgument(5, ppx_per_edge_);
+  kernel_->SetArgument(6, ppx_per_edge_link_likelihood_);
+  kernel_->SetArgument(7, ppx_per_edge_non_link_likelihood_);
+  kernel_->SetArgument(8, ppx_per_edge_link_count_);
+  kernel_->SetArgument(9, ppx_per_edge_non_link_count_);
+  // kernel_.SetArgument(10, count_calls_);
   if (mode == EDGE_PER_WORKGROUP) {
-    scratch_ =
-        compute::vector<Float>(edges_.size() * cfg.K, queue_.get_context()),
-    kernel_.set_arg(11, scratch_);
-    kernel_.set_arg(12, local_ * sizeof(Float), 0);
+    scratch_.reset(new clcuda::Buffer<Float>(
+        queue_.GetContext(), (edges_.GetSize() / sizeof(Edge)) * cfg.K));
+    kernel_->SetArgument(11, *scratch_);
   }
+  std::vector<Float> fzeros(edges_.GetSize() / sizeof(Edge), 0);
+  std::vector<uint32_t> zeros(edges_.GetSize() / sizeof(Edge), 0);
+  ppx_per_edge_.Write(queue_, edges_.GetSize() / sizeof(Edge), fzeros.data());
+  ppx_per_edge_link_likelihood_.Write(queue_, edges_.GetSize() / sizeof(Edge), fzeros.data());
+  ppx_per_edge_non_link_likelihood_.Write(queue_, edges_.GetSize() / sizeof(Edge), fzeros.data());
+  ppx_per_edge_link_count_.Write(queue_, edges_.GetSize() / sizeof(Edge), zeros.data());
+  ppx_per_edge_non_link_count_.Write(queue_, edges_.GetSize() / sizeof(Edge), zeros.data());
 }
 
 uint64_t PerplexityCalculator::LastInvocationTime() const {
-  return event_.duration<boost::chrono::nanoseconds>().count();
+  return event_.GetElapsedTime();
 }
 
 Float PerplexityCalculator::operator()() {
   count_calls_++;
-  kernel_.set_arg(10, count_calls_);
-  event_ = queue_.enqueue_1d_range_kernel(kernel_, 0, global_, local_);
-  event_.wait();
+  kernel_->SetArgument(10, count_calls_);
+  kernel_->Launch(queue_, {global_}, {local_}, event_);
+  queue_.Finish();
+  // FIXME FIXME
+  std::vector<uint32_t> tmp_data(ppx_per_edge_link_count_.GetSize()/sizeof(uint32_t));
+  //
+  ppx_per_edge_link_count_.Read(queue_, tmp_data.size(), tmp_data.data());
+  link_count_[0] = std::accumulate(tmp_data.begin(), tmp_data.end(), 0);
+  //
+  ppx_per_edge_non_link_count_.Read(queue_, tmp_data.size(), tmp_data.data());
+  non_link_count_[0] = std::accumulate(tmp_data.begin(), tmp_data.end(), 0);
+  //
+  std::vector<Float> tmp_fdata(ppx_per_edge_link_count_.GetSize()/sizeof(uint32_t));
+  //
+  ppx_per_edge_link_likelihood_.Read(queue_, tmp_fdata.size(), tmp_fdata.data());
+  link_likelihood_[0] = std::accumulate(tmp_fdata.begin(), tmp_fdata.end(), 0);
+  //
+  ppx_per_edge_non_link_likelihood_.Read(queue_, tmp_fdata.size(), tmp_fdata.data());
+  non_link_likelihood_[0] = std::accumulate(tmp_fdata.begin(), tmp_fdata.end(), 0);
+#if 0
   compute::reduce(ppx_per_edge_link_count_.begin(),
                   ppx_per_edge_link_count_.end(), link_count_.begin(), queue_);
   compute::reduce(ppx_per_edge_non_link_count_.begin(),
@@ -265,6 +289,7 @@ Float PerplexityCalculator::operator()() {
   compute::reduce(ppx_per_edge_non_link_likelihood_.begin(),
                   ppx_per_edge_non_link_likelihood_.end(),
                   non_link_likelihood_.begin(), queue_);
+#endif
   double avg_likelihood = 0.0;
   if (link_count_[0] + non_link_count_[0] != 0) {
     avg_likelihood = (link_likelihood_[0] + non_link_likelihood_[0]) /
