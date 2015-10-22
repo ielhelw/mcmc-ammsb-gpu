@@ -1,7 +1,5 @@
 #include "mcmc/algorithm/sum.h"
 
-#include <boost/compute/utility/source.hpp>
-
 #include "mcmc/gen-util.h"
 #include "mcmc/types.h"
 

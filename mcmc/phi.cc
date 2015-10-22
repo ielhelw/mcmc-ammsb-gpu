@@ -105,11 +105,11 @@ const std::string kSourcePhi = random::GetRandomHeader() + R"%%(
         )%%";
 
 const std::string kSourcePhiWg =
-    mcmc::algorithm::WorkGroupNormalizeProgram(compute::type_name<Float>()) +
-    "\n" + "#define WG_SUM_Float WG_SUM_" + compute::type_name<Float>() +
+    mcmc::algorithm::WorkGroupNormalizeProgram(type_name<Float>()) + "\n" +
+    "#define WG_SUM_Float WG_SUM_" + type_name<Float>() +
     "\n"
     "#define WG_NORMALIZE_Float WG_NORMALIZE_" +
-    compute::type_name<Float>() + "\n" + random::GetRandomHeader() + R"%%(
+    type_name<Float>() + "\n" + random::GetRandomHeader() + R"%%(
 
         void update_phi_for_nodeWG(GLOBAL Float* beta, GLOBAL void* g_pi,
                                    GLOBAL Float* g_phi, GLOBAL Float* phi_vec,
@@ -265,9 +265,9 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
     out << "#define PHI_RANDN(X) randn(X)" << std::endl;
   }
   out << baseFuncs << std::endl << GetRowPartitionedMatrixHeader<Float>()
-      << std::endl << "#define FloatRowPartitionedMatrix "
-      << compute::type_name<Float>() << "RowPartitionedMatrix\n"
-      << "#define FloatRowPartitionedMatrix_Row " << compute::type_name<Float>()
+      << std::endl << "#define FloatRowPartitionedMatrix " << type_name<Float>()
+      << "RowPartitionedMatrix\n"
+      << "#define FloatRowPartitionedMatrix_Row " << type_name<Float>()
       << "RowPartitionedMatrix_Row\n" << *src << std::endl;
   prog_.reset(new clcuda::Program(queue_.GetContext(), out.str()));
   std::vector<std::string> opts =

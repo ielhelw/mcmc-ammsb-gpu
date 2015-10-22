@@ -81,8 +81,8 @@ const std::string kSourcePerplexity = R"%%(
     )%%";
 
 const std::string kSourcePerplexityWg =
-    mcmc::algorithm::WorkGroupSum(compute::type_name<Float>()) + "\n" +
-    "#define WG_SUM_Float WG_SUM_" + compute::type_name<Float>() +
+    mcmc::algorithm::WorkGroupSum(type_name<Float>()) + "\n" +
+    "#define WG_SUM_Float WG_SUM_" + type_name<Float>() +
     "\n"
     R"%%(
 
@@ -220,10 +220,10 @@ PerplexityCalculator::PerplexityCalculator(
   prog_.reset(new clcuda::Program(
       queue_.GetContext(),
       baseFuncs + GetRowPartitionedMatrixHeader<Float>() +
-          "#define FloatRowPartitionedMatrix " + compute::type_name<Float>() +
+          "#define FloatRowPartitionedMatrix " + type_name<Float>() +
           "RowPartitionedMatrix\n"
           "#define FloatRowPartitionedMatrix_Row " +
-          compute::type_name<Float>() + "RowPartitionedMatrix_Row\n" + *src));
+          type_name<Float>() + "RowPartitionedMatrix_Row\n" + *src));
   std::vector<std::string> opts =
       ::mcmc::GetClFlags(mode == EDGE_PER_WORKGROUP ? local_ : 0);
   opts.insert(opts.end(), compileFlags.begin(), compileFlags.end());

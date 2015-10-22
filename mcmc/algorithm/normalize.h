@@ -22,17 +22,15 @@ class Normalizer {
         data_(in),
         slice_(slice),
         wg_(wg),
-        prog_(queue_.GetContext(),
-              WorkGroupNormalizeProgram(compute::type_name<T>())) {
+        prog_(queue_.GetContext(), WorkGroupNormalizeProgram(type_name<T>())) {
     LOG_IF(FATAL, (data_->GetSize() / sizeof(T)) % slice != 0)
         << "Data size must be multiple of slice";
     std::vector<std::string> opts = ::mcmc::GetClFlags(wg_);
     clcuda::BuildStatus status = prog_.Build(queue_.GetDevice(), opts);
     LOG_IF(FATAL, status != clcuda::BuildStatus::kSuccess)
         << prog_.GetBuildInfo(queue_.GetDevice());
-    kernel_.reset(
-        new clcuda::Kernel(prog_, std::string("WG_NORMALIZE_KERNEL_") +
-                                      std::string(compute::type_name<T>())));
+    kernel_.reset(new clcuda::Kernel(
+        prog_, std::string("WG_NORMALIZE_KERNEL_") + type_name<T>()));
     kernel_->SetArgument(0, *data_);
     kernel_->SetArgument(1, static_cast<uint32_t>(slice));
   }
@@ -62,15 +60,14 @@ class PartitionedNormalizer {
         data_(in),
         sum_(sum),
         wg_(wg),
-        prog_(queue_.GetContext(),
-              WorkGroupNormalizeProgram(compute::type_name<T>())) {
+        prog_(queue_.GetContext(), WorkGroupNormalizeProgram(type_name<T>())) {
     std::vector<std::string> opts = ::mcmc::GetClFlags(wg_);
     clcuda::BuildStatus status = prog_.Build(queue_.GetDevice(), opts);
     LOG_IF(FATAL, status != clcuda::BuildStatus::kSuccess)
         << prog_.GetBuildInfo(queue_.GetDevice());
     kernel_.reset(new clcuda::Kernel(
-        prog_, std::string("WG_NORMALIZE_PARTITIONED_KERNEL_") +
-                   std::string(compute::type_name<T>())));
+        prog_,
+        std::string("WG_NORMALIZE_PARTITIONED_KERNEL_") + type_name<T>()));
     kernel_->SetArgument(0, data_->Get());
     kernel_->SetArgument(1, sum_);
   }

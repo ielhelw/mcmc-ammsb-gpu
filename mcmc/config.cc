@@ -54,7 +54,7 @@ const std::string& GetSourceGuard() {
 
 std::vector<std::string> MakeCompileFlags(const Config& cfg) {
   std::vector<std::string> ret = {
-      std::string("-DFLOAT_TYPE=") + compute::type_name<Float>(),
+      std::string("-DFLOAT_TYPE=") + type_name<Float>(),
       "-DVERTEX_TYPE=uint",
       "-DEDGE_TYPE=ulong",
       std::string("-DK=") + std::to_string(cfg.K),

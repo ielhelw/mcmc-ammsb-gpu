@@ -7,7 +7,7 @@ namespace mcmc {
 std::string GetClTypes() {
   std::ostringstream out;
 #ifdef USE_CL
-  if (compute::type_name<Float>() == std::string("double")) {
+  if (type_name<Float>() == std::string("double")) {
     out << "#pragma OPENCL EXTENSION cl_khr_fp64: enable " << std::endl;
   }
   out << R"%%(
@@ -45,7 +45,7 @@ std::string GetClTypes() {
   #define ULONG_MAX 0xffffffffffffffffUL
   )%%";
 #endif
-  out << "typedef " << compute::type_name<Float>() << " Float;" << std::endl;
+  out << "typedef " << type_name<Float>() << " Float;" << std::endl;
   out << R"%%(
   typedef ulong uint64_t;
   typedef uint uint32_t;
@@ -60,8 +60,8 @@ std::vector<std::string> GetClFlags(uint32_t wg) {
   }
 #ifdef USE_CL
 #else
-  ret.push_back(" -default-device");
-  ret.push_back("--gpu-architecture=compute_20 ");
+  ret.push_back("-default-device");
+  ret.push_back("--gpu-architecture=compute_20");
 #endif
   return ret;
 }

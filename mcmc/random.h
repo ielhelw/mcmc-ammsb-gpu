@@ -2,9 +2,6 @@
 #define __MCMC_RANDOM_H__
 
 #include <memory>
-#include <boost/compute/container/vector.hpp>
-#include <boost/compute/types.hpp>
-#include <boost/compute/utility/source.hpp>
 
 #include "mcmc/types.h"
 #include "mcmc/partitioned-alloc.h"
@@ -13,7 +10,7 @@
 namespace mcmc {
 namespace random {
 
-typedef compute::ulong2_ gsl_rng;
+typedef ::mcmc::ulong2 gsl_rng;
 typedef gsl_rng random_seed_t;
 
 class OpenClRandomFactory;

@@ -1,5 +1,6 @@
 #include "mcmc/beta.h"
 
+#include <chrono>
 #include <glog/logging.h>
 
 #include "mcmc/algorithm/sum.h"
@@ -111,8 +112,8 @@ const std::string kSourceBeta = kSourceBetaBase + R"%%(
     })%%";
 
 const std::string kSourceBetaWg =
-    mcmc::algorithm::WorkGroupSum(compute::type_name<Float>()) + "\n" +
-    "#define WG_SUM_Float WG_SUM_" + compute::type_name<Float>() + "\n" +
+    mcmc::algorithm::WorkGroupSum(type_name<Float>()) + "\n" +
+    "#define WG_SUM_Float WG_SUM_" + type_name<Float>() + "\n" +
     kSourceBetaBase + R"%%(
     KERNEL void calculate_grads_partial(
         GLOBAL Float* theta,      // [K, 2]
@@ -216,10 +217,10 @@ BetaUpdater::BetaUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
   prog_.reset(new clcuda::Program(
       queue_.GetContext(),
       baseFuncs + GetRowPartitionedMatrixHeader<Float>() +
-          "#define FloatRowPartitionedMatrix " + compute::type_name<Float>() +
+          "#define FloatRowPartitionedMatrix " + type_name<Float>() +
           "RowPartitionedMatrix\n"
           "#define FloatRowPartitionedMatrix_Row " +
-          compute::type_name<Float>() + "RowPartitionedMatrix_Row\n" + *src));
+          type_name<Float>() + "RowPartitionedMatrix_Row\n" + *src));
   std::vector<std::string> opts =
       ::mcmc::GetClFlags(mode_ == EDGE_PER_WORKGROUP ? local_ : 0);
   opts.insert(opts.end(), compileFlags.begin(), compileFlags.end());

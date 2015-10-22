@@ -13,8 +13,8 @@ namespace test {
 class WgNormalizeTest : public ContextTest {
  protected:
   WgNormalizeTest()
-      : ContextTest(mcmc::algorithm::WorkGroupNormalizeProgram(
-            compute::type_name<Float>())) {}
+      : ContextTest(
+            mcmc::algorithm::WorkGroupNormalizeProgram(type_name<Float>())) {}
 };
 
 class WgNormalizeParameterizedTest
@@ -24,8 +24,8 @@ class WgNormalizeParameterizedTest
 TEST_P(WgNormalizeParameterizedTest, VaryLength) {
   uint32_t wg = GetParam();
   BuildProgram(wg);
-  clcuda::Kernel kernel(*prog_, std::string("WG_NORMALIZE_KERNEL_") +
-                                    compute::type_name<Float>());
+  clcuda::Kernel kernel(
+      *prog_, std::string("WG_NORMALIZE_KERNEL_") + type_name<Float>());
   std::vector<uint32_t> vals = {1,  2,   3,   4,    5,    6,    7,  11,
                                 31, 32,  33,  47,   48,   49,   63, 64,
                                 65, 127, 128, 1023, 1024, 11331};
@@ -83,8 +83,8 @@ TEST_F(WgNormalizeTest, CustomNormalizePerformance) {
   }
   uint32_t wg = 32;
   BuildProgram(wg);
-  clcuda::Kernel kernel(*prog_, std::string("WG_NORMALIZE_KERNEL_") +
-                                    compute::type_name<Float>());
+  clcuda::Kernel kernel(
+      *prog_, std::string("WG_NORMALIZE_KERNEL_") + type_name<Float>());
   kernel.SetArgument(0, in);
   kernel.SetArgument(1, static_cast<uint32_t>(K));
   clcuda::Event e;

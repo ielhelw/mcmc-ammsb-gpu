@@ -10,7 +10,6 @@ find_package(Boost REQUIRED COMPONENTS
   filesystem
   system
 )
-find_package(BoostCompute CONFIG REQUIRED)
 
 LIST(APPEND CMAKE_CXX_FLAGS " -std=c++11 -Wall -Wextra ")
 #LIST(APPEND CMAKE_CXX_FLAGS " -std=c++11 ")
@@ -19,7 +18,6 @@ include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${GLOG_INCLUDE_DIRS}
   ${Boost_INCLUDE_DIRS}
-  ${BoostCompute_INCLUDE_DIRS}
   ${OPENCL_INCLUDE_DIRS}
   ${GTEST_INCLUDE_DIRS}
 )

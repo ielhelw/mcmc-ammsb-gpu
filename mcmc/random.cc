@@ -130,8 +130,8 @@ void RandomGamma(clcuda::Queue* queue, OpenClRandom* randv, Float eta0,
   out << random::GetRandomHeader() << std::endl;
   out << GetRowPartitionedMatrixHeader<Float>() << std::endl;
   out << GenerateGammaSource() << std::endl;
-  std::string source = gen::MakeHeaderFromTemplate(
-      "GenAndNorm", out.str(), "TT", compute::type_name<Float>());
+  std::string source = gen::MakeHeaderFromTemplate("GenAndNorm", out.str(),
+                                                   "TT", type_name<Float>());
   clcuda::Program prog(queue->GetContext(), source);
   std::vector<std::string> opts = ::mcmc::GetClFlags();
   clcuda::BuildStatus status = prog.Build(queue->GetDevice(), opts);

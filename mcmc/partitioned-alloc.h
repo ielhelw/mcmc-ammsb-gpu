@@ -62,9 +62,9 @@ inline std::string GetRowPartitionedMatrixHeader(const std::string& type) {
 
 template <class T>
 std::string GetRowPartitionedMatrixHeader() {
-  return gen::MakeHeaderFromTemplate(
-      std::string(compute::type_name<T>()) + "RowPartitionedMatrix",
-      GetRowPartitionedMatrixSource(), "TT", compute::type_name<T>());
+  return gen::MakeHeaderFromTemplate(type_name<T>() + "RowPartitionedMatrix",
+                                     GetRowPartitionedMatrixSource(), "TT",
+                                     type_name<T>());
 }
 
 template <class T>
@@ -165,19 +165,17 @@ class RowPartitionedMatrixFactory
     LOG_IF(FATAL, status != clcuda::BuildStatus::kSuccess)
         << prog_.GetBuildInfo(queue_.GetDevice());
     clcuda::Buffer<uint64_t> sizeOf(queue_.GetContext(), 1);
-    clcuda::Kernel sizeofKernel(prog_, std::string(compute::type_name<T>()) +
-                                           "RowPartitionedMatrixSizeof");
+    clcuda::Kernel sizeofKernel(prog_,
+                                type_name<T>() + "RowPartitionedMatrixSizeof");
     sizeofKernel.SetArgument(0, sizeOf);
     clcuda::Event e;
     sizeofKernel.Launch(queue, {1}, {1}, e);
     queue_.Finish();
     sizeOf.Read(queue_, 1, &sizeOf_);
     init_kernel_.reset(new clcuda::Kernel(
-        prog_,
-        std::string(compute::type_name<T>()) + "RowPartitionedMatrix_init"));
-    set_kernel_.reset(new clcuda::Kernel(
-        prog_,
-        std::string(compute::type_name<T>()) + "RowPartitionedMatrix_set"));
+        prog_, type_name<T>() + "RowPartitionedMatrix_init"));
+    set_kernel_.reset(
+        new clcuda::Kernel(prog_, type_name<T>() + "RowPartitionedMatrix_set"));
   }
 
   clcuda::Queue queue_;

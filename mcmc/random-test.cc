@@ -13,9 +13,7 @@ using namespace mcmc::random;
 using mcmc::Float;
 namespace clcuda = mcmc::clcuda;
 
-const std::string kSource =
-    ::mcmc::random::GetRandomHeader() +
-    BOOST_COMPUTE_STRINGIZE_SOURCE(
+const std::string kSource = ::mcmc::random::GetRandomHeader() + R"%%(
         KERNEL void test(GLOBAL void * vrand, GLOBAL ulong * ok) {
           GLOBAL Random* rand = (GLOBAL Random*)vrand;
           if (rand == 0) {
@@ -44,7 +42,7 @@ const std::string kSource =
             data[i] = randn(&seed);
           }
           rand->base_[gid] = seed;
-        });
+        })%%";
 
 TEST(RandomTest, Check) {
   clcuda::Platform platform((size_t)0);
