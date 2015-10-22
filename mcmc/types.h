@@ -5,9 +5,9 @@
 #include <sstream>
 #include <tuple>
 
-#define USE_CL
+#include "mcmc/types.h.inc"
 
-#ifdef USE_CL
+#ifdef MCMC_USE_CL
 #include <clpp11.h>
 #else
 #include <cupp11.h>
@@ -29,7 +29,7 @@ namespace clcuda = CLCudaAPI;
 
 typedef uint64_t Edge;
 typedef uint32_t Vertex;
-typedef double Float;
+typedef float Float;
 
 struct ulong2 {
   uint64_t values[2];

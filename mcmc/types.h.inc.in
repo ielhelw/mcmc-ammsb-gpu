@@ -1,0 +1,3 @@
+
+#cmakedefine MCMC_USE_CL
+

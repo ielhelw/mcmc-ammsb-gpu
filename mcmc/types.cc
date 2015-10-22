@@ -6,7 +6,7 @@ namespace mcmc {
 
 std::string GetClTypes() {
   std::ostringstream out;
-#ifdef USE_CL
+#ifdef MCMC_USE_CL
   if (type_name<Float>() == std::string("double")) {
     out << "#pragma OPENCL EXTENSION cl_khr_fp64: enable " << std::endl;
   }
@@ -58,7 +58,7 @@ std::vector<std::string> GetClFlags(uint32_t wg) {
   if (wg != 0) {
     ret.push_back(std::string("-DWG_SIZE=") + std::to_string(wg));
   }
-#ifdef USE_CL
+#ifdef MCMC_USE_CL
 #else
   ret.push_back("-default-device");
   ret.push_back("--gpu-architecture=compute_20");
