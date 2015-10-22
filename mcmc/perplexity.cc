@@ -1,6 +1,9 @@
 #include "mcmc/perplexity.h"
 
 #include <algorithm>
+#ifdef USE_CL
+#include <boost/compute/algorithm/reduce.hpp>
+#endif
 #include <glog/logging.h>
 #include "mcmc/algorithm/sum.h"
 #include "mcmc/algorithm/normalize.h"
@@ -187,15 +190,18 @@ PerplexityCalculator::PerplexityCalculator(
       pi_(pi),
       edges_(edges),
       edgeSet_(edgeSet),
-      ppx_per_edge_(queue_.GetContext(), edges_.GetSize() / sizeof(Edge)),
-      ppx_per_edge_link_likelihood_(queue_.GetContext(),
-                                    edges.GetSize() / sizeof(Edge)),
-      ppx_per_edge_non_link_likelihood_(queue_.GetContext(),
-                                        edges.GetSize() / sizeof(Edge)),
-      ppx_per_edge_link_count_(queue_.GetContext(),
-                               edges.GetSize() / sizeof(Edge)),
-      ppx_per_edge_non_link_count_(queue_.GetContext(),
-                                   edges.GetSize() / sizeof(Edge)),
+#ifdef USE_CL
+      compute_queue_(queue_(), true),
+      ppx_per_edge_(edges_.GetSize() / sizeof(Edge), 0, compute_queue_),
+      ppx_per_edge_link_likelihood_(edges.GetSize() / sizeof(Edge), 0,
+                                    compute_queue_),
+      ppx_per_edge_non_link_likelihood_(edges.GetSize() / sizeof(Edge), 0,
+                                        compute_queue_),
+      ppx_per_edge_link_count_(edges.GetSize() / sizeof(Edge), 0,
+                               compute_queue_),
+      ppx_per_edge_non_link_count_(edges.GetSize() / sizeof(Edge), 0,
+                                   compute_queue_),
+#endif
       link_count_(1),
       non_link_count_(1),
       link_likelihood_(1),
@@ -240,17 +246,18 @@ PerplexityCalculator::PerplexityCalculator(
   kernel_->SetArgument(2, pi_->Get());
   kernel_->SetArgument(3, beta_);
   kernel_->SetArgument(4, edgeSet_->Get()());
-  kernel_->SetArgument(5, ppx_per_edge_);
-  kernel_->SetArgument(6, ppx_per_edge_link_likelihood_);
-  kernel_->SetArgument(7, ppx_per_edge_non_link_likelihood_);
-  kernel_->SetArgument(8, ppx_per_edge_link_count_);
-  kernel_->SetArgument(9, ppx_per_edge_non_link_count_);
+  kernel_->SetArgument(5, ppx_per_edge_.get_buffer().get());
+  kernel_->SetArgument(6, ppx_per_edge_link_likelihood_.get_buffer().get());
+  kernel_->SetArgument(7, ppx_per_edge_non_link_likelihood_.get_buffer().get());
+  kernel_->SetArgument(8, ppx_per_edge_link_count_.get_buffer().get());
+  kernel_->SetArgument(9, ppx_per_edge_non_link_count_.get_buffer().get());
   // kernel_.SetArgument(10, count_calls_);
   if (mode == EDGE_PER_WORKGROUP) {
     scratch_.reset(new clcuda::Buffer<Float>(
         queue_.GetContext(), (edges_.GetSize() / sizeof(Edge)) * cfg.K));
     kernel_->SetArgument(11, *scratch_);
   }
+#if 0
   std::vector<Float> fzeros(edges_.GetSize() / sizeof(Edge), 0);
   std::vector<uint32_t> zeros(edges_.GetSize() / sizeof(Edge), 0);
   ppx_per_edge_.Write(queue_, edges_.GetSize() / sizeof(Edge), fzeros.data());
@@ -262,6 +269,7 @@ PerplexityCalculator::PerplexityCalculator(
                                  zeros.data());
   ppx_per_edge_non_link_count_.Write(queue_, edges_.GetSize() / sizeof(Edge),
                                      zeros.data());
+#endif
 }
 
 uint64_t PerplexityCalculator::LastInvocationTime() const {
@@ -273,7 +281,7 @@ Float PerplexityCalculator::operator()() {
   kernel_->SetArgument(10, count_calls_);
   kernel_->Launch(queue_, {global_}, {local_}, event_);
   queue_.Finish();
-  // FIXME FIXME
+#if 0
   std::vector<uint32_t> tmp_data(ppx_per_edge_link_count_.GetSize() /
                                  sizeof(uint32_t));
   //
@@ -294,18 +302,20 @@ Float PerplexityCalculator::operator()() {
                                          tmp_fdata.data());
   non_link_likelihood_[0] =
       std::accumulate(tmp_fdata.begin(), tmp_fdata.end(), 0);
-#if 0
-  compute::reduce(ppx_per_edge_link_count_.begin(),
-                  ppx_per_edge_link_count_.end(), link_count_.begin(), queue_);
-  compute::reduce(ppx_per_edge_non_link_count_.begin(),
-                  ppx_per_edge_non_link_count_.end(), non_link_count_.begin(),
-                  queue_);
-  compute::reduce(ppx_per_edge_link_likelihood_.begin(),
-                  ppx_per_edge_link_likelihood_.end(), link_likelihood_.begin(),
-                  queue_);
-  compute::reduce(ppx_per_edge_non_link_likelihood_.begin(),
-                  ppx_per_edge_non_link_likelihood_.end(),
-                  non_link_likelihood_.begin(), queue_);
+#endif
+#ifdef USE_CL
+  boost::compute::reduce(ppx_per_edge_link_count_.begin(),
+                         ppx_per_edge_link_count_.end(), link_count_.begin(),
+                         compute_queue_);
+  boost::compute::reduce(ppx_per_edge_non_link_count_.begin(),
+                         ppx_per_edge_non_link_count_.end(),
+                         non_link_count_.begin(), compute_queue_);
+  boost::compute::reduce(ppx_per_edge_link_likelihood_.begin(),
+                         ppx_per_edge_link_likelihood_.end(),
+                         link_likelihood_.begin(), compute_queue_);
+  boost::compute::reduce(ppx_per_edge_non_link_likelihood_.begin(),
+                         ppx_per_edge_non_link_likelihood_.end(),
+                         non_link_likelihood_.begin(), compute_queue_);
 #endif
   double avg_likelihood = 0.0;
   if (link_count_[0] + non_link_count_[0] != 0) {

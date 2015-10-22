@@ -2,7 +2,9 @@
 #define __MCMC_PERPLEXITY_H__
 
 #include "mcmc/config.h"
-
+#ifdef USE_CL
+#include <boost/compute/container/vector.hpp>
+#endif
 #include "mcmc/partitioned-alloc.h"
 
 namespace mcmc {
@@ -33,12 +35,14 @@ class PerplexityCalculator {
   RowPartitionedMatrix<Float>* pi_;  // [N,K]
   clcuda::Buffer<Edge>& edges_;
   OpenClSet* edgeSet_;
-
-  clcuda::Buffer<Float> ppx_per_edge_;
-  clcuda::Buffer<Float> ppx_per_edge_link_likelihood_;
-  clcuda::Buffer<Float> ppx_per_edge_non_link_likelihood_;
-  clcuda::Buffer<uint32_t> ppx_per_edge_link_count_;
-  clcuda::Buffer<uint32_t> ppx_per_edge_non_link_count_;
+#ifdef USE_CL
+  boost::compute::command_queue compute_queue_;
+  boost::compute::vector<Float> ppx_per_edge_;
+  boost::compute::vector<Float> ppx_per_edge_link_likelihood_;
+  boost::compute::vector<Float> ppx_per_edge_non_link_likelihood_;
+  boost::compute::vector<uint32_t> ppx_per_edge_link_count_;
+  boost::compute::vector<uint32_t> ppx_per_edge_non_link_count_;
+#endif
 
   std::vector<uint32_t> link_count_;
   std::vector<uint32_t> non_link_count_;

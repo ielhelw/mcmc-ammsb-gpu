@@ -259,7 +259,7 @@ void BetaUpdater::operator()(clcuda::Buffer<Edge>* edges, uint32_t num_edges,
                              Float scale) {
   ++count_calls_;
   {
-    theta_sum_kernel_->Launch(queue_, {k_}, {1 /*FIXME*/}, theta_sum_event_);
+    theta_sum_kernel_->Launch(queue_, {k_}, {32}, theta_sum_event_);
     queue_.Finish();
   }
   {
@@ -277,15 +277,13 @@ void BetaUpdater::operator()(clcuda::Buffer<Edge>* edges, uint32_t num_edges,
 
     uint32_t num_partials = std::min(global, num_edges);
     grads_sum_kernel_->SetArgument(1, num_partials);
-    grads_sum_kernel_->Launch(queue_, {2 * k_}, {1 /*FIXME*/},
-                              grads_sum_event_);
+    grads_sum_kernel_->Launch(queue_, {2 * k_}, {32}, grads_sum_event_);
     queue_.Finish();
   }
   {
     update_theta_kernel_->SetArgument(2, count_calls_);
     update_theta_kernel_->SetArgument(3, scale);
-    update_theta_kernel_->Launch(queue_, {k_}, {1 /*FIXME*/},
-                                 update_theta_event_);
+    update_theta_kernel_->Launch(queue_, {k_}, {32}, update_theta_event_);
     queue_.Finish();
   }
   {

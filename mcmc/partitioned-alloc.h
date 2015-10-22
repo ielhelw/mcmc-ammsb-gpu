@@ -120,14 +120,9 @@ class RowPartitionedMatrix {
   }
 
   uint64_t GetMaxRowsInBlock(clcuda::Device dev, uint32_t cols) {
-    // FIXME FIXME
-    return 1024 * 1024;
-#if 0
     uint64_t row_size = cols * sizeof(T);
-    compute::ulong_ max_alloc =
-        dev.get_info<compute::ulong_>(CL_DEVICE_MAX_MEM_ALLOC_SIZE);
+    uint64_t max_alloc = dev.MaxAllocSize();
     return max_alloc / row_size;
-#endif
   }
 
   clcuda::Queue queue_;
