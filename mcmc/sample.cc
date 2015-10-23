@@ -152,11 +152,10 @@ Float sampleNodeLink(const Config& cfg, std::vector<Edge>* edges,
           break;
         }
       }
-      if (!set.empty()) break;
     }
   }
   edges->insert(edges->begin(), set.begin(), set.end());
-  return static_cast<Float>(cfg.N);
+  return static_cast<Float>(cfg.N) * Us.size();
 }
 
 // 1- randomly select u
@@ -179,7 +178,7 @@ Float sampleNodeNonLink(const Config& cfg, std::vector<Edge>* edges,
     set.insert(e);
   }
   edges->insert(edges->begin(), set.begin(), set.end());
-  return cfg.N * cfg.N / static_cast<Float>(cfg.mini_batch_size);
+  return (cfg.N * cfg.N) / static_cast<Float>(cfg.mini_batch_size);
 }
 
 Float sampleNode(const Config& cfg, std::vector<Edge>* edges,

@@ -1,6 +1,8 @@
 #ifndef __MCMC_PERPLEXITY_H__
 #define __MCMC_PERPLEXITY_H__
 
+#include "mcmc/types.h.inc"
+
 #ifndef MCMC_USE_CL
 #include <thrust/device_vector.h>
 #endif
