@@ -143,7 +143,7 @@ void RandomGamma(clcuda::Queue* queue, OpenClRandom* randv, Float eta0,
   kernel.SetArgument(2, eta0);
   kernel.SetArgument(3, eta1);
   clcuda::Event e;
-  kernel.Launch(*queue, {norm->Rows() * local}, {local}, e);
+  kernel.Launch(*queue, {std::min(norm->Rows(), GetMaxGroups()) * local}, {local}, e);
   queue->Finish();
 }
 

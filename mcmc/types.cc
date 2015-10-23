@@ -66,4 +66,6 @@ std::vector<std::string> GetClFlags(uint32_t wg) {
   return ret;
 }
 
+uint32_t GetMaxGroups() { return 65535; }
+
 }  // namespace mcmc

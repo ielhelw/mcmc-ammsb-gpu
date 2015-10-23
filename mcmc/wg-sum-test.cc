@@ -34,7 +34,8 @@ TEST_P(WgSumParameterizedTest, VaryLength) {
     clcuda::Buffer<uint32_t> out(*context_, 1);
     kernel.SetArgument(0, in);
     kernel.SetArgument(1, out);
-    kernel.SetArgument(2, static_cast<uint32_t>(host.size()));
+    kernel.SetArgument(2, 1);
+    kernel.SetArgument(3, static_cast<uint32_t>(host.size()));
     clcuda::Event e;
     kernel.Launch(*queue_, {wg}, {wg}, e);
     queue_->Finish();
@@ -63,7 +64,8 @@ TEST_F(WgSumTest, CustomSumPerformance) {
   clcuda::Kernel kernel(*prog_, "WG_SUM_KERNEL_uint");
   kernel.SetArgument(0, in);
   kernel.SetArgument(1, out);
-  kernel.SetArgument(2, static_cast<uint32_t>(K));
+  kernel.SetArgument(2, N);
+  kernel.SetArgument(3, static_cast<uint32_t>(K));
   clcuda::Event e;
   kernel.Launch(*queue_, {N * wg}, {wg}, e);
   queue_->Finish();

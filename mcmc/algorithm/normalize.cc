@@ -22,12 +22,12 @@ static const std::string kNormalizeSourceTemplate = R"%%(
         }
 
         KERNEL void WG_NORMALIZE_KERNEL_TT(
-            GLOBAL TT* in, uint len) {
+            GLOBAL TT* in, uint rows, uint len) {
           LOCAL_DECLARE TT aux[WG_SIZE];
           uint gid = GET_GROUP_ID();
-          uint stride = GET_LOCAL_SIZE();
-          in += gid * len;
-          WG_NORMALIZE_TT(in, aux, len);
+          for (; gid < rows; gid += GET_NUM_GROUPS()) {
+            WG_NORMALIZE_TT(in + gid * len, aux, len);
+          }
         }
 
         KERNEL void WG_NORMALIZE_PARTITIONED_KERNEL_TT(
@@ -38,13 +38,15 @@ static const std::string kNormalizeSourceTemplate = R"%%(
           uint gid = GET_GROUP_ID();
           GLOBAL TTRowPartitionedMatrix* pm =
               (GLOBAL TTRowPartitionedMatrix*)in;
-          GLOBAL TT* row = TTRowPartitionedMatrix_Row(pm, gid);
-          WG_SUM_TT(row, aux, pm->num_cols_);
-          Float sum = aux[0];
-          for (uint i = lid; i < pm->num_cols_; i += lsize) {
-            row[i] = row[i] / sum;
+          for (; gid < pm->num_rows_; gid += GET_NUM_GROUPS()) {
+            GLOBAL TT* row = TTRowPartitionedMatrix_Row(pm, gid);
+            WG_SUM_TT(row, aux, pm->num_cols_);
+            Float sum = aux[0];
+            for (uint i = lid; i < pm->num_cols_; i += lsize) {
+              row[i] = row[i] / sum;
+            }
+            if (lid == 0) g_sum[gid] = sum;
           }
-          if (lid == 0) g_sum[gid] = sum;
         }
 
         )%%";

@@ -32,12 +32,13 @@ static const std::string kSumSourceTemplate = R"%%(
     }
 
     KERNEL void WG_SUM_KERNEL_TT(GLOBAL TT* in, GLOBAL TT* out,
-                                   uint len) {
+                                 uint rows, uint len) {
       LOCAL_DECLARE TT aux[WG_SIZE];
       uint gid = GET_GROUP_ID();
-      in += len * gid;
-      WG_SUM_TT(in, aux, len);
-      if (GET_LOCAL_ID() == 0) out[gid] = aux[0];
+      for (; gid < rows; gid += GET_NUM_GROUPS()) {
+        WG_SUM_TT(in + gid * len, aux, len);
+        if (GET_LOCAL_ID() == 0) out[gid] = aux[0];
+      }
     }
 
     KERNEL void WG_SUM_PARTITIONED_KERNEL_TT(
@@ -46,9 +47,11 @@ static const std::string kSumSourceTemplate = R"%%(
       uint gid = GET_GROUP_ID();
       GLOBAL TTRowPartitionedMatrix* pm =
           (GLOBAL TTRowPartitionedMatrix*)in;
-      GLOBAL TT* row = TTRowPartitionedMatrix_Row(pm, gid);
-      WG_SUM_TT(row, aux, pm->num_cols_);
-      if (GET_LOCAL_ID() == 0) out[gid] = aux[0];
+      for (; gid < pm->num_rows_; gid += GET_NUM_GROUPS()) {
+        GLOBAL TT* row = TTRowPartitionedMatrix_Row(pm, gid);
+        WG_SUM_TT(row, aux, pm->num_cols_);
+        if (GET_LOCAL_ID() == 0) out[gid] = aux[0];
+      }
     }
 
     )%%";

@@ -34,7 +34,8 @@ TEST_P(WgNormalizeParameterizedTest, VaryLength) {
     for (uint32_t i = 0; i < host.size(); ++i) host[i] = i + 1;
     clcuda::Buffer<Float> in(*context_, *queue_, host.begin(), host.end());
     kernel.SetArgument(0, in);
-    kernel.SetArgument(1, static_cast<uint32_t>(host.size()));
+    kernel.SetArgument(1, 1);
+    kernel.SetArgument(2, static_cast<uint32_t>(host.size()));
     clcuda::Event e;
     kernel.Launch(*queue_, {wg}, {wg}, e);
     queue_->Finish();
@@ -86,7 +87,8 @@ TEST_F(WgNormalizeTest, CustomNormalizePerformance) {
   clcuda::Kernel kernel(
       *prog_, std::string("WG_NORMALIZE_KERNEL_") + type_name<Float>());
   kernel.SetArgument(0, in);
-  kernel.SetArgument(1, static_cast<uint32_t>(K));
+  kernel.SetArgument(1, N);
+  kernel.SetArgument(2, static_cast<uint32_t>(K));
   clcuda::Event e;
   auto t1 = std::chrono::high_resolution_clock::now();
   kernel.Launch(*queue_, {N * wg}, {wg}, e);

@@ -58,6 +58,8 @@ std::string GetClTypes();
 
 std::vector<std::string> GetClFlags(uint32_t wg = 0);
 
+uint32_t GetMaxGroups();
+
 }  // namespace mcmc
 
 MCMC_TYPE_TRAIT(float, float)

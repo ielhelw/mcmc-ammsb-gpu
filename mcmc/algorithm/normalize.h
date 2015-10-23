@@ -32,12 +32,15 @@ class Normalizer {
     kernel_.reset(new clcuda::Kernel(
         prog_, std::string("WG_NORMALIZE_KERNEL_") + type_name<T>()));
     kernel_->SetArgument(0, *data_);
-    kernel_->SetArgument(1, static_cast<uint32_t>(slice));
+    kernel_->SetArgument(1, static_cast<uint32_t>((data_->GetSize() / sizeof(T)) / slice));
+    kernel_->SetArgument(2, static_cast<uint32_t>(slice));
   }
 
   void operator()() {
     clcuda::Event e;
-    kernel_->Launch(queue_, {((data_->GetSize() / sizeof(T)) / slice_) * wg_},
+    uint32_t num_groups = (data_->GetSize() / sizeof(T)) / slice_;
+    num_groups = std::min(num_groups, GetMaxGroups());
+    kernel_->Launch(queue_, {num_groups * wg_},
                     {wg_}, e);
     queue_.Finish();
   }
@@ -74,7 +77,7 @@ class PartitionedNormalizer {
 
   void operator()() {
     clcuda::Event e;
-    kernel_->Launch(queue_, {data_->Rows() * wg_}, {wg_}, e);
+    kernel_->Launch(queue_, {std::min(data_->Rows(), GetMaxGroups()) * wg_}, {wg_}, e);
     queue_.Finish();
   }
 

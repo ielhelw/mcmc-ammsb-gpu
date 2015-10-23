@@ -267,10 +267,11 @@ void BetaUpdater::operator()(clcuda::Buffer<Edge>* edges, uint32_t num_edges,
     grads_partial_kernel_->SetArgument(5, *edges);
     grads_partial_kernel_->SetArgument(6, num_edges);
     if (mode_ == EDGE_PER_THREAD) {
-      global = (num_edges / local_ + (num_edges % local_ ? 1 : 0)) * local_;
+      global = (num_edges / local_ + (num_edges % local_ ? 1 : 0));
     } else {
-      global = num_edges * local_;
+      global = num_edges;
     }
+    global = std::min(global, GetMaxGroups()) * local_;
     grads_partial_kernel_->Launch(queue_, {global}, {local_},
                                   grads_partial_event_);
     queue_.Finish();

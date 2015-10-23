@@ -201,16 +201,16 @@ PerplexityCalculatorBase::PerplexityCalculatorBase(
     case EDGE_PER_THREAD:
       src = &kSourcePerplexity;
       global_ = ((edges_.GetSize() / sizeof(Edge)) / local_ +
-                 ((edges_.GetSize() / sizeof(Edge)) % local_ ? 1 : 0)) *
-                local_;
+                 ((edges_.GetSize() / sizeof(Edge)) % local_ ? 1 : 0));
       break;
     case EDGE_PER_WORKGROUP:
       src = &kSourcePerplexityWg;
-      global_ = (edges.GetSize() / sizeof(Edge)) * local_;
+      global_ = (edges.GetSize() / sizeof(Edge));
       break;
     default:
       LOG(FATAL) << "Cannot recognize mode: " << mode;
   }
+  global_ = std::min(global_, GetMaxGroups()) * local_;
   prog_.reset(new clcuda::Program(
       queue_.GetContext(),
       baseFuncs + GetRowPartitionedMatrixHeader<Float>() +

@@ -317,11 +317,11 @@ void PhiUpdater::operator()(
   uint32_t global;
   if (mode_ == NODE_PER_THREAD) {
     global = (num_mini_batch_nodes / local_ +
-              (num_mini_batch_nodes % local_ ? 1 : 0)) *
-             local_;
+              (num_mini_batch_nodes % local_ ? 1 : 0));
   } else {
-    global = num_mini_batch_nodes * local_;
+    global = num_mini_batch_nodes;
   }
+  global = std::min(global, GetMaxGroups()) * local_;
   LOG_IF(FATAL,
          rand_->GetSeeds().GetSize() / sizeof(random::random_seed_t) < global)
       << "Num seeds smaller than global threads";
