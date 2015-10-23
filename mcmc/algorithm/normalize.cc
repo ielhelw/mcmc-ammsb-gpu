@@ -19,6 +19,7 @@ static const std::string kNormalizeSourceTemplate = R"%%(
           for (; lid < len; lid += stride) {
             in[lid] = in[lid] / sum;
           }
+          BARRIER_LOCAL;
         }
 
         KERNEL void WG_NORMALIZE_KERNEL_TT(
@@ -46,6 +47,7 @@ static const std::string kNormalizeSourceTemplate = R"%%(
               row[i] = row[i] / sum;
             }
             if (lid == 0) g_sum[gid] = sum;
+            BARRIER_LOCAL;
           }
         }
 
