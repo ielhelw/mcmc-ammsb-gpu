@@ -33,6 +33,7 @@ ELSE()
     CUDA_ADD_EXECUTABLE(${ARGN})
   endmacro()
   SET(PERPLEXITY_EXT "mcmc/perplexity.cu")
+  SET(CUDA_LIBS cuda nvrtc)
 ENDIF()
 
 configure_file(mcmc/types.h.inc.in mcmc/types.h.inc)
@@ -51,8 +52,7 @@ link_libraries(
   ${GLOG_LIBRARIES}
   ${OPENCL_LIBRARIES}
   ${Boost_LIBRARIES}
-  cuda
-  nvrtc
+  ${CUDA_LIBS}
 )
 
 mcmc_add_library(mcmc SHARED
