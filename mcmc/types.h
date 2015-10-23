@@ -29,7 +29,7 @@ namespace clcuda = CLCudaAPI;
 
 typedef uint64_t Edge;
 typedef uint32_t Vertex;
-typedef float Float;
+typedef double Float;
 
 struct ulong2 {
   uint64_t values[2];
