@@ -62,6 +62,7 @@ std::vector<std::string> GetClFlags(uint32_t wg) {
 #else
   ret.push_back("-default-device");
   ret.push_back("--gpu-architecture=compute_20");
+  ret.push_back("-use_fast_math");
 #endif
   return ret;
 }
