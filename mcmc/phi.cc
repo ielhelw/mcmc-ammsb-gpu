@@ -118,7 +118,6 @@ const std::string kSourcePhiWg =
                                    GLOBAL Float* grads,  // K
                                    GLOBAL Float* probs,  // K
                                    random_seed_t* rseed,
-                                   GLOBAL Float* scratch,  // K
                                    LOCAL Float* aux) {
           GLOBAL Float* pi = FloatRowPartitionedMatrix_Row((GLOBAL FloatRowPartitionedMatrix*)g_pi, node);
           Float eps_t = get_eps_t(step_count);
@@ -139,9 +138,12 @@ const std::string kSourcePhiWg =
             Float e = (y == 1 ? EPSILON : 1.0 - EPSILON);
             // probs
             for (uint k = lid; k < K; k += lsize) {
-              Float f = (y == 1) ? (Beta(beta, k) - EPSILON)
-                                 : (EPSILON - Beta(beta, k));
-              Float probs_k = pi[k] * (pi_neighbor[k] * f + e);
+              Float beta_k = Beta(beta, k);
+              Float f = (y == 1) ? (beta_k - EPSILON)
+                                 : (EPSILON - beta_k);
+              Float pi_k = pi[k];
+              Float pin_k = pi_neighbor[k];
+              Float probs_k = pi_k * (pin_k * f + e);
               probs[k] = probs_k;
             }
             // probs sum
@@ -149,8 +151,11 @@ const std::string kSourcePhiWg =
             WG_SUM_Float(probs, aux, K);
             Float probs_sum = aux[0];
             for (uint k = lid; k < K; k += lsize) {
-              grads[k] +=
-                  (probs[k] / probs_sum) / (pi[k] * phi_sum) - 1.0 / phi_sum;
+              Float pi_k = pi[k];
+              Float probs_k = probs[k];
+              Float grads_k = grads[k];
+              grads_k += (probs_k / probs_sum) / (pi_k * phi_sum) - 1.0 / phi_sum;
+              grads[k] = grads_k;
             }
           }
           Float Nn = (1.0 * N) / NUM_NEIGHBORS;
@@ -174,16 +179,13 @@ const std::string kSourcePhiWg =
             uint step_count,
             GLOBAL Float* grads,  // [num local threads * K]
             GLOBAL Float* probs,  // [num local threads * K]
-            GLOBAL void* vrand,
-            GLOBAL Float* scratch  // [num local threads * K]
-            ) {
+            GLOBAL void* vrand) {
           LOCAL_DECLARE Float aux[WG_SIZE];
           uint i = GET_GROUP_ID();
           uint gsize = GET_NUM_GROUPS();
           GLOBAL Random* rand = (GLOBAL Random*)vrand;
           grads += i * K;
           probs += i * K;
-          scratch += i * K;
           if (i < num_mini_batch_nodes) {
             random_seed_t rseed = rand->base_[GET_GLOBAL_ID()];
             for (; i < num_mini_batch_nodes; i += gsize) {
@@ -192,8 +194,7 @@ const std::string kSourcePhiWg =
               GLOBAL Float* phi_vec = g_phi_vec + i * K;
               update_phi_for_nodeWG(g_beta, g_pi, g_phi, phi_vec,
                                     (GLOBAL Set*)training_edge_set, node, node_neighbors,
-                                    step_count, grads, probs, &rseed, scratch,
-                                    aux);
+                                    step_count, grads, probs, &rseed, aux);
             }
             rand->base_[GET_GLOBAL_ID()] = rseed;
           }
@@ -201,13 +202,12 @@ const std::string kSourcePhiWg =
 
         KERNEL void update_pi(GLOBAL void* g_pi, GLOBAL Float* g_phi_vec,
                               GLOBAL Vertex* mini_batch_nodes,
-                              uint num_mini_batch_nodes, GLOBAL Float* scratch) {
+                              uint num_mini_batch_nodes) {
           LOCAL_DECLARE Float aux[WG_SIZE];
           uint i = GET_GROUP_ID();
           uint gsize = GET_NUM_GROUPS();
           uint lid = GET_LOCAL_ID();
           uint lsize = GET_LOCAL_SIZE();
-          scratch += i * K;
           for (; i < num_mini_batch_nodes; i += gsize) {
             Vertex n = mini_batch_nodes[i];
             GLOBAL Float* pi = FloatRowPartitionedMatrix_Row((GLOBAL FloatRowPartitionedMatrix*)g_pi, n);
@@ -252,8 +252,6 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
       break;
     case NODE_PER_WORKGROUP:
       src = &kSourcePhiWg;
-      scratch_.reset(new clcuda::Buffer<Float>(
-          queue_.GetContext(), 2 * cfg.mini_batch_size * cfg.K));
       break;
     default:
       LOG(FATAL) << "Cannot recognize mode";
@@ -288,16 +286,10 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
   phi_kernel_->SetArgument(9, grads_);
   phi_kernel_->SetArgument(10, probs_);
   phi_kernel_->SetArgument(11, rand_->Get());
-  if (mode_ == NODE_PER_WORKGROUP) {
-    phi_kernel_->SetArgument(12, *scratch_);
-  }
 
   pi_kernel_.reset(new clcuda::Kernel(*prog_, "update_pi"));
   pi_kernel_->SetArgument(0, pi_->Get());
   pi_kernel_->SetArgument(1, phi_vec);
-  if (mode_ == NODE_PER_WORKGROUP) {
-    pi_kernel_->SetArgument(4, *scratch_);
-  }
 }
 
 void PhiUpdater::operator()(
@@ -309,10 +301,6 @@ void PhiUpdater::operator()(
       << "grads too small";
   LOG_IF(FATAL, probs_.GetSize() / sizeof(Float) < num_mini_batch_nodes * k_)
       << "probs too small";
-  LOG_IF(FATAL,
-         mode_ == NODE_PER_WORKGROUP &&
-             scratch_->GetSize() / sizeof(Float) < num_mini_batch_nodes * k_)
-      << "scratch too small";
   ++count_calls_;
   uint32_t global;
   if (mode_ == NODE_PER_THREAD) {
