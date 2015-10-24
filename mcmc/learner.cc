@@ -6,6 +6,7 @@
 #include <random>
 #include <unordered_set>
 #include <queue>
+#include <signal.h>
 
 #include "mcmc/algorithm/sum.h"
 
@@ -159,6 +160,12 @@ Float Learner::DoSample(Sample* sample) {
   return weight;
 }
 
+sig_atomic_t signaled = 0;
+
+void handler(int sig) {
+  signaled = 1;
+}
+
 void Learner::run(uint32_t max_iters) {
   uint32_t step_count = 1;
   uint64_t tppx = 0;
@@ -172,7 +179,8 @@ void Learner::run(uint32_t max_iters) {
   auto T1 = high_resolution_clock::now();
   futures[phase] =
       std::async(std::launch::async, &Learner::DoSample, this, &samples[phase]);
-  for (; step_count < max_iters; ++step_count) {
+  signal(SIGINT, handler);
+  for (; step_count < max_iters && !signaled; ++step_count) {
     if ((step_count - 1) % cfg_.ppx_interval == 0) {
       auto tppx_start = high_resolution_clock::now();
       Float ppx = heldoutPerplexity_();
@@ -216,6 +224,7 @@ void Learner::run(uint32_t max_iters) {
   }
   auto T2 = high_resolution_clock::now();
   uint64_t time = duration_cast<nanoseconds>(T2 - T1).count();
+  LOG_IF(INFO, signaled) << "FORCED TERMINATE";
   LOG(INFO) << "TOTAL    : " << time / 1e9;
   LOG(INFO) << "PPX      : " << tppx / 1e9 << " (%"
             << 100 * (tppx / 1e9) / (time / 1e9) << ")";
