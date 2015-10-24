@@ -50,8 +50,8 @@ class PhiUpdater {
   uint32_t k_;
   uint32_t local_;
 
-  clcuda::Buffer<Float> grads_;                     // [mini_batch, K]
-  clcuda::Buffer<Float> probs_;                     // [mini_batch, K]
+  std::unique_ptr<clcuda::Buffer<Float>> grads_;    // [mini_batch, K]
+  std::unique_ptr<clcuda::Buffer<Float>> probs_;    // [mini_batch, K]
 };
 
 }  // namespace mcmc
