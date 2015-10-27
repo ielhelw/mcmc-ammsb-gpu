@@ -30,7 +30,7 @@ struct Config {
 
   uint32_t ppx_wg_size;
   uint32_t ppx_interval;
-
+  uint32_t neighbor_sampler_wg_size;
   uint32_t phi_wg_size;
   uint32_t beta_wg_size;
 
@@ -52,6 +52,7 @@ struct Config {
     num_node_sample = 32;
     ppx_wg_size = 32;
     ppx_interval = 100;
+    neighbor_sampler_wg_size = 32;
     phi_wg_size = 32;
     beta_wg_size = 32;
     phi_disable_noise = false;

@@ -24,10 +24,6 @@ class Learner {
   void extractNodesFromMiniBatch(const std::vector<Edge>& edges,
                                  std::vector<Vertex>* nodes);
 
-  void sampleNeighbors(const std::vector<Vertex>& nodes,
-                       std::vector<Vertex>* neighbors,
-                       std::vector<unsigned int>* seeds);
-
   Float DoSample(Sample* sample);
 
   void run(uint32_t max_iters);

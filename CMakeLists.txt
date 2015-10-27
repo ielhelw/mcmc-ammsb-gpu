@@ -117,3 +117,7 @@ add_test(wg-beta-test wg-beta-test)
 mcmc_add_executable(test-partitioned-alloc mcmc/test-partitioned-alloc.cc)
 target_link_libraries(test-partitioned-alloc mcmc ${GTEST_BOTH_LIBRARIES})
 add_test(test-partitioned-alloc test-partitioned-alloc)
+
+mcmc_add_executable(wg-sample-test mcmc/wg-sample-test.cc)
+target_link_libraries(wg-sample-test mcmc ${GTEST_BOTH_LIBRARIES})
+add_test(wg-sample-test wg-sample-test)

@@ -1,5 +1,6 @@
 #include "mcmc/sample.h"
 
+#include <boost/program_options.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <glog/logging.h>
 #include <unordered_set>
@@ -9,14 +10,122 @@
 
 namespace mcmc {
 
-Sample::Sample(const Config& cfg, clcuda::Queue queue)
-    : dev_edges(queue.GetContext(), cfg.mini_batch_size),
-      dev_nodes(queue.GetContext(), 2 * cfg.mini_batch_size),
-      dev_neighbors(queue.GetContext(),
-                    2 * cfg.mini_batch_size * cfg.num_node_sample),
-      seeds(2 * cfg.mini_batch_size) {
-  std::generate(seeds.begin(), seeds.end(), rand);
+std::string GetNeighborSamplerSource() {
+  return R"%%(
+    inline uint h1(uint k, uint capacity) {
+      return (k ^ 553105253) % capacity;
+    }
+    inline uint h2(uint k, uint capacity) {
+      return 1 + (capacity << 1);
+  //    return 1 + (k ^ 961748941);
+    }
+
+    void generate_random_int(
+        random_seed_t* seed,
+        GLOBAL uint* out,
+        uint capacity,
+        uint max_id,
+        uint node) {
+      uint r, val;
+      do {
+        do {
+          r = (uint)randint(seed, 0, max_id);
+        } while (r == node);
+        uint l1 = h1(r, capacity);
+        uint l2 = h2(r, capacity);
+        for (uint i = 0;; ++i) {
+          uint offset = (l1 + i * l2) % capacity;
+          val = out[offset];
+          if (val == r) break;
+          if (val == max_id + 1) {
+            out[offset] = r;
+            break;
+          }
+        }
+      } while (val == r);
+    }
+
+    KERNEL void generate_random_int_kernel(
+        uint num_samples, GLOBAL uint* nodes,
+        GLOBAL uint* g_out, uint n, uint num, uint capacity,
+        GLOBAL uint* g_packed,
+        GLOBAL void* vrand) {
+      uint gid = GET_GLOBAL_ID();
+      uint gsize = GET_GLOBAL_SIZE();
+      if (gid < num_samples) {
+        random_seed_t seed = ((GLOBAL Random*)vrand)->base_[GET_GLOBAL_ID()];
+        for (uint i = gid; i < num_samples; i += gsize) {
+          GLOBAL uint* out = g_out + i * capacity;
+          GLOBAL uint* packed = g_packed + i * num;
+          uint node = nodes[i];
+          for (uint j = 0; j < capacity; ++j) {
+            out[j] = n;
+          }
+          for (uint j = 0; j < num; ++j) {
+            generate_random_int(&seed, out, capacity, n-1, node);
+          }
+          uint count = 0;
+          for (uint j = 0; j < capacity && count < num; ++j) {
+            if (out[j] != n) {
+              packed[count] = out[j];
+              count++;
+            }
+          }
+        }
+        ((GLOBAL Random*)vrand)->base_[GET_GLOBAL_ID()] = seed;
+      }
+    }
+  )%%";
 }
+
+NeighborSampler::NeighborSampler(const Config& cfg, clcuda::Queue queue)
+    : cfg_(cfg),
+      capacity_(2 * cfg.num_node_sample),
+      local_(cfg.neighbor_sampler_wg_size),
+      queue_(queue),
+      hash_(queue_.GetContext(), 2 * cfg.mini_batch_size * capacity_),
+      data_(queue_.GetContext(), 2 * cfg.mini_batch_size * cfg.num_node_sample),
+      prog_(queue.GetContext(),
+            ::mcmc::random::GetRandomHeader() + GetNeighborSamplerSource()),
+      randFactory_(random::OpenClRandomFactory::New(queue_)),
+      rand_(randFactory_->CreateRandom(
+          2 * cfg.mini_batch_size * cfg.num_node_sample,
+          random::random_seed_t{42, 43})) {
+  std::vector<std::string> opts = ::mcmc::GetClFlags();
+  clcuda::BuildStatus status = prog_.Build(queue.GetDevice(), opts);
+  LOG_IF(FATAL, status != clcuda::BuildStatus::kSuccess)
+      << prog_.GetBuildInfo(queue.GetDevice());
+  kernel_.reset(new clcuda::Kernel(prog_, "generate_random_int_kernel"));
+  kernel_->SetArgument(2, hash_);
+  kernel_->SetArgument(3, static_cast<uint32_t>(cfg.N));
+  kernel_->SetArgument(4, static_cast<uint32_t>(cfg.num_node_sample));
+  kernel_->SetArgument(5, static_cast<uint32_t>(capacity_));
+  kernel_->SetArgument(6, data_);
+  kernel_->SetArgument(7, rand_->Get());
+}
+
+void NeighborSampler::operator()(uint32_t num_samples,
+                                 clcuda::Buffer<Vertex>* nodes) {
+  kernel_->SetArgument(0, num_samples);
+  kernel_->SetArgument(1, *nodes);
+  clcuda::Event e;
+  uint32_t global =
+      std::min(num_samples / local_ + (num_samples % local_ ? 1 : 0),
+               ::mcmc::GetMaxGroups() / local_);
+  kernel_->Launch(queue_, {global * local_}, {local_}, e);
+  queue_.Finish();
+}
+
+uint32_t NeighborSampler::HashCapacityPerSample() { return capacity_; }
+
+uint32_t NeighborSampler::DataSizePerSample() { return cfg_.num_node_sample; }
+
+Sample::Sample(const Config& cfg, clcuda::Queue q)
+    : queue(q.GetContext(), q.GetDevice()),
+      dev_edges(q.GetContext(), cfg.mini_batch_size),
+      dev_nodes(q.GetContext(), 2 * cfg.mini_batch_size),
+      seed(rand()),
+      neighbor_sampler(cfg, clcuda::Queue(q.GetContext(), q.GetDevice())) {}
 
 std::istream& operator>>(std::istream& in, SampleStrategy& strategy) {
   std::string token;
@@ -140,7 +249,8 @@ Float sampleNodeLink(const Config& cfg, std::vector<Edge>* edges,
                      unsigned int* seed) {
   std::unordered_set<Vertex> Us;
   std::unordered_set<Edge> set;
-  while (set.size() < cfg.mini_batch_size) {
+  while (set.empty()) {
+    //  while (set.size() < cfg.mini_batch_size) {
     Vertex u = rand_r(seed) % cfg.N;
     if (Us.insert(u).second) {
       auto& neighbors = cfg.trainingGraph->NeighborsOf(u);
@@ -155,7 +265,7 @@ Float sampleNodeLink(const Config& cfg, std::vector<Edge>* edges,
     }
   }
   edges->insert(edges->begin(), set.begin(), set.end());
-  return static_cast<Float>(cfg.N) * Us.size();
+  return static_cast<Float>(cfg.N);
 }
 
 // 1- randomly select u

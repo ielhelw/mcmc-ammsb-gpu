@@ -40,6 +40,7 @@ std::string GetClTypes() {
   #define GET_GROUP_ID() (blockIdx.x)
   #define BARRIER_LOCAL  __syncthreads()
   #define BARRIER_GLOBAL __syncthreads()
+  #define atomic_cmpxchg atomicCAS
   typedef unsigned int uint;
   typedef unsigned long ulong;
   #define ULONG_MAX 0xffffffffffffffffUL

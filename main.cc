@@ -63,6 +63,7 @@ int main(int argc, char **argv) {
     ("beta-wg", po::value(&cfg.beta_wg_size)->default_value(32))
     ("max-iters,x", po::value(&max_iters)->default_value(100))
     ("sample,s", po::value(&cfg.strategy)->default_value(mcmc::Node))
+    ("sampler-wg", po::value(&cfg.neighbor_sampler_wg_size)->default_value(32))
   ;
   po::variables_map options_vm;
   po::store(po::parse_command_line(argc, argv, options), options_vm);
@@ -81,6 +82,7 @@ int main(int argc, char **argv) {
     << "  Platform: " << dev.Vendor() << endl
     << "  Device: " << dev.Name() << endl
     << "  Device Driver: " << dev.Version();
+  LOG(INFO) << "Global mem = " << dev.MemorySize()/1e9 << ", Local mem = " << dev.LocalMemSize()/1e9;
   std::vector<mcmc::Edge> unique_edges;
   if (!mcmc::GetUniqueEdgesFromFile(filename, &cfg.N, &unique_edges) ||
       !mcmc::GenerateSetsFromEdges(cfg.N, unique_edges, cfg.heldout_ratio,

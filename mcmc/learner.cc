@@ -124,53 +124,33 @@ void Learner::extractNodesFromMiniBatch(const std::vector<Edge>& edges,
   nodes_vec->insert(nodes_vec->begin(), nodes.begin(), nodes.end());
 }
 
-void Learner::sampleNeighbors(const std::vector<Vertex>& nodes,
-                              std::vector<Vertex>* neighbors,
-                              std::vector<unsigned int>* seeds) {
-  neighbors->resize(nodes.size() * cfg_.num_node_sample);
-  std::vector<std::future<void>> futures;
-  for (uint32_t i = 0; i < nodes.size(); ++i) {
-    futures.push_back(
-        std::async(std::launch::async, [this, i, &nodes, neighbors, seeds]() {
-          std::unordered_set<Vertex> sample;
-          while (sample.size() < cfg_.num_node_sample) {
-            Vertex u = rand_r(&((*seeds)[i])) % cfg_.N;
-            if (u != nodes[i]) {
-              if (sample.insert(u).second) {
-                size_t idx = i * cfg_.num_node_sample + sample.size() - 1;
-                (*neighbors)[idx] = u;
-              }
-            }
-          }
-        }));
-  }
-  for (uint32_t i = 0; i < nodes.size(); ++i) {
-    futures[i].wait();
-  }
-}
-
 Float Learner::DoSample(Sample* sample) {
   sample->edges.clear();
-  Float weight = sampleMiniBatch(&sample->edges, &sample->seeds[0]);
+  Float weight = sampleMiniBatch(&sample->edges, &sample->seed);
   extractNodesFromMiniBatch(sample->edges, &sample->nodes_vec);
   LOG_IF(FATAL, sample->nodes_vec.size() == 0) << "mini-batch size = 0!";
   LOG_IF(FATAL, sample->nodes_vec.size() > 2 * cfg_.mini_batch_size)
       << "mini-batch too big";
-  sampleNeighbors(sample->nodes_vec, &sample->neighbors_vec, &sample->seeds);
+#ifndef MCMC_USE_CL
+  // CUDA NEEDS TO KNOW CURRENT CONTEXT PER THREAD
+  cuCtxSetCurrent(sample->queue.GetContext()());
+#endif
+  sample->dev_edges.Write(sample->queue, sample->edges.size(),
+                          sample->edges.data());
+  sample->dev_nodes.Write(sample->queue, sample->nodes_vec.size(),
+                          sample->nodes_vec.data());
+  sample->neighbor_sampler(sample->nodes_vec.size(), &(sample->dev_nodes));
   return weight;
 }
 
 sig_atomic_t signaled = 0;
 
-void handler(int sig) {
-  signaled = 1;
-}
+void handler(int sig) { signaled = 1; }
 
 void Learner::run(uint32_t max_iters) {
   uint32_t step_count = 1;
   uint64_t tppx = 0;
   uint64_t tsampling = 0;
-  uint64_t tstaging = 0;
   uint64_t tpi = 0;
   uint64_t tbeta = 0;
   Sample samples[2] = {Sample(cfg_, queue_), Sample(cfg_, queue_)};
@@ -197,19 +177,9 @@ void Learner::run(uint32_t max_iters) {
     tsampling +=
         duration_cast<nanoseconds>(tsampling_end - tsampling_start).count();
 
-    auto tstaging_start = high_resolution_clock::now();
-    samples[phase].dev_edges.Write(queue_, samples[phase].edges.size(),
-                                   samples[phase].edges.data());
-    samples[phase].dev_nodes.Write(queue_, samples[phase].nodes_vec.size(),
-                                   samples[phase].nodes_vec.data());
-    samples[phase].dev_neighbors.Write(queue_,
-                                       samples[phase].neighbors_vec.size(),
-                                       samples[phase].neighbors_vec.data());
-    auto tstaging_end = high_resolution_clock::now();
-    tstaging +=
-        duration_cast<nanoseconds>(tstaging_end - tstaging_start).count();
     auto tpi_start = high_resolution_clock::now();
-    phiUpdater_(samples[phase].dev_nodes, samples[phase].dev_neighbors,
+    phiUpdater_(samples[phase].dev_nodes,
+                samples[phase].neighbor_sampler.GetData(),
                 samples[phase].nodes_vec.size());
     auto tpi_end = high_resolution_clock::now();
     tpi += duration_cast<nanoseconds>(tpi_end - tpi_start).count();
@@ -230,8 +200,6 @@ void Learner::run(uint32_t max_iters) {
             << 100 * (tppx / 1e9) / (time / 1e9) << ")";
   LOG(INFO) << "SAMPLING : " << tsampling / 1e9 << " (%"
             << 100 * (tsampling / 1e9) / (time / 1e9) << ")";
-  LOG(INFO) << "STAGING  : " << tstaging / 1e9 << " (%"
-            << 100 * (tstaging / 1e9) / (time / 1e9) << ")";
   LOG(INFO) << "PI       : " << tpi / 1e9 << " (%"
             << 100 * (tpi / 1e9) / (time / 1e9) << ")";
   LOG(INFO) << "BETA     : " << tbeta / 1e9 << " (%"
