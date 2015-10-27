@@ -74,7 +74,6 @@ int main(int argc, char **argv) {
   po::notify(options_vm);
   LOG_IF(FATAL, !fs::exists(filename) || fs::is_directory(filename))
       << "Failed to detect file: " << filename;
-
   clcuda::Device dev = ChooseDevice();
   clcuda::Context context(dev);
   clcuda::Queue queue(context, dev);
@@ -82,7 +81,6 @@ int main(int argc, char **argv) {
     << "  Platform: " << dev.Vendor() << endl
     << "  Device: " << dev.Name() << endl
     << "  Device Driver: " << dev.Version();
-  LOG(INFO) << "Global mem = " << dev.MemorySize()/1e9 << ", Local mem = " << dev.LocalMemSize()/1e9;
   std::vector<mcmc::Edge> unique_edges;
   if (!mcmc::GetUniqueEdgesFromFile(filename, &cfg.N, &unique_edges) ||
       !mcmc::GenerateSetsFromEdges(cfg.N, unique_edges, cfg.heldout_ratio,
