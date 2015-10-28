@@ -44,6 +44,36 @@ const std::string& Learner::GetBaseFuncs() {
   return kSourceBaseFuncs;
 }
 
+#ifdef MCMC_CALC_TRAIN_PPX
+std::vector<Edge> MakeEdgesForTrainingPerplexity(const Config& cfg,
+                                                 clcuda::Queue queue) {
+  uint64_t total = (cfg.N * (cfg.N - 1)) / 2;
+  uint64_t num_links = static_cast<uint64_t>(cfg.training_ppx_ratio *
+                                             cfg.training_edges.size());
+  uint64_t num_non_links = static_cast<uint64_t>(num_links * total /
+                                                static_cast<double>(cfg.E));
+  LOG(INFO) << "TRAINING PPX: LINKS = " << num_links << ", NON_LINKS = " << num_non_links;
+  std::vector<Edge> ret(num_links + num_non_links);
+  // take first half from training edges
+  std::copy(cfg.training_edges.begin(), cfg.training_edges.begin() + num_links,
+            ret.begin());
+  // randomly generate second half (edges not in training or heldout)
+  for (uint32_t i = num_links; i < ret.size(); ++i) {
+    Vertex u, v;
+    Edge e;
+    do {
+      Vertex u = rand() % cfg.N;
+      do {
+        v = rand() % cfg.N;
+      } while (u == v);
+      e = MakeEdge(u, v);
+    } while (cfg.training->Has(e) || cfg.heldout->Has(e));
+    ret[i] = e;
+  }
+  return ret;
+}
+#endif
+
 Learner::Learner(const Config& cfg, clcuda::Queue queue)
     : cfg_(cfg),
       queue_(queue),
@@ -60,6 +90,18 @@ Learner::Learner(const Config& cfg, clcuda::Queue queue)
       heldoutEdges_(queue_.GetContext(), queue_, cfg_.heldout_edges.begin(),
                     cfg_.heldout_edges.end()),
       compileFlags_(MakeCompileFlags(cfg_)),
+#ifdef MCMC_CALC_TRAIN_PPX
+      trainingPerplexityEdges_(MakeEdgesForTrainingPerplexity(cfg, queue_)),
+      devTrainingPerplexityEdges_(queue.GetContext(), queue,
+                                  trainingPerplexityEdges_.begin(),
+                                  trainingPerplexityEdges_.end()),
+      trainingPerplexity_((queue_.GetDevice().Type() == "GPU"
+                               ? PerplexityCalculator::EDGE_PER_WORKGROUP
+                               : PerplexityCalculator::EDGE_PER_THREAD),
+                          cfg_, queue_, beta_, pi_.get(),
+                          devTrainingPerplexityEdges_, trainingSet_.get(),
+                          compileFlags_, GetBaseFuncs()),
+#endif
       heldoutPerplexity_((queue_.GetDevice().Type() == "GPU"
                               ? PerplexityCalculator::EDGE_PER_WORKGROUP
                               : PerplexityCalculator::EDGE_PER_THREAD),
@@ -150,6 +192,9 @@ void handler(int sig) { signaled = 1; }
 void Learner::run(uint32_t max_iters) {
   uint32_t step_count = 1;
   uint64_t tppx = 0;
+#ifdef MCMC_CALC_TRAIN_PPX
+  uint64_t ttppx = 0;
+#endif
   uint64_t tsampling = 0;
   uint64_t tpi = 0;
   uint64_t tbeta = 0;
@@ -168,6 +213,14 @@ void Learner::run(uint32_t max_iters) {
       tppx += duration_cast<nanoseconds>(tppx_end - tppx_start).count();
       LOG(INFO) << "ppx[" << step_count << "] = " << ppx << ", "
                 << std::exp(ppx);
+#ifdef MCMC_CALC_TRAIN_PPX
+      auto ttppx_start = high_resolution_clock::now();
+      Float train_ppx = trainingPerplexity_();
+      auto ttppx_end = high_resolution_clock::now();
+      ttppx += duration_cast<nanoseconds>(ttppx_end - ttppx_start).count();
+      LOG(INFO) << "train-ppx[" << step_count << "] = " << train_ppx << ", "
+                << std::exp(train_ppx);
+#endif
     }
     auto tsampling_start = high_resolution_clock::now();
     Float weight = futures[phase].get();
@@ -198,6 +251,10 @@ void Learner::run(uint32_t max_iters) {
   LOG(INFO) << "TOTAL    : " << time / 1e9;
   LOG(INFO) << "PPX      : " << tppx / 1e9 << " (%"
             << 100 * (tppx / 1e9) / (time / 1e9) << ")";
+#ifdef MCMC_CALC_TRAIN_PPX
+  LOG(INFO) << "TRAIN PPX: " << ttppx / 1e9 << " (%"
+            << 100 * (ttppx / 1e9) / (time / 1e9) << ")";
+#endif
   LOG(INFO) << "SAMPLING : " << tsampling / 1e9 << " (%"
             << 100 * (tsampling / 1e9) / (time / 1e9) << ")";
   LOG(INFO) << "PI       : " << tpi / 1e9 << " (%"

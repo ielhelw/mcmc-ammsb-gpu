@@ -11,6 +11,9 @@
 namespace mcmc {
 
 struct Config {
+#ifdef MCMC_CALC_TRAIN_PPX
+  Float training_ppx_ratio; // subset of training edges used for training ppx calculation
+#endif
   Float heldout_ratio;
   Float alpha;
   Float a, b, c;
@@ -39,6 +42,9 @@ struct Config {
   SampleStrategy strategy;
 
   Config() {
+#ifdef MCMC_CALC_TRAIN_PPX
+    training_ppx_ratio = 0.01;
+#endif
     heldout_ratio = 0.01;
     alpha = 0.001;
     a = 0.0315;

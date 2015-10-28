@@ -1,3 +1,4 @@
 
 #cmakedefine MCMC_USE_CL
+#cmakedefine MCMC_CALC_TRAIN_PPX
 

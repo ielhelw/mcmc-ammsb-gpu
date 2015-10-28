@@ -35,7 +35,17 @@ const std::string GetRandomHeader() {
                                   s) { return (1.0 * rand(s) / ULONG_MAX); }
 
               inline int randint(random_seed_t * s, int from, int upto) {
+#if 1
                 return (rand(s) % (upto + 1 - from)) + from;
+#else
+                ulong range = upto - (ulong)from + 1;
+                ulong cutoff = (ULONG_MAX / range) * range;
+                ulong result;
+                do {
+                  result = rand(s);
+                } while (result >= cutoff);
+                return from + (int)(result % range);
+#endif
               }
 
               /* gauss.c - gaussian random numbers, using the Ziggurat method

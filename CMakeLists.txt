@@ -36,6 +36,8 @@ ELSE()
   SET(CUDA_LIBS cuda nvrtc)
 ENDIF()
 
+OPTION(MCMC_CALC_TRAIN_PPX "Calculate training perplexity" OFF)
+
 configure_file(mcmc/types.h.inc.in mcmc/types.h.inc)
 
 include_directories(

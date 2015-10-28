@@ -50,6 +50,12 @@ class Learner {
 
   std::vector<std::string> compileFlags_;
 
+#ifdef MCMC_CALC_TRAIN_PPX
+  std::vector<Edge> trainingPerplexityEdges_;
+  clcuda::Buffer<Edge> devTrainingPerplexityEdges_;
+  PerplexityCalculator trainingPerplexity_;
+#endif
+
   PerplexityCalculator heldoutPerplexity_;
   PhiUpdater phiUpdater_;
   BetaUpdater betaUpdater_;

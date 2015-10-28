@@ -46,6 +46,9 @@ int main(int argc, char **argv) {
     ("help,h", "Show usage")
     ("file,f", po::value(&filename)->required(),
       "Graph data file")
+#ifdef MCMC_CALC_TRAIN_PPX
+    ("train-ppx-ratio", po::value(&cfg.training_ppx_ratio)->default_value(0.01))
+#endif
     ("heldout-ratio,r", po::value(&cfg.heldout_ratio)->default_value(0.01))
     ("alpha", po::value(&cfg.alpha)->default_value(0))
     ("a,a", po::value(&cfg.a)->default_value(0.0315))
