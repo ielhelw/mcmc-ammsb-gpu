@@ -38,6 +38,13 @@ clcuda::Device ChooseDevice() {
 int main(int argc, char **argv) {
   FLAGS_logtostderr = 1;
   google::InitGoogleLogging(argv[0]);
+  {
+    std::ostringstream s;
+    for (int i = 0; i < argc; ++i) {
+      s << argv[i] << " ";
+    }
+    LOG(INFO) << s.str();
+  }
   std::string filename;
   mcmc::Config cfg;
   po::options_description options;
