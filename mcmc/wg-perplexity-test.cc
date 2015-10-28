@@ -51,7 +51,7 @@ class WgPerplexityTest : public ContextTest,
     std::generate(beta.begin(), beta.end(), gen);
     allocFactory = (RowPartitionedMatrixFactory<Float>::New(*queue_));
     dev_pi_.reset(allocFactory->CreateMatrix(N_, K_));
-    ASSERT_EQ(1, dev_pi_->Blocks().size());
+    ASSERT_EQ(static_cast<size_t>(1), dev_pi_->Blocks().size());
     ASSERT_EQ(pi.size(), dev_pi_->Blocks()[0].GetSize() / sizeof(Float));
     dev_pi_->Blocks()[0].Write(*queue_, pi.size(), pi);
     clcuda::Buffer<Float> phi(*context_, N_);

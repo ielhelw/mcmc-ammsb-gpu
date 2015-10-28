@@ -13,7 +13,7 @@ namespace test {
 class WgBetaTest : public ContextTest,
                    public ::testing::WithParamInterface<uint32_t> {
  protected:
-  WgBetaTest(uint32_t K = 1024, uint32_t N = 10 * 1024) : num_tries_(3) {
+  WgBetaTest(uint32_t K = 1024, uint32_t N = 4 * 1024) : num_tries_(3) {
     cfg_.N = N;
     cfg_.K = K;
     cfg_.mini_batch_size = N;

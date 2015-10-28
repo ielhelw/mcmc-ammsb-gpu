@@ -30,8 +30,8 @@ TEST(CuckooSetTest, RandomMembership) {
   std::vector<Edge> edges = GenerateRandom();
   uint64_t in_len = static_cast<uint64_t>(1 + ceil(edges.size() / 2.0));
   uint64_t out_len = edges.size() - in_len;
-  ASSERT_GT(in_len, 0);
-  ASSERT_GT(out_len, 0);
+  ASSERT_GT(in_len, static_cast<uint64_t>(0));
+  ASSERT_GT(out_len, static_cast<uint64_t>(0));
   Set set(in_len);
   for (auto it = edges.begin(); it != edges.begin() + in_len; ++it) {
     ASSERT_TRUE(set.Insert(*it));
@@ -58,8 +58,8 @@ TEST(OpenClCuckooSetTest, RandomMembership) {
   std::vector<Edge> edges = GenerateRandom();
   uint64_t in_len = static_cast<uint64_t>(1 + ceil(edges.size() / 2.0));
   uint64_t out_len = edges.size() - in_len;
-  ASSERT_GT(in_len, 0);
-  ASSERT_GT(out_len, 0);
+  ASSERT_GT(in_len, static_cast<uint64_t>(0));
+  ASSERT_GT(out_len, static_cast<uint64_t>(0));
   Set set(in_len);
   for (auto it = edges.begin(); it != edges.begin() + in_len; ++it) {
     ASSERT_TRUE(set.Insert(*it));
@@ -98,7 +98,7 @@ TEST(OpenClCuckooSetTest, RandomMembership) {
   for (auto v : output) {
     if (v != 1) ++count;
   }
-  ASSERT_EQ(count, 0);
+  ASSERT_EQ(count, static_cast<uint64_t>(0));
   dev_input.reset(new clcuda::Buffer<Edge>(
       context, queue, edges.begin() + in_len, edges.end()));
   dev_output.reset(new clcuda::Buffer<Edge>(context, out_len));
@@ -116,5 +116,5 @@ TEST(OpenClCuckooSetTest, RandomMembership) {
   for (auto v : output) {
     if (v != 0) ++count;
   }
-  ASSERT_EQ(count, 0);
+  ASSERT_EQ(count, static_cast<uint64_t>(0));
 }

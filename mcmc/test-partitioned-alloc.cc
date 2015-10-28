@@ -42,7 +42,6 @@ TEST_F(PartitionedAllocTest, RetrieveElements) {
   uint32_t num_rows_in_block = rows / 11;
   uint32_t num_blocks =
       rows / num_rows_in_block + (rows % num_rows_in_block ? 1 : 0);
-  uint32_t num_elements_in_block = num_rows_in_block * cols;
   auto factory = RowPartitionedMatrixFactory<uint32_t>::New(*queue_);
   std::unique_ptr<RowPartitionedMatrix<uint32_t>> p(
       factory->CreateMatrix(rows, cols, num_rows_in_block));

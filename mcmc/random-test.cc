@@ -76,7 +76,7 @@ TEST(RandomTest, Check) {
   queue.Finish();
   std::vector<uint64_t> ok(1, 0);
   dev_ok.Read(queue, 1, ok.data());
-  ASSERT_EQ(1, ok[0]);
+  ASSERT_EQ(static_cast<uint64_t>(1), ok[0]);
   uint32_t K = 10000;
   clcuda::Buffer<Float> data(context, host.size() * K);
   clcuda::Kernel generate(prog, "generate");

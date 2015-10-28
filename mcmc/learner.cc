@@ -45,8 +45,7 @@ const std::string& Learner::GetBaseFuncs() {
 }
 
 #ifdef MCMC_CALC_TRAIN_PPX
-std::vector<Edge> MakeEdgesForTrainingPerplexity(const Config& cfg,
-                                                 clcuda::Queue queue) {
+std::vector<Edge> MakeEdgesForTrainingPerplexity(const Config& cfg) {
   uint64_t total = (cfg.N * (cfg.N - 1)) / 2;
   uint64_t num_links = static_cast<uint64_t>(cfg.training_ppx_ratio *
                                              cfg.training_edges.size());
@@ -62,7 +61,7 @@ std::vector<Edge> MakeEdgesForTrainingPerplexity(const Config& cfg,
     Vertex u, v;
     Edge e;
     do {
-      Vertex u = rand() % cfg.N;
+      u = rand() % cfg.N;
       do {
         v = rand() % cfg.N;
       } while (u == v);
@@ -91,7 +90,7 @@ Learner::Learner(const Config& cfg, clcuda::Queue queue)
                     cfg_.heldout_edges.end()),
       compileFlags_(MakeCompileFlags(cfg_)),
 #ifdef MCMC_CALC_TRAIN_PPX
-      trainingPerplexityEdges_(MakeEdgesForTrainingPerplexity(cfg, queue_)),
+      trainingPerplexityEdges_(MakeEdgesForTrainingPerplexity(cfg)),
       devTrainingPerplexityEdges_(queue.GetContext(), queue,
                                   trainingPerplexityEdges_.begin(),
                                   trainingPerplexityEdges_.end()),
@@ -187,7 +186,7 @@ Float Learner::DoSample(Sample* sample) {
 
 sig_atomic_t signaled = 0;
 
-void handler(int sig) { signaled = 1; }
+void handler(int sig __attribute((unused))) { signaled = 1; }
 
 void Learner::run(uint32_t max_iters) {
   uint32_t step_count = 1;

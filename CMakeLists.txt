@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8)
 SET(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
-LIST(APPEND CMAKE_CXX_FLAGS " -std=c++0x -Wall -Wextra ")
+LIST(APPEND CMAKE_CXX_FLAGS " -std=c++11 -Wall -Wextra ")
 
 find_package(Threads REQUIRED)
 find_package(Glog REQUIRED)
@@ -24,7 +24,7 @@ IF (MCMC_USE_CL)
   endmacro()
   SET(PERPLEXITY_EXT "")
 ELSE()
-  LIST(APPEND CUDA_NVCC_FLAGS " -std=c++11 ")
+  LIST(APPEND CUDA_NVCC_FLAGS "-std=c++11")
   find_package(CUDA REQUIRED)
   macro(MCMC_ADD_LIBRARY)
     CUDA_ADD_LIBRARY(${ARGN})

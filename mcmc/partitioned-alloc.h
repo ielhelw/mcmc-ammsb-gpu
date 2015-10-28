@@ -119,7 +119,8 @@ class RowPartitionedMatrix {
     }
   }
 
-  uint64_t GetMaxRowsInBlock(clcuda::Device dev, uint32_t cols) {
+  uint64_t GetMaxRowsInBlock(clcuda::Device dev __attribute__((unused)),
+                             uint32_t cols) {
     uint64_t row_size = cols * sizeof(T);
 #ifdef MCMC_USE_CL
     uint64_t max_alloc = dev.MaxAllocSize();

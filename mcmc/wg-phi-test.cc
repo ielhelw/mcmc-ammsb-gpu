@@ -13,12 +13,12 @@ namespace test {
 class WgPhiTest : public ContextTest,
                   public ::testing::WithParamInterface<uint32_t> {
  protected:
-  WgPhiTest(uint32_t K = 1024, uint32_t N = 10 * 1024) : num_tries_(3) {
+  WgPhiTest(uint32_t K = 512, uint32_t N = 4 * 1024) : num_tries_(3) {
     cfg_.N = N;
     cfg_.K = K;
     cfg_.phi_wg_size = 32;
     cfg_.mini_batch_size = N;
-    cfg_.num_node_sample = 64;
+    cfg_.num_node_sample = 4;
     cfg_.eta0 = 1;
     cfg_.eta1 = 1;
   }
@@ -63,7 +63,7 @@ class WgPhiTest : public ContextTest,
     allocFactory = RowPartitionedMatrixFactory<Float>::New(*queue_);
     phi_.reset(new clcuda::Buffer<Float>(*context_, cfg_.N));
     pi_.reset(allocFactory->CreateMatrix(cfg_.N, cfg_.K));
-    ASSERT_EQ(1, pi_->Blocks().size());
+    ASSERT_EQ(static_cast<size_t>(1), pi_->Blocks().size());
   }
 
   void TearDown() override {
@@ -78,7 +78,6 @@ class WgPhiTest : public ContextTest,
   }
 
   void Run(PhiUpdater::Mode mode) {
-    Float delta = 1.0 / cfg_.K;
     PhiUpdater updater(mode, cfg_, *queue_, *beta_, pi_.get(), *phi_,
                        dev_set_.get(), MakeCompileFlags(cfg_),
                        Learner::GetBaseFuncs());

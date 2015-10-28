@@ -4,7 +4,10 @@
 #include "mcmc/types.h.inc"
 
 #ifndef MCMC_USE_CL
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <thrust/device_vector.h>
+#pragma GCC diagnostic pop
 #endif
 
 #include "mcmc/config.h"
