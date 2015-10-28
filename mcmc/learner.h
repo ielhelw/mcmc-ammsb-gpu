@@ -2,6 +2,7 @@
 #define __MCMC_LEARNER_H__
 
 #include <boost/program_options.hpp>
+#include <future>
 #include <ostream>
 
 #include "mcmc/algorithm/normalize.h"
@@ -17,20 +18,20 @@ class Learner {
  public:
   Learner(const Config& cfg, clcuda::Queue queue);
 
-  Float calculate_perplexity_heldout(uint32_t step_count);
+  void Run(uint32_t max_iters);
 
-  Float sampleMiniBatch(std::vector<Edge>* edges, unsigned int* seed);
-
-  void extractNodesFromMiniBatch(const std::vector<Edge>& edges,
-                                 std::vector<Vertex>* nodes);
-
-  Float DoSample(Sample* sample);
-
-  void run(uint32_t max_iters);
+  void PrintStats();
 
   static const std::string& GetBaseFuncs();
 
  private:
+  Float SampleMiniBatch(std::vector<Edge>* edges, unsigned int* seed);
+
+  void ExtractNodesFromMiniBatch(const std::vector<Edge>& edges,
+                                 std::vector<Vertex>* nodes);
+
+  Float DoSample(Sample* sample);
+
   const Config& cfg_;
 
   clcuda::Queue queue_;
@@ -62,6 +63,19 @@ class Learner {
 
   Float (*sampler_)(const Config& cfg, std::vector<Edge>* edges,
                     unsigned int* seed);
+
+  uint32_t stepCount_;
+  uint64_t time_;
+  uint64_t heldoutPpxTime_;
+#ifdef MCMC_CALC_TRAIN_PPX
+  uint64_t trainingPpxTime_;
+#endif
+  uint64_t samplingTime_;
+  uint64_t piTime_;
+  uint64_t betaTime_;
+  Sample samples_[2];
+  std::future<Float> futures_[2];
+  int phase_;
 };
 
 }  // namespace mcmc

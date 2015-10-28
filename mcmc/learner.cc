@@ -47,11 +47,12 @@ const std::string& Learner::GetBaseFuncs() {
 #ifdef MCMC_CALC_TRAIN_PPX
 std::vector<Edge> MakeEdgesForTrainingPerplexity(const Config& cfg) {
   uint64_t total = (cfg.N * (cfg.N - 1)) / 2;
-  uint64_t num_links = static_cast<uint64_t>(cfg.training_ppx_ratio *
-                                             cfg.training_edges.size());
-  uint64_t num_non_links = static_cast<uint64_t>(num_links * total /
-                                                static_cast<double>(cfg.E));
-  LOG(INFO) << "TRAINING PPX: LINKS = " << num_links << ", NON_LINKS = " << num_non_links;
+  uint64_t num_links =
+      static_cast<uint64_t>(cfg.training_ppx_ratio * cfg.training_edges.size());
+  uint64_t num_non_links =
+      static_cast<uint64_t>(num_links * total / static_cast<double>(cfg.E));
+  LOG(INFO) << "TRAINING PPX: LINKS = " << num_links
+            << ", NON_LINKS = " << num_non_links;
   std::vector<Edge> ret(num_links + num_non_links);
   // take first half from training edges
   std::copy(cfg.training_edges.begin(), cfg.training_edges.begin() + num_links,
@@ -115,7 +116,18 @@ Learner::Learner(const Config& cfg, clcuda::Queue queue)
           (queue_.GetDevice().Type() == "GPU" ? BetaUpdater::EDGE_PER_WORKGROUP
                                               : BetaUpdater::EDGE_PER_THREAD),
           cfg, queue_, theta_, beta_, pi_.get(), trainingSet_.get(),
-          compileFlags_, GetBaseFuncs()) {
+          compileFlags_, GetBaseFuncs()),
+      stepCount_(1),
+      time_(0),
+      heldoutPpxTime_(0),
+#ifdef MCMC_CALC_TRAIN_PPX
+      trainingPpxTime_(0),
+#endif
+      samplingTime_(0),
+      piTime_(0),
+      betaTime_(0),
+      samples_({Sample(cfg_, queue_), Sample(cfg_, queue_)}),
+      phase_(0) {
   switch (cfg_.strategy) {
     case NodeLink:
       sampler_ = sampleNodeLink;
@@ -148,11 +160,11 @@ Learner::Learner(const Config& cfg, clcuda::Queue queue)
                                   &phi_);
 }
 
-Float Learner::sampleMiniBatch(std::vector<Edge>* edges, unsigned int* seed) {
+Float Learner::SampleMiniBatch(std::vector<Edge>* edges, unsigned int* seed) {
   return sampler_(cfg_, edges, seed);
 }
 
-void Learner::extractNodesFromMiniBatch(const std::vector<Edge>& edges,
+void Learner::ExtractNodesFromMiniBatch(const std::vector<Edge>& edges,
                                         std::vector<Vertex>* nodes_vec) {
   std::unordered_set<Vertex> nodes;
   for (auto e : edges) {
@@ -167,8 +179,8 @@ void Learner::extractNodesFromMiniBatch(const std::vector<Edge>& edges,
 
 Float Learner::DoSample(Sample* sample) {
   sample->edges.clear();
-  Float weight = sampleMiniBatch(&sample->edges, &sample->seed);
-  extractNodesFromMiniBatch(sample->edges, &sample->nodes_vec);
+  Float weight = SampleMiniBatch(&sample->edges, &sample->seed);
+  ExtractNodesFromMiniBatch(sample->edges, &sample->nodes_vec);
   LOG_IF(FATAL, sample->nodes_vec.size() == 0) << "mini-batch size = 0!";
   LOG_IF(FATAL, sample->nodes_vec.size() > 2 * cfg_.mini_batch_size)
       << "mini-batch too big";
@@ -188,80 +200,75 @@ sig_atomic_t signaled = 0;
 
 void handler(int sig __attribute((unused))) { signaled = 1; }
 
-void Learner::run(uint32_t max_iters) {
-  uint32_t step_count = 1;
-  uint64_t tppx = 0;
-#ifdef MCMC_CALC_TRAIN_PPX
-  uint64_t ttppx = 0;
-#endif
-  uint64_t tsampling = 0;
-  uint64_t tpi = 0;
-  uint64_t tbeta = 0;
-  Sample samples[2] = {Sample(cfg_, queue_), Sample(cfg_, queue_)};
-  std::future<Float> futures[2];
-  int phase = 0;
+void Learner::Run(uint32_t max_iters) {
   auto T1 = high_resolution_clock::now();
-  futures[phase] =
-      std::async(std::launch::async, &Learner::DoSample, this, &samples[phase]);
+  if (stepCount_ == 1) {
+    futures_[phase_] = std::async(std::launch::async, &Learner::DoSample, this,
+                                 &samples_[phase_]);
+  }
   auto prev_handler = signal(SIGINT, handler);
-  for (; step_count < max_iters && !signaled; ++step_count) {
-    if ((step_count - 1) % cfg_.ppx_interval == 0) {
+  for (uint64_t I = 0; I < max_iters && !signaled; ++I, ++stepCount_) {
+    if ((stepCount_ - 1) % cfg_.ppx_interval == 0) {
       auto tppx_start = high_resolution_clock::now();
       Float ppx = heldoutPerplexity_();
       auto tppx_end = high_resolution_clock::now();
-      tppx += duration_cast<nanoseconds>(tppx_end - tppx_start).count();
-      LOG(INFO) << "ppx[" << step_count << "] = " << ppx << ", "
+      heldoutPpxTime_ +=
+          duration_cast<nanoseconds>(tppx_end - tppx_start).count();
+      LOG(INFO) << "ppx[" << stepCount_ << "] = " << ppx << ", "
                 << std::exp(ppx);
 #ifdef MCMC_CALC_TRAIN_PPX
       auto ttppx_start = high_resolution_clock::now();
       Float train_ppx = trainingPerplexity_();
       auto ttppx_end = high_resolution_clock::now();
-      ttppx += duration_cast<nanoseconds>(ttppx_end - ttppx_start).count();
-      LOG(INFO) << "train-ppx[" << step_count << "] = " << train_ppx << ", "
+      trainingPpxTime_ +=
+          duration_cast<nanoseconds>(ttppx_end - ttppx_start).count();
+      LOG(INFO) << "train-ppx[" << stepCount_ << "] = " << train_ppx << ", "
                 << std::exp(train_ppx);
 #endif
     }
     auto tsampling_start = high_resolution_clock::now();
-    Float weight = futures[phase].get();
-    futures[1 - phase] = std::async(std::launch::async, &Learner::DoSample,
-                                    this, &samples[1 - phase]);
+    Float weight = futures_[phase_].get();
+    futures_[1 - phase_] = std::async(std::launch::async, &Learner::DoSample,
+                                     this, &samples_[1 - phase_]);
     auto tsampling_end = high_resolution_clock::now();
-    tsampling +=
+    samplingTime_ +=
         duration_cast<nanoseconds>(tsampling_end - tsampling_start).count();
 
     auto tpi_start = high_resolution_clock::now();
-    phiUpdater_(samples[phase].dev_nodes,
-                samples[phase].neighbor_sampler.GetData(),
-                samples[phase].nodes_vec.size());
+    phiUpdater_(samples_[phase_].dev_nodes,
+                samples_[phase_].neighbor_sampler.GetData(),
+                samples_[phase_].nodes_vec.size());
     auto tpi_end = high_resolution_clock::now();
-    tpi += duration_cast<nanoseconds>(tpi_end - tpi_start).count();
+    piTime_ += duration_cast<nanoseconds>(tpi_end - tpi_start).count();
 
     auto tbeta_start = high_resolution_clock::now();
-    betaUpdater_(&samples[phase].dev_edges, samples[phase].edges.size(),
+    betaUpdater_(&samples_[phase_].dev_edges, samples_[phase_].edges.size(),
                  weight);
     auto tbeta_end = high_resolution_clock::now();
-    tbeta += duration_cast<nanoseconds>(tbeta_end - tbeta_start).count();
+    betaTime_ += duration_cast<nanoseconds>(tbeta_end - tbeta_start).count();
 
-    phase = 1 - phase;
+    phase_ = 1 - phase_;
   }
   auto T2 = high_resolution_clock::now();
-  uint64_t time = duration_cast<nanoseconds>(T2 - T1).count();
+  time_ += duration_cast<nanoseconds>(T2 - T1).count();
   LOG_IF(INFO, signaled) << "FORCED TERMINATE";
-  LOG(INFO) << "TOTAL    : " << time / 1e9;
-  LOG(INFO) << "PPX      : " << tppx / 1e9 << " (%"
-            << 100 * (tppx / 1e9) / (time / 1e9) << ")";
-#ifdef MCMC_CALC_TRAIN_PPX
-  LOG(INFO) << "TRAIN PPX: " << ttppx / 1e9 << " (%"
-            << 100 * (ttppx / 1e9) / (time / 1e9) << ")";
-#endif
-  LOG(INFO) << "SAMPLING : " << tsampling / 1e9 << " (%"
-            << 100 * (tsampling / 1e9) / (time / 1e9) << ")";
-  LOG(INFO) << "PI       : " << tpi / 1e9 << " (%"
-            << 100 * (tpi / 1e9) / (time / 1e9) << ")";
-  LOG(INFO) << "BETA     : " << tbeta / 1e9 << " (%"
-            << 100 * (tbeta / 1e9) / (time / 1e9) << ")";
-
   signal(SIGINT, prev_handler);
+}
+
+void Learner::PrintStats() {
+  LOG(INFO) << "TOTAL    : " << time_ / 1e9;
+  LOG(INFO) << "PPX      : " << heldoutPpxTime_ / 1e9 << " (%"
+            << 100 * (heldoutPpxTime_ / 1e9) / (time_ / 1e9) << ")";
+#ifdef MCMC_CALC_TRAIN_PPX
+  LOG(INFO) << "TRAIN PPX: " << trainingPpxTime_ / 1e9 << " (%"
+            << 100 * (trainingPpxTime_ / 1e9) / (time_ / 1e9) << ")";
+#endif
+  LOG(INFO) << "SAMPLING : " << samplingTime_ / 1e9 << " (%"
+            << 100 * (samplingTime_ / 1e9) / (time_ / 1e9) << ")";
+  LOG(INFO) << "PI       : " << piTime_ / 1e9 << " (%"
+            << 100 * (piTime_ / 1e9) / (time_ / 1e9) << ")";
+  LOG(INFO) << "BETA     : " << betaTime_ / 1e9 << " (%"
+            << 100 * (betaTime_ / 1e9) / (time_ / 1e9) << ")";
 }
 
 }  // namespace mcmc

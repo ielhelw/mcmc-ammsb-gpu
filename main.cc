@@ -101,6 +101,7 @@ int main(int argc, char **argv) {
   LOG(INFO) << "Loaded file " << filename;
   LOG(INFO) << cfg;
   mcmc::Learner learner(cfg, queue);
-  learner.run(max_iters);
+  learner.Run(max_iters);
+  learner.PrintStats();
   return 0;
 }
