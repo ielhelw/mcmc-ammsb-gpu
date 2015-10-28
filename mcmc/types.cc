@@ -1,5 +1,8 @@
 #include "mcmc/types.h"
 
+#include <boost/program_options.hpp>
+#include <glog/logging.h>
+
 #include "mcmc/gen-util.h"
 
 namespace mcmc {
@@ -70,5 +73,21 @@ std::vector<std::string> GetClFlags(uint32_t wg) {
 }
 
 uint32_t GetMaxGroups() { return 65535; }
+
+std::ostream& operator<<(std::ostream& out, const ulong2& v) {
+  out << v[0] << "," << v[1];
+  return out;
+}
+
+std::istream& operator>>(std::istream& in, ulong2& v) {
+  in >> v[0];
+  if (in.get() != ',') {
+    throw boost::program_options::validation_error(
+        boost::program_options::validation_error::invalid_option_value,
+        "Invalid ulong2");
+  }
+  in >> v[1];
+  return in;
+}
 
 }  // namespace mcmc

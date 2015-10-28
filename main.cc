@@ -67,6 +67,9 @@ int main(int argc, char **argv) {
     ("max-iters,x", po::value(&max_iters)->default_value(100))
     ("sample,s", po::value(&cfg.strategy)->default_value(mcmc::Node))
     ("sampler-wg", po::value(&cfg.neighbor_sampler_wg_size)->default_value(32))
+    ("phi-seed", po::value(&cfg.phi_seed)->default_value({42, 43}))
+    ("beta-seed", po::value(&cfg.beta_seed)->default_value({44, 45}))
+    ("neighbor-seed", po::value(&cfg.neighbor_seed)->default_value({56, 57}))
   ;
   po::variables_map options_vm;
   po::store(po::parse_command_line(argc, argv, options), options_vm);

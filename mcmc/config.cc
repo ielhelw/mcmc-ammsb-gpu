@@ -85,6 +85,9 @@ std::ostream& operator<<(std::ostream& out, const Config& cfg) {
   out << "ppx-wg: : " << cfg.ppx_wg_size << std::endl;
   out << "phi-wg: : " << cfg.phi_wg_size << std::endl;
   out << "beta-wg: : " << cfg.beta_wg_size << std::endl;
+  out << "phi-seed: : " << cfg.phi_seed << std::endl;
+  out << "beta-seed: : " << cfg.beta_seed << std::endl;
+  out << "neighbor-seed: : " << cfg.neighbor_seed << std::endl;
   out << "|N|: " << cfg.N << std::endl;
   out << "|E|: " << cfg.E << std::endl;
   if (cfg.training)

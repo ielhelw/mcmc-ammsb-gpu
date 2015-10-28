@@ -7,6 +7,7 @@
 
 #include "mcmc/data.h"
 #include "mcmc/sample.h"
+#include "mcmc/random.h"
 
 namespace mcmc {
 
@@ -37,6 +38,10 @@ struct Config {
   uint32_t phi_wg_size;
   uint32_t beta_wg_size;
 
+  ulong2 phi_seed;
+  ulong2 beta_seed;
+  ulong2 neighbor_seed;
+
   bool phi_disable_noise;
 
   SampleStrategy strategy;
@@ -62,6 +67,9 @@ struct Config {
     phi_wg_size = 32;
     beta_wg_size = 32;
     phi_disable_noise = false;
+    phi_seed = {42, 43};
+    beta_seed = {113, 117};
+    neighbor_seed = {3337, 54351};
     strategy = Node;
   }
 };

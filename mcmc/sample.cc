@@ -90,7 +90,7 @@ NeighborSampler::NeighborSampler(const Config& cfg, clcuda::Queue queue)
       randFactory_(random::OpenClRandomFactory::New(queue_)),
       rand_(randFactory_->CreateRandom(
           2 * cfg.mini_batch_size * cfg.num_node_sample,
-          random::random_seed_t{42, 43})) {
+          random::random_seed_t{cfg.neighbor_seed[0], cfg.neighbor_seed[1]})) {
   std::vector<std::string> opts = ::mcmc::GetClFlags();
   clcuda::BuildStatus status = prog_.Build(queue.GetDevice(), opts);
   LOG_IF(FATAL, status != clcuda::BuildStatus::kSuccess)

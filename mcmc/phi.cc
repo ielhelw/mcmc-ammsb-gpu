@@ -243,7 +243,7 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
       rand_(randFactory_->CreateRandom(
           2 * cfg.mini_batch_size *
               (mode == NODE_PER_THREAD ? 1 : cfg.phi_wg_size),
-          random::random_seed_t{42, 43})),
+          random::random_seed_t{cfg.phi_seed[0], cfg.phi_seed[1]})),
       count_calls_(0),
       k_(cfg.K),
       local_(cfg.phi_wg_size) {

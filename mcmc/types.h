@@ -4,6 +4,7 @@
 #include <limits>
 #include <sstream>
 #include <tuple>
+#include <initializer_list>
 
 #include "mcmc/types.h.inc"
 
@@ -35,7 +36,25 @@ struct ulong2 {
   uint64_t values[2];
 
   uint64_t& operator[](size_t i) { return values[i]; }
+
+  uint64_t operator[](size_t i) const { return values[i]; }
+
+  ulong2() {}
+
+  ulong2(const std::initializer_list<uint64_t>& list) {
+    values[0] = *list.begin();
+    values[1] = *(list.begin() + 1);
+  }
+
+  void operator=(const std::initializer_list<uint64_t>& list) {
+    values[0] = *list.begin();
+    values[1] = *(list.begin() + 1);
+  }
+
 } __attribute__((aligned(16)));
+
+std::ostream& operator<<(std::ostream& out, const ulong2& v);
+std::istream& operator>>(std::istream& in, ulong2& v);
 
 namespace internal {
 
