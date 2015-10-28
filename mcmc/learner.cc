@@ -204,7 +204,7 @@ void Learner::run(uint32_t max_iters) {
   auto T1 = high_resolution_clock::now();
   futures[phase] =
       std::async(std::launch::async, &Learner::DoSample, this, &samples[phase]);
-  signal(SIGINT, handler);
+  auto prev_handler = signal(SIGINT, handler);
   for (; step_count < max_iters && !signaled; ++step_count) {
     if ((step_count - 1) % cfg_.ppx_interval == 0) {
       auto tppx_start = high_resolution_clock::now();
@@ -261,6 +261,8 @@ void Learner::run(uint32_t max_iters) {
             << 100 * (tpi / 1e9) / (time / 1e9) << ")";
   LOG(INFO) << "BETA     : " << tbeta / 1e9 << " (%"
             << 100 * (tbeta / 1e9) / (time / 1e9) << ")";
+
+  signal(SIGINT, prev_handler);
 }
 
 }  // namespace mcmc
