@@ -2,6 +2,7 @@
 #include <glog/logging.h>
 
 #include <chrono>
+#include <map>
 
 #include "mcmc/test.h"
 #include "mcmc/random.h"
