@@ -63,7 +63,7 @@ std::vector<std::string> GetClFlags(uint32_t wg) {
     ret.push_back(std::string("-DWG_SIZE=") + std::to_string(wg));
   }
 #ifdef MCMC_USE_CL
-  ret.push_back("-cl-fast-relaxed-math");
+//  ret.push_back("-cl-fast-relaxed-math");
 #else
   ret.push_back("-default-device");
   ret.push_back("--gpu-architecture=compute_20");

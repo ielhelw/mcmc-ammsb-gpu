@@ -4,15 +4,17 @@
 #include "mcmc/config.h"
 #include "mcmc/random.h"
 #include "mcmc/algorithm/normalize.h"
+#include "mcmc/serialize.h"
+
+bool Serialize(std::ostream* out);
+
+bool Parse(std::istream* in);
 
 namespace mcmc {
 
 class BetaUpdater {
  public:
-  enum Mode {
-    EDGE_PER_THREAD,
-    EDGE_PER_WORKGROUP
-  };
+  enum Mode { EDGE_PER_THREAD, EDGE_PER_WORKGROUP };
 
   BetaUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
               clcuda::Buffer<Float>& theta, clcuda::Buffer<Float>& beta,
@@ -26,6 +28,10 @@ class BetaUpdater {
 
   clcuda::Buffer<Float>& GetThetaSum() { return theta_sum_; }
   clcuda::Buffer<Float>& GetGrads() { return grads_; }
+
+  bool Serialize(std::ostream* out);
+
+  bool Parse(std::istream* in);
 
  private:
   Mode mode_;

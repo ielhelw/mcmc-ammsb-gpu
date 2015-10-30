@@ -6,6 +6,7 @@
 #include "mcmc/types.h"
 #include "mcmc/partitioned-alloc.h"
 #include "mcmc/algorithm/normalize.h"
+#include "mcmc/serialize.h"
 
 namespace mcmc {
 namespace random {
@@ -19,6 +20,10 @@ class OpenClRandom {
  public:
   inline clcuda::Buffer<char>& Get() { return buf_; }
   inline clcuda::Buffer<random_seed_t>& GetSeeds() { return data_; }
+
+  bool Serialize(std::ostream* out);
+
+  bool Parse(std::istream* in);
 
  private:
   OpenClRandom(std::shared_ptr<OpenClRandomFactory> factory,

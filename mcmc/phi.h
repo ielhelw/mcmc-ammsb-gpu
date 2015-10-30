@@ -9,10 +9,7 @@ namespace mcmc {
 
 class PhiUpdater {
  public:
-  enum Mode {
-    NODE_PER_THREAD,
-    NODE_PER_WORKGROUP
-  };
+  enum Mode { NODE_PER_THREAD, NODE_PER_WORKGROUP };
 
   PhiUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
              clcuda::Buffer<Float>& beta, RowPartitionedMatrix<Float>* pi,
@@ -26,6 +23,10 @@ class PhiUpdater {
       uint32_t num_mini_batch_nodes);
 
   uint64_t LastInvocationTime() const;
+
+  bool Serialize(std::ostream* out);
+
+  bool Parse(std::istream* in);
 
  private:
   Mode mode_;
@@ -50,8 +51,8 @@ class PhiUpdater {
   uint32_t k_;
   uint32_t local_;
 
-  std::unique_ptr<clcuda::Buffer<Float>> grads_;    // [mini_batch, K]
-  std::unique_ptr<clcuda::Buffer<Float>> probs_;    // [mini_batch, K]
+  std::unique_ptr<clcuda::Buffer<Float>> grads_;  // [mini_batch, K]
+  std::unique_ptr<clcuda::Buffer<Float>> probs_;  // [mini_batch, K]
 };
 
 }  // namespace mcmc

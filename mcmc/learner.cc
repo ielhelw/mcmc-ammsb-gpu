@@ -14,10 +14,10 @@ using namespace std::chrono;
 
 namespace mcmc {
 
-const std::string& Learner::GetBaseFuncs() {
-  static const std::string kSourceBaseFuncs =
-      GetSourceGuard() + GetClTypes() + "\n" + OpenClSetFactory::GetHeader() +
-      "\n" + R"%%(
+const std::string Learner::GetBaseFuncs() {
+  const std::string kSourceBaseFuncs = GetSourceGuard() + GetClTypes() + "\n" +
+                                       OpenClSetFactory::GetHeader() + "\n" +
+                                       R"%%(
           typedef VERTEX_TYPE Vertex; typedef EDGE_TYPE Edge;
           inline Vertex Vertex0(Edge e) {
             return (Vertex)((e & 0xffffffff00000000) >> 32);
@@ -200,36 +200,41 @@ sig_atomic_t signaled = 0;
 
 void handler(int sig __attribute((unused))) { signaled = 1; }
 
+Float Learner::HeldoutPerplexity() {
+  auto tppx_start = high_resolution_clock::now();
+  Float ppx = heldoutPerplexity_();
+  auto tppx_end = high_resolution_clock::now();
+  heldoutPpxTime_ += duration_cast<nanoseconds>(tppx_end - tppx_start).count();
+  //  LOG(INFO) << "ppx[" << stepCount_ << "] = " << ppx << ", "
+  //            << std::exp(ppx);
+  return std::exp(ppx);
+}
+
+#ifdef MCMC_CALC_TRAIN_PPX
+Float Learner::TrainingPerplexity() {
+  auto ttppx_start = high_resolution_clock::now();
+  Float train_ppx = trainingPerplexity_();
+  auto ttppx_end = high_resolution_clock::now();
+  trainingPpxTime_ +=
+      duration_cast<nanoseconds>(ttppx_end - ttppx_start).count();
+  //  LOG(INFO) << "train-ppx[" << stepCount_ << "] = " << train_ppx << ", "
+  //            << std::exp(train_ppx);
+  return std::exp(train_ppx);
+}
+#endif
+
 void Learner::Run(uint32_t max_iters) {
   auto T1 = high_resolution_clock::now();
   if (stepCount_ == 1) {
     futures_[phase_] = std::async(std::launch::async, &Learner::DoSample, this,
-                                 &samples_[phase_]);
+                                  &samples_[phase_]);
   }
   auto prev_handler = signal(SIGINT, handler);
   for (uint64_t I = 0; I < max_iters && !signaled; ++I, ++stepCount_) {
-    if ((stepCount_ - 1) % cfg_.ppx_interval == 0) {
-      auto tppx_start = high_resolution_clock::now();
-      Float ppx = heldoutPerplexity_();
-      auto tppx_end = high_resolution_clock::now();
-      heldoutPpxTime_ +=
-          duration_cast<nanoseconds>(tppx_end - tppx_start).count();
-      LOG(INFO) << "ppx[" << stepCount_ << "] = " << ppx << ", "
-                << std::exp(ppx);
-#ifdef MCMC_CALC_TRAIN_PPX
-      auto ttppx_start = high_resolution_clock::now();
-      Float train_ppx = trainingPerplexity_();
-      auto ttppx_end = high_resolution_clock::now();
-      trainingPpxTime_ +=
-          duration_cast<nanoseconds>(ttppx_end - ttppx_start).count();
-      LOG(INFO) << "train-ppx[" << stepCount_ << "] = " << train_ppx << ", "
-                << std::exp(train_ppx);
-#endif
-    }
     auto tsampling_start = high_resolution_clock::now();
     Float weight = futures_[phase_].get();
     futures_[1 - phase_] = std::async(std::launch::async, &Learner::DoSample,
-                                     this, &samples_[1 - phase_]);
+                                      this, &samples_[1 - phase_]);
     auto tsampling_end = high_resolution_clock::now();
     samplingTime_ +=
         duration_cast<nanoseconds>(tsampling_end - tsampling_start).count();
@@ -269,6 +274,67 @@ void Learner::PrintStats() {
             << 100 * (piTime_ / 1e9) / (time_ / 1e9) << ")";
   LOG(INFO) << "BETA     : " << betaTime_ / 1e9 << " (%"
             << 100 * (betaTime_ / 1e9) / (time_ / 1e9) << ")";
+}
+
+bool Learner::Serialize(std::ostream* out) {
+  LearnerProperties props;
+  props.set_stepcount(stepCount_);
+  props.set_time(time_);
+  props.set_heldoutppxtime(heldoutPpxTime_);
+#ifdef MCMC_CALC_TRAIN_PPX
+  props.set_trainingppxtime(trainingPpxTime_);
+#endif
+  props.set_samplingtime(samplingTime_);
+  props.set_pitime(piTime_);
+  props.set_betatime(betaTime_);
+  props.set_phase(phase_);
+  Float weight = futures_[phase_].get();
+  // reset future
+  futures_[phase_] =
+      std::async(std::launch::async, [weight]() -> Float { return weight; });
+  props.set_weight(weight);
+  return (::mcmc::Serialize(out, &beta_, &queue_) &&
+          ::mcmc::Serialize(out, &theta_, &queue_) &&
+          ::mcmc::Serialize(out, pi_.get(), &queue_) &&
+          ::mcmc::Serialize(out, &phi_, &queue_) &&
+          phiUpdater_.Serialize(out) && betaUpdater_.Serialize(out) &&
+#ifdef MCMC_CALC_TRAIN_PPX
+          trainingPerplexity_.Serialize(out) &&
+#endif
+          heldoutPerplexity_.Serialize(out) &&
+          ::mcmc::SerializeMessage(out, props) && samples_[0].Serialize(out) &&
+          samples_[1].Serialize(out));
+}
+
+bool Learner::Parse(std::istream* in) {
+  LearnerProperties props;
+  if (::mcmc::Parse(in, &beta_, &queue_) &&
+      ::mcmc::Parse(in, &theta_, &queue_) &&
+      ::mcmc::Parse(in, pi_.get(), &queue_) &&
+      ::mcmc::Parse(in, &phi_, &queue_) && phiUpdater_.Parse(in) &&
+      betaUpdater_.Parse(in) &&
+#ifdef MCMC_CALC_TRAIN_PPX
+      trainingPerplexity_.Parse(in) &&
+#endif
+      heldoutPerplexity_.Parse(in) && ::mcmc::ParseMessage(in, &props)) {
+    stepCount_ = props.stepcount();
+    time_ = props.time();
+    heldoutPpxTime_ = props.heldoutppxtime();
+#ifdef MCMC_CALC_TRAIN_PPX
+    trainingPpxTime = props.trainingppxtime();
+#endif
+    samplingTime_ = props.samplingtime();
+    piTime_ = props.pitime();
+    betaTime_ = props.betatime();
+    phase_ = props.phase();
+    if (samples_[0].Parse(in) && samples_[1].Parse(in)) {
+      Float weight = static_cast<Float>(props.weight());
+      futures_[phase_] = std::async(std::launch::async,
+                                    [weight]() -> Float { return weight; });
+      return true;
+    }
+  }
+  return false;
 }
 
 }  // namespace mcmc

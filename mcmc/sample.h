@@ -5,6 +5,7 @@
 
 #include "mcmc/types.h"
 #include "mcmc/random.h"
+#include "mcmc/serialize.h"
 
 namespace mcmc {
 
@@ -25,6 +26,14 @@ class NeighborSampler {
   uint32_t HashCapacityPerSample();
 
   uint32_t DataSizePerSample();
+
+  inline bool Serialize(std::ostream* out) {
+    return rand_->Serialize(out) && ::mcmc::Serialize(out, &data_, &queue_);
+  }
+
+  inline bool Parse(std::istream* in) {
+    return rand_->Parse(in) && ::mcmc::Parse(in, &data_, &queue_);
+  }
 
  private:
   const Config& cfg_;
@@ -49,6 +58,37 @@ struct Sample {
   NeighborSampler neighbor_sampler;
 
   Sample(const Config& cfg, clcuda::Queue queue);
+
+  inline bool Serialize(std::ostream* out) {
+    SampleStorage storage;
+    storage.mutable_edges()->resize(edges.size() * sizeof(Edge));
+    memcpy((void*)storage.mutable_edges()->data(), edges.data(),
+           edges.size() * sizeof(Edge));
+    storage.mutable_nodes_vec()->resize(nodes_vec.size() * sizeof(Vertex));
+    memcpy((void*)storage.mutable_nodes_vec()->data(), nodes_vec.data(),
+           nodes_vec.size() * sizeof(Vertex));
+    storage.set_seed(seed);
+    return ::mcmc::SerializeMessage(out, storage) &&
+           ::mcmc::Serialize(out, &dev_edges, &queue) &&
+           ::mcmc::Serialize(out, &dev_nodes, &queue) &&
+           neighbor_sampler.Serialize(out);
+  }
+
+  inline bool Parse(std::istream* in) {
+    SampleStorage storage;
+    if (::mcmc::ParseMessage(in, &storage) &&
+        ::mcmc::Parse(in, &dev_edges, &queue) &&
+        ::mcmc::Parse(in, &dev_nodes, &queue) && neighbor_sampler.Parse(in)) {
+      edges.resize(storage.edges().size() / sizeof(Edge));
+      memcpy(edges.data(), storage.edges().data(), edges.size() * sizeof(Edge));
+      nodes_vec.resize(storage.nodes_vec().size() / sizeof(Vertex));
+      memcpy(nodes_vec.data(), storage.nodes_vec().data(),
+             nodes_vec.size() * sizeof(Vertex));
+      seed = storage.seed();
+      return true;
+    }
+    return false;
+  }
 };
 
 enum SampleStrategy {

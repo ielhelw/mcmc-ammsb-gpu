@@ -20,9 +20,17 @@ class Learner {
 
   void Run(uint32_t max_iters);
 
+  Float HeldoutPerplexity();
+
+  Float TrainingPerplexity();
+
   void PrintStats();
 
-  static const std::string& GetBaseFuncs();
+  bool Serialize(std::ostream* out);
+
+  bool Parse(std::istream* in);
+
+  static const std::string GetBaseFuncs();
 
  private:
   Float SampleMiniBatch(std::vector<Edge>* edges, unsigned int* seed);

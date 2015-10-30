@@ -11,6 +11,7 @@ find_package(Boost REQUIRED COMPONENTS
   filesystem
   system
 )
+find_package(Protobuf REQUIRED)
 
 OPTION(MCMC_USE_CL "Use OpenCL / else CUDA with nvcc" ON)
 IF (MCMC_USE_CL)
@@ -40,6 +41,8 @@ OPTION(MCMC_CALC_TRAIN_PPX "Calculate training perplexity" OFF)
 
 configure_file(mcmc/types.h.inc.in mcmc/types.h.inc)
 
+PROTOBUF_GENERATE_CPP(PROTO_SRCS PROTO_HDRS mcmc/protos.proto)
+
 include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_BINARY_DIR}
@@ -48,6 +51,7 @@ include_directories(
   ${BoostCompute_INCLUDE_DIRS}
   ${OPENCL_INCLUDE_DIRS}
   ${GTEST_INCLUDE_DIRS}
+  ${PROTOBUF_INCLUDE_DIRS}
 )
 link_libraries(
   ${CMAKE_THREAD_LIBS_INIT}
@@ -55,9 +59,11 @@ link_libraries(
   ${OPENCL_LIBRARIES}
   ${Boost_LIBRARIES}
   ${CUDA_LIBS}
+  ${PROTOBUF_LIBRARIES}
 )
 
 mcmc_add_library(mcmc SHARED
+  ${PROTO_SRCS}
   mcmc/cuckoo.cc
   mcmc/data.cc
   mcmc/random.cc
@@ -123,3 +129,7 @@ add_test(test-partitioned-alloc test-partitioned-alloc)
 mcmc_add_executable(wg-sample-test mcmc/wg-sample-test.cc)
 target_link_libraries(wg-sample-test mcmc ${GTEST_BOTH_LIBRARIES})
 add_test(wg-sample-test wg-sample-test)
+
+mcmc_add_executable(serialize-test mcmc/serialize-test.cc)
+target_link_libraries(serialize-test mcmc ${GTEST_BOTH_LIBRARIES})
+add_test(serialize-test serialize-test)

@@ -90,10 +90,9 @@ int main(int argc, char **argv) {
   clcuda::Device dev = ChooseDevice();
   clcuda::Context context(dev);
   clcuda::Queue queue(context, dev);
-  LOG(INFO) << "OpenCL:" << endl
-    << "  Platform: " << dev.Vendor() << endl
-    << "  Device: " << dev.Name() << endl
-    << "  Device Driver: " << dev.Version();
+  LOG(INFO) << "OpenCL:" << endl << "  Platform: " << dev.Vendor() << endl
+            << "  Device: " << dev.Name() << endl
+            << "  Device Driver: " << dev.Version();
   std::vector<mcmc::Edge> unique_edges;
   if (!mcmc::GetUniqueEdgesFromFile(filename, &cfg.N, &unique_edges) ||
       !mcmc::GenerateSetsFromEdges(cfg.N, unique_edges, cfg.heldout_ratio,
@@ -103,12 +102,16 @@ int main(int argc, char **argv) {
   }
   cfg.trainingGraph.reset(new mcmc::Graph(cfg.N, cfg.training_edges));
   cfg.heldoutGraph.reset(new mcmc::Graph(cfg.N, cfg.heldout_edges));
-  if (cfg.alpha == 0) cfg.alpha = static_cast<mcmc::Float>(1)/cfg.K;
+  if (cfg.alpha == 0) cfg.alpha = static_cast<mcmc::Float>(1) / cfg.K;
   cfg.E = unique_edges.size();
   LOG(INFO) << "Loaded file " << filename;
   LOG(INFO) << cfg;
   mcmc::Learner learner(cfg, queue);
-  learner.Run(max_iters);
+  for (uint64_t i = 0; i < max_iters; i += cfg.ppx_interval) {
+    uint64_t step = std::min<uint64_t>(max_iters - i, cfg.ppx_interval);
+    learner.Run(step);
+    LOG(INFO) << "ppx[" << i + step << "] = " << learner.HeldoutPerplexity();
+  }
   learner.PrintStats();
   return 0;
 }

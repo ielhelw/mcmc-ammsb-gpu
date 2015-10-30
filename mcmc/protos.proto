@@ -1,0 +1,45 @@
+package mcmc;
+
+message VectorStorage {
+  required bytes storage = 1;
+}
+
+message RpmProperties {
+  required uint32 rows = 1;
+  required uint32 cols = 2;
+  required uint32 rows_in_block = 3;
+}
+
+message OpenClRandomStorage {
+  required VectorStorage seeds = 1;
+}
+
+message BetaProperties {
+  required uint32 count_calls = 1;
+}
+
+message PhiProperties {
+  required uint32 count_calls = 1;
+}
+
+message PerplexityProperties {
+  required uint32 count_calls = 1;
+}
+
+message SampleStorage {
+  required bytes edges = 1;
+  required bytes nodes_vec = 2;
+  required uint32 seed = 3;
+}
+
+message LearnerProperties {
+  required uint32 stepCount = 1;
+  required uint64 time = 2;
+  required uint64 heldoutPpxTime = 3;
+  optional uint64 trainingPpxTime = 4;
+  required uint64 samplingTime = 5;
+  required uint64 piTime = 6;
+  required uint64 betaTime = 7;
+  required int32 phase = 8;
+  required double weight = 9;
+}

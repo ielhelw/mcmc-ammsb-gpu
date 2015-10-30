@@ -22,21 +22,22 @@ namespace mcmc {
 
 class PerplexityCalculatorBase {
  public:
-  enum Mode {
-    EDGE_PER_THREAD,
-    EDGE_PER_WORKGROUP
-  };
+  enum Mode { EDGE_PER_THREAD, EDGE_PER_WORKGROUP };
 
   PerplexityCalculatorBase(Mode mode, const Config& cfg, clcuda::Queue queue,
-                       clcuda::Buffer<Float>& beta,
-                       RowPartitionedMatrix<Float>* pi,
-                       clcuda::Buffer<Edge>& edges, OpenClSet* edgeSet,
-                       const std::vector<std::string>& compileFlags,
-                       const std::string& baseFuncs);
+                           clcuda::Buffer<Float>& beta,
+                           RowPartitionedMatrix<Float>* pi,
+                           clcuda::Buffer<Edge>& edges, OpenClSet* edgeSet,
+                           const std::vector<std::string>& compileFlags,
+                           const std::string& baseFuncs);
 
   Float operator()();
 
   uint64_t LastInvocationTime() const;
+
+  bool Serialize(std::ostream* out);
+
+  bool Parse(std::istream* in);
 
  protected:
   virtual void AccumulateVectors() = 0;
@@ -48,6 +49,7 @@ class PerplexityCalculatorBase {
   RowPartitionedMatrix<Float>* pi_;  // [N,K]
   clcuda::Buffer<Edge>& edges_;
   OpenClSet* edgeSet_;
+  clcuda::Buffer<Float> ppx_per_edge_;
 
   std::vector<uint32_t> link_count_;
   std::vector<uint32_t> non_link_count_;
@@ -71,11 +73,11 @@ class PerplexityCalculatorCl : public PerplexityCalculatorBase {
                          clcuda::Buffer<Edge>& edges, OpenClSet* edgeSet,
                          const std::vector<std::string>& compileFlags,
                          const std::string& baseFuncs);
+
  private:
   void AccumulateVectors() override;
 
   boost::compute::command_queue compute_queue_;
-  boost::compute::vector<Float> ppx_per_edge_;
   boost::compute::vector<Float> ppx_per_edge_link_likelihood_;
   boost::compute::vector<Float> ppx_per_edge_non_link_likelihood_;
   boost::compute::vector<uint32_t> ppx_per_edge_link_count_;
@@ -90,10 +92,10 @@ class PerplexityCalculatorCu : public PerplexityCalculatorBase {
                          clcuda::Buffer<Edge>& edges, OpenClSet* edgeSet,
                          const std::vector<std::string>& compileFlags,
                          const std::string& baseFuncs);
+
  private:
   void AccumulateVectors();
 
-  thrust::device_vector<Float> ppx_per_edge_;
   thrust::device_vector<Float> ppx_per_edge_link_likelihood_;
   thrust::device_vector<Float> ppx_per_edge_non_link_likelihood_;
   thrust::device_vector<uint32_t> ppx_per_edge_link_count_;

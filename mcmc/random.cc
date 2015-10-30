@@ -68,6 +68,14 @@ void OpenClRandom::SetSeed(random_seed_t seed) {
   queue_.Finish();
 }
 
+bool OpenClRandom::Serialize(std::ostream* out) {
+  return ::mcmc::Serialize(out, &data_, &queue_);
+}
+
+bool OpenClRandom::Parse(std::istream* in) {
+  return ::mcmc::Parse(in, &data_, &queue_);
+}
+
 std::shared_ptr<OpenClRandomFactory> OpenClRandomFactory::New(
     clcuda::Queue queue) {
   return std::shared_ptr<OpenClRandomFactory>(new OpenClRandomFactory(queue));
@@ -143,7 +151,8 @@ void RandomGamma(clcuda::Queue* queue, OpenClRandom* randv, Float eta0,
   kernel.SetArgument(2, eta0);
   kernel.SetArgument(3, eta1);
   clcuda::Event e;
-  kernel.Launch(*queue, {std::min(norm->Rows(), GetMaxGroups()) * local}, {local}, e);
+  kernel.Launch(*queue, {std::min(norm->Rows(), GetMaxGroups()) * local},
+                {local}, e);
   queue->Finish();
 }
 

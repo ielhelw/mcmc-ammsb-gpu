@@ -296,18 +296,6 @@ void BetaUpdater::operator()(clcuda::Buffer<Edge>* edges, uint32_t num_edges,
     normalize_time_ =
         std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t2).count();
   }
-#if 0
-  LOG(INFO)
-      << "BetaUpdater: "
-      << theta_sum_event_.duration<boost::chrono::nanoseconds>().count() / 1e9
-      << ", "
-      << grads_partial_event_.duration<boost::chrono::nanoseconds>().count() /
-             1e9 << ", "
-      << grads_sum_event_.duration<boost::chrono::nanoseconds>().count() / 1e9
-      << ", "
-      << update_theta_event_.duration<boost::chrono::nanoseconds>().count() /
-             1e9 << ", " << normalize_time_ / 1e9;
-#endif
 }
 
 uint64_t BetaUpdater::LastInvocationTime() const {
@@ -315,6 +303,25 @@ uint64_t BetaUpdater::LastInvocationTime() const {
          grads_partial_event_.GetElapsedTime() +
          grads_sum_event_.GetElapsedTime() +
          update_theta_event_.GetElapsedTime() + normalize_time_;
+}
+
+bool BetaUpdater::Serialize(std::ostream* out) {
+  BetaProperties props;
+  props.set_count_calls(count_calls_);
+  return (rand_->Serialize(out) &&
+          ::mcmc::Serialize(out, &theta_sum_, &queue_) &&
+          ::mcmc::SerializeMessage(out, props));
+}
+
+bool BetaUpdater::Parse(std::istream* in) {
+  BetaProperties props;
+  if (rand_->Parse(in) && ::mcmc::Parse(in, &theta_sum_, &queue_) &&
+      ::mcmc::ParseMessage(in, &props)) {
+    count_calls_ = props.count_calls();
+    return true;
+  } else {
+    return false;
+  }
 }
 
 }  // namespace mcmc

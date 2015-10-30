@@ -108,8 +108,11 @@ const std::string kSourcePhiWg =
     mcmc::algorithm::WorkGroupNormalizeProgram(type_name<Float>()) + "\n" +
     "#define WG_SUM_Float WG_SUM_" + type_name<Float>() +
     "\n"
-    "#define WG_SUM_Float_LOCAL_ WG_SUM_" + type_name<Float>() + "_LOCAL_\n"
-    "#define WG_SUML_Float WG_SUML_" + type_name<Float>() +
+    "#define WG_SUM_Float_LOCAL_ WG_SUM_" +
+    type_name<Float>() +
+    "_LOCAL_\n"
+    "#define WG_SUML_Float WG_SUML_" +
+    type_name<Float>() +
     "\n"
     "#define WG_NORMALIZE_Float WG_NORMALIZE_" +
     type_name<Float>() + "\n" + random::GetRandomHeader() + R"%%(
@@ -251,8 +254,10 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
   switch (mode_) {
     case NODE_PER_THREAD:
       src = &kSourcePhi;
-      grads_.reset(new clcuda::Buffer<Float>(queue_.GetContext(), 2 * cfg.mini_batch_size * cfg.K));
-      probs_.reset(new clcuda::Buffer<Float>(queue_.GetContext(), 2 * cfg.mini_batch_size * cfg.K));
+      grads_.reset(new clcuda::Buffer<Float>(queue_.GetContext(),
+                                             2 * cfg.mini_batch_size * cfg.K));
+      probs_.reset(new clcuda::Buffer<Float>(queue_.GetContext(),
+                                             2 * cfg.mini_batch_size * cfg.K));
       break;
     case NODE_PER_WORKGROUP:
       src = &kSourcePhiWg;
@@ -338,6 +343,22 @@ void PhiUpdater::operator()(
 
 uint64_t PhiUpdater::LastInvocationTime() const {
   return phi_event_.GetElapsedTime() + pi_event_.GetElapsedTime();
+}
+
+bool PhiUpdater::Serialize(std::ostream* out) {
+  PhiProperties props;
+  props.set_count_calls(count_calls_);
+  return (rand_->Serialize(out) && ::mcmc::SerializeMessage(out, props));
+}
+
+bool PhiUpdater::Parse(std::istream* in) {
+  PhiProperties props;
+  if (rand_->Parse(in) && ::mcmc::ParseMessage(in, &props)) {
+    count_calls_ = props.count_calls();
+    return true;
+  } else {
+    return false;
+  }
 }
 
 }  // namespace mcmc
