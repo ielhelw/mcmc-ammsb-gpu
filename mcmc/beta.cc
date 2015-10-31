@@ -38,17 +38,17 @@ const std::string kSourceBetaBase = random::GetRandomHeader() + R"%%(
               Float r0 = randn(&rseed);
               Float grads_k = grads[2 * k];
               Float theta_k = Theta0(theta, k);
-              Float f0 = sqrt(eps_t * theta_k);
+              Float f0 = SQRT(eps_t * theta_k);
               SetTheta0(theta, k,
-                        fabs(theta_k +
-                             eps_t / 2.0 * (ETA0 - theta_k + scale * grads_k) +
+                        FABS(theta_k +
+                             eps_t / ((Float)2.0) * (ETA0 - theta_k + scale * grads_k) +
                              f0 * r0));
               Float r1 = randn(&rseed);
               Float grads_2k = grads[2 * k + 1];
               Float theta_2k = Theta1(theta, k);
-              Float f1 = sqrt(eps_t * theta_2k);
-              SetTheta1(theta, k, fabs(theta_2k +
-                                       eps_t / 2.0 * (ETA1 - theta_2k +
+              Float f1 = SQRT(eps_t * theta_2k);
+              SetTheta1(theta, k, FABS(theta_2k +
+                                       eps_t / ((Float)2.0) * (ETA1 - theta_2k +
                                                       scale * grads_2k) +
                                        f1 * r1));
             }
@@ -95,16 +95,16 @@ const std::string kSourceBeta = kSourceBetaBase + R"%%(
           if (y) {
             probs_k = Beta(beta, k) * f;
           } else {
-            probs_k = (1.0 - Beta(beta, k)) * f;
+            probs_k = (((Float)1.0) - Beta(beta, k)) * f;
           }
           probs[k] = probs_k;
           probs_sum += probs_k;
         }
-        Float prob_0 = (y ? EPSILON : (1.0 - EPSILON)) * (1.0 - pi_sum);
+        Float prob_0 = (y ? EPSILON : (((Float)1.0) - EPSILON)) * (((Float)1.0) - pi_sum);
         probs_sum += prob_0;
         for (uint k = 0; k < K; k++) {
           Float f = probs[k] / probs_sum;
-          Float one_over_theta_sum = 1.0 / theta_sum[k];
+          Float one_over_theta_sum = ((Float)1.0) / theta_sum[k];
           grads[2 * k] += f * ((1 - y) / Theta0(theta, k) - one_over_theta_sum);
           grads[2 * k + 1] += f * (y / Theta1(theta, k) - one_over_theta_sum);
         }
@@ -157,7 +157,7 @@ const std::string kSourceBetaWg =
           if (y) {
             probs_k = beta_k * f;
           } else {
-            probs_k = (1.0 - beta_k) * f;
+            probs_k = (((Float)1.0) - beta_k) * f;
           }
           probs[k] = probs_k;
         }
@@ -168,11 +168,11 @@ const std::string kSourceBetaWg =
         WG_SUM_Float(probs, aux, K);
         probs_sum = aux[0];
 
-        Float prob_0 = (y ? EPSILON : (1.0 - EPSILON)) * (1.0 - pi_sum);
+        Float prob_0 = (y ? EPSILON : (((Float)1.0) - EPSILON)) * (((Float)1.0) - pi_sum);
         probs_sum += prob_0;
         for (uint k = lid; k < K; k += lsize) {
           Float f = probs[k] / probs_sum;
-          Float one_over_theta_sum = 1.0 / theta_sum[k];
+          Float one_over_theta_sum = ((Float)1.0) / theta_sum[k];
           grads[2 * k] += f * ((1 - y) / Theta0(theta, k) - one_over_theta_sum);
           grads[2 * k + 1] += f * (y / Theta1(theta, k) - one_over_theta_sum);
         }

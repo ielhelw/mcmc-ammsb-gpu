@@ -25,13 +25,13 @@ const std::string kSourcePerplexity = R"%%(
         uint k = 0;
         for (; k < K; ++k) {
           Float f = pi_a[k] * pi_b[k];
-          s += f * (1.0 - Beta(beta, k));
+          s += f * (((Float)1.0) - Beta(beta, k));
           sum += f;
         }
-        s += (1.0 - sum) * (1.0 - EPSILON);
+        s += (((Float)1.0) - sum) * (((Float)1.0) - EPSILON);
       }
-      if (s < 1.0e-30) {
-        s = 1.0e-30;
+      if (s < ((Float)1.0e-30)) {
+        s = ((Float)1.0e-30);
       }
       return s;
     }
@@ -51,12 +51,12 @@ const std::string kSourcePerplexity = R"%%(
       ppx = (ppx * (avg_count - 1) + edge_likelihood) / avg_count;
       if (is_edge) {
         *g_link_count = 1;
-        *g_link_likelihood = log(ppx);
+        *g_link_likelihood = LOG(ppx);
         *g_non_link_count = 0;
         *g_non_link_likelihood = 0;
       } else {
         (*g_non_link_count) = 1;
-        *g_non_link_likelihood = log(ppx);
+        *g_non_link_likelihood = LOG(ppx);
         *g_link_count = 0;
         *g_link_likelihood = 0;
       }
@@ -111,15 +111,15 @@ const std::string kSourcePerplexityWg =
             sum = aux[0];
             BARRIER_LOCAL;
             for (uint i = lid; i < K; i += GET_LOCAL_SIZE()) {
-              scratch[i] = pi_a[i] * pi_b[i] * (1.0 - Beta(beta, i));
+              scratch[i] = pi_a[i] * pi_b[i] * (((Float)1.0) - Beta(beta, i));
             }
             BARRIER_GLOBAL;
             WG_SUM_Float(scratch, aux, K);
             s = aux[0];
-            s += (1.0 - sum) * (1.0 - EPSILON);
+            s += (((Float)1.0) - sum) * (((Float)1.0) - EPSILON);
           }
-          if (s < 1.0e-30) {
-            s = 1.0e-30;
+          if (s < ((Float)1.0e-30)) {
+            s = ((Float)1.0e-30);
           }
           return s;
         }
@@ -142,12 +142,12 @@ const std::string kSourcePerplexityWg =
             ppx = (ppx * (avg_count - 1) + edge_likelihood) / avg_count;
             if (is_edge) {
               *g_link_count = 1;
-              *g_link_likelihood = log(ppx);
+              *g_link_likelihood = LOG(ppx);
               *g_non_link_count = 0;
               *g_non_link_likelihood = 0;
             } else {
               *g_non_link_count = 1;
-              *g_non_link_likelihood = log(ppx);
+              *g_non_link_likelihood = LOG(ppx);
               *g_link_count = 0;
               *g_link_likelihood = 0;
             }

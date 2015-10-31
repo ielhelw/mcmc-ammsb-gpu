@@ -111,8 +111,8 @@ TEST_F(SerializeTest, EndToEnd) {
   cfg.trainingGraph.reset(new ::mcmc::Graph(cfg.N, cfg.training_edges));
   cfg.heldoutGraph.reset(new ::mcmc::Graph(cfg.N, cfg.heldout_edges));
   if (cfg.alpha == 0) cfg.alpha = static_cast<::mcmc::Float>(1) / cfg.K;
-  ASSERT_GT(cfg.training_edges.size(), 0);
-  ASSERT_GT(cfg.heldout_edges.size(), 0);
+  ASSERT_GT(cfg.training_edges.size(), static_cast<size_t>(0));
+  ASSERT_GT(cfg.heldout_edges.size(), static_cast<size_t>(0));
   cfg.E = unique_edges.size();
   LOG(INFO) << cfg;
   std::ostringstream out;

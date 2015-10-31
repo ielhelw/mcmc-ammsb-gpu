@@ -13,6 +13,11 @@ std::string GetClTypes() {
   if (type_name<Float>() == std::string("double")) {
     out << "#pragma OPENCL EXTENSION cl_khr_fp64: enable " << std::endl;
   }
+  out << "#define FABS fabs" << std::endl;
+  out << "#define EXP exp" << std::endl;
+  out << "#define SQRT sqrt" << std::endl;
+  out << "#define LOG log" << std::endl;
+  out << "#define POW pow" << std::endl;
   out << R"%%(
   #define KERNEL __kernel
   #define GLOBAL __global
@@ -29,6 +34,19 @@ std::string GetClTypes() {
   #define BARRIER_GLOBAL  barrier(CLK_GLOBAL_MEM_FENCE)
   )%%";
 #else
+  if (type_name<Float>() == std::string("double")) {
+    out << "#define FABS fabs" << std::endl;
+    out << "#define EXP exp" << std::endl;
+    out << "#define SQRT sqrt" << std::endl;
+    out << "#define LOG log" << std::endl;
+    out << "#define POW pow" << std::endl;
+  } else {
+    out << "#define FABS fabsf" << std::endl;
+    out << "#define EXP expf" << std::endl;
+    out << "#define SQRT sqrtf" << std::endl;
+    out << "#define LOG logf" << std::endl;
+    out << "#define POW powf" << std::endl;
+  }
   out << R"%%(
   #define KERNEL extern "C" __global__
   #define GLOBAL
