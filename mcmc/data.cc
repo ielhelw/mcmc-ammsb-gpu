@@ -9,15 +9,17 @@
 
 namespace mcmc {
 
-Graph::Graph(uint32_t num_nodes, const std::vector<Edge>& unique_edges)
+Graph::Graph(uint64_t num_nodes, const std::vector<Edge>& unique_edges)
     : num_nodes_(num_nodes),
       unique_edges_(unique_edges),
-      adjacency_(num_nodes) {
+      adjacency_(num_nodes),
+      max_fan_out_(0) {
   for (auto e : unique_edges_) {
     Vertex u, v;
     std::tie(u, v) = Vertices(e);
     adjacency_[u].push_back(v);
     adjacency_[v].push_back(u);
+    max_fan_out_ = std::max(adjacency_[u].size(), adjacency_[v].size());
   }
 }
 

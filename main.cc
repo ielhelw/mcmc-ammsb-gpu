@@ -104,7 +104,9 @@ int main(int argc, char **argv) {
   cfg.heldoutGraph.reset(new mcmc::Graph(cfg.N, cfg.heldout_edges));
   if (cfg.alpha == 0) cfg.alpha = static_cast<mcmc::Float>(1) / cfg.K;
   cfg.E = unique_edges.size();
-  LOG(INFO) << "Loaded file " << filename;
+  LOG(INFO) << "Loaded file " << filename
+            << " (training max fan out = " << cfg.trainingGraph->MaxFanOut()
+            << ", heldout max fan out = " << cfg.heldoutGraph->MaxFanOut() << ")";
   LOG(INFO) << cfg;
   mcmc::Learner learner(cfg, queue);
   for (uint64_t i = 0; i < max_iters; i += cfg.ppx_interval) {

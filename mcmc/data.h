@@ -15,7 +15,7 @@ using namespace mcmc::cuckoo;
 
 class Graph {
  public:
-  Graph(uint32_t num_nodes, const std::vector<Edge>& unique_edges);
+  Graph(uint64_t num_nodes, const std::vector<Edge>& unique_edges);
 
   Edge GetRandomEdge() const;
 
@@ -25,10 +25,13 @@ class Graph {
 
   inline const std::vector<Edge>& UniqueEdges() const { return unique_edges_; }
 
+  uint64_t MaxFanOut() const { return max_fan_out_; }
+
  private:
-  uint32_t num_nodes_;
+  uint64_t num_nodes_;
   std::vector<Edge> unique_edges_;
   std::vector<std::vector<Vertex>> adjacency_;
+  uint64_t max_fan_out_;
 };
 
 bool GetUniqueEdgesFromFile(const std::string& filename,

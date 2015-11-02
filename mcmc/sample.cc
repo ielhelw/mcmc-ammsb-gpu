@@ -83,8 +83,12 @@ NeighborSampler::NeighborSampler(const Config& cfg, clcuda::Queue queue)
       capacity_(2 * cfg.num_node_sample),
       local_(cfg.neighbor_sampler_wg_size),
       queue_(queue),
-      hash_(queue_.GetContext(), 2 * cfg.mini_batch_size * capacity_),
-      data_(queue_.GetContext(), 2 * cfg.mini_batch_size * cfg.num_node_sample),
+      hash_(queue_.GetContext(), std::max(2 * cfg.mini_batch_size,
+                                          1 + cfg.trainingGraph->MaxFanOut()) *
+                                     capacity_),
+      data_(queue_.GetContext(), std::max(2 * cfg.mini_batch_size,
+                                          1 + cfg.trainingGraph->MaxFanOut()) *
+                                     cfg.num_node_sample),
       prog_(queue.GetContext(),
             ::mcmc::random::GetRandomHeader() + GetNeighborSamplerSource()),
       randFactory_(random::OpenClRandomFactory::New(queue_)),
@@ -123,7 +127,8 @@ uint32_t NeighborSampler::DataSizePerSample() { return cfg_.num_node_sample; }
 Sample::Sample(const Config& cfg, clcuda::Queue q)
     : queue(q.GetContext(), q.GetDevice()),
       dev_edges(q.GetContext(), cfg.mini_batch_size),
-      dev_nodes(q.GetContext(), 2 * cfg.mini_batch_size),
+      dev_nodes(q.GetContext(), std::max(2 * cfg.mini_batch_size,
+                                         1 + cfg.trainingGraph->MaxFanOut())),
       seed(rand()),
       neighbor_sampler(cfg, clcuda::Queue(q.GetContext(), q.GetDevice())) {}
 
@@ -288,7 +293,8 @@ Float sampleNodeNonLink(const Config& cfg, std::vector<Edge>* edges,
     set.insert(e);
   }
   edges->insert(edges->begin(), set.begin(), set.end());
-  return (cfg.N * cfg.N) / static_cast<Float>(cfg.mini_batch_size);
+  // return (cfg.N * cfg.N) / static_cast<Float>(cfg.mini_batch_size);
+  return (2 * cfg.E) / static_cast<Float>(cfg.mini_batch_size);
 }
 
 Float sampleNode(const Config& cfg, std::vector<Edge>* edges,
