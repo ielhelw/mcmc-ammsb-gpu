@@ -19,9 +19,11 @@ const std::string kSourceBetaBase = random::GetRandomHeader() + R"%%(
           uint i = GET_GLOBAL_ID();
           uint gsize = GET_GLOBAL_SIZE();
           for (; i < 2 * K; i += gsize) {
+            Float sum = grads[i];
             for (uint p = 1; p < num_partial_sums; ++p) {
-              grads[i] += grads[i + p * 2 * K];
+              sum += grads[i + p * 2 * K];
             }
+            grads[i] = sum;
           }
         }
 
