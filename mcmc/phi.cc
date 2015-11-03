@@ -103,7 +103,7 @@ const std::string kSourcePhi = random::GetRandomHeader() + R"%%(
         }
 
         )%%";
-#if 0 // pi_a/probs/grads in thread local memory. Not enough registers, spills.
+#if 0  // pi_a/probs/grads in thread local memory. Not enough registers, spills.
  const std::string kSourcePhiWg =
     mcmc::algorithm::WorkGroupNormalizeProgram(type_name<Float>()) + "\n" +
     "#define WG_SUM_Float WG_SUM_" + type_name<Float>() +
@@ -228,7 +228,7 @@ const std::string kSourcePhi = random::GetRandomHeader() + R"%%(
         }
 
         )%%";
-#else
+#elif 0
 // 25% improvement by placing pi_a/probs/grads in shared memory.
 const std::string kSourcePhiWg =
     mcmc::algorithm::WorkGroupNormalizeProgram(type_name<Float>()) + "\n" +
@@ -333,6 +333,350 @@ const std::string kSourcePhiWg =
               update_phi_for_nodeWG(g_beta, g_pi, g_phi, phi_vec,
                                     (GLOBAL Set*)training_edge_set, node, node_neighbors,
                                     step_count, &rseed, aux, grads, probs, pi_a);
+            }
+            rand->base_[GET_GLOBAL_ID()] = rseed;
+          }
+        }
+
+        KERNEL void update_pi(GLOBAL void* g_pi, GLOBAL Float* g_phi_vec,
+                              GLOBAL Vertex* mini_batch_nodes,
+                              uint num_mini_batch_nodes) {
+          LOCAL_DECLARE Float aux[WG_SIZE];
+          uint i = GET_GROUP_ID();
+          uint gsize = GET_NUM_GROUPS();
+          uint lid = GET_LOCAL_ID();
+          for (; i < num_mini_batch_nodes; i += gsize) {
+            Vertex n = mini_batch_nodes[i];
+            GLOBAL Float* pi = FloatRowPartitionedMatrix_Row((GLOBAL FloatRowPartitionedMatrix*)g_pi, n);
+            GLOBAL Float* phi = g_phi_vec + i * K;
+            for (uint k = lid; k < K; k += WG_SIZE) {
+              pi[k] = phi[k];
+            }
+            BARRIER_GLOBAL;
+            WG_NORMALIZE_Float(pi, aux, K);
+          }
+        }
+
+        )%%";
+#else
+// grads/pi_a in shared memory, probs in registers.
+// Optimal block size for Titan X = 128
+// Note: tried moving more arrays in registers, worked but was slower. Using
+// too many registers limits number of concurrent blocks on a single SM.
+const std::string kSourcePhiWg =
+    mcmc::algorithm::WorkGroupNormalizeProgram(type_name<Float>()) + "\n" +
+    "#define WG_SUM_Float WG_SUM_" + type_name<Float>() +
+    "\n"
+    "#define WG_SUM_Float_LOCAL_ WG_SUM_" +
+    type_name<Float>() +
+    "_LOCAL_\n"
+    "#define WG_SUML_Float WG_SUML_" +
+    type_name<Float>() +
+    "\n"
+    "#define WG_NORMALIZE_Float WG_NORMALIZE_" +
+    type_name<Float>() + "\n" + random::GetRandomHeader() + R"%%(
+
+        #define K_PER_THREAD ((K/WG_SIZE) + (K % WG_SIZE? 1 : 0))
+        #define K_IDX(k) ((k/WG_SIZE))
+
+        #define INIT_ARRAYS(i, kk) \
+        {\
+          uint k = kk;\
+          if (k < K) { \
+            grads[k] = 0; \
+            pi_a[k] = pi[k]; \
+          }\
+        }
+        #define CALC_PROBS(i, kk) \
+        {\
+          uint k = kk;\
+          if (k < K) { \
+            Float beta_k = Beta(beta, k); \
+            Float f = (y == 1) ? (beta_k - EPSILON) \
+                               : (EPSILON - beta_k); \
+            Float pi_k = pi_a[k]; \
+            Float pin_k = pi_neighbor[k]; \
+            Float probs_k = pi_k * (pin_k * f + e); \
+            probs_sum += probs_k; \
+            probs[i] = probs_k; \
+          }\
+        }
+        #define CALC_GRADS(i, kk) \
+        {\
+          uint k = kk;\
+          if (k < K) { \
+            Float pi_k = pi_a[k]; \
+            Float probs_k = probs[i]; \
+            grads[k] += (probs_k / probs_sum) / (pi_k * phi_sum) - FL(1.0) / phi_sum; \
+          }\
+        }
+        #define CALC_PHI(i, kk) \
+        {\
+          uint k = kk;\
+          if (k < K) { \
+            Float noise = PHI_RANDN(rseed); \
+            Float phi_k = pi_a[k] * phi_sum; \
+            phi_vec[k] = \
+                FABS(phi_k + eps_t / 2 * (ALPHA - phi_k + Nn * grads[k]) + \
+                     SQRT(eps_t * phi_k) * noise); \
+          }\
+        }
+
+        void update_phi_for_nodeWG(GLOBAL Float* beta, GLOBAL void* g_pi,
+                                   GLOBAL Float* g_phi, GLOBAL Float* phi_vec,
+                                   GLOBAL Set* edge_set, Vertex node,
+                                   GLOBAL Vertex* neighbors, uint step_count,
+                                   random_seed_t* rseed,
+                                   LOCAL Float* aux,
+                                   LOCAL Float* grads,
+                                   LOCAL Float *pi_a
+                                   ) {
+          Float probs[K_PER_THREAD];
+          GLOBAL Float* pi = FloatRowPartitionedMatrix_Row((GLOBAL FloatRowPartitionedMatrix*)g_pi, node);
+          Float eps_t = get_eps_t(step_count);
+          uint lid = GET_LOCAL_ID();
+          // phi sum
+          Float phi_sum = g_phi[node];
+          // reset grads
+          {
+            INIT_ARRAYS(0, lid + 0 * WG_SIZE);
+#if K_PER_THREAD > 1
+            INIT_ARRAYS(1, lid + 1 * WG_SIZE);
+#if K_PER_THREAD > 2
+            INIT_ARRAYS(2, lid + 2 * WG_SIZE);
+            INIT_ARRAYS(3, lid + 3 * WG_SIZE);
+#if K_PER_THREAD > 4
+            INIT_ARRAYS(4, lid + 4 * WG_SIZE);
+            INIT_ARRAYS(5, lid + 5 * WG_SIZE);
+            INIT_ARRAYS(6, lid + 6 * WG_SIZE);
+            INIT_ARRAYS(7, lid + 7 * WG_SIZE);
+#if K_PER_THREAD > 8
+            INIT_ARRAYS(8, lid + 8 * WG_SIZE);
+            INIT_ARRAYS(9, lid + 9 * WG_SIZE);
+            INIT_ARRAYS(10, lid + 10 * WG_SIZE);
+            INIT_ARRAYS(11, lid + 11 * WG_SIZE);
+#if K_PER_THREAD > 12
+            INIT_ARRAYS(12, lid + 12 * WG_SIZE);
+            INIT_ARRAYS(13, lid + 13 * WG_SIZE);
+            INIT_ARRAYS(14, lid + 14 * WG_SIZE);
+            INIT_ARRAYS(15, lid + 15 * WG_SIZE);
+#if K_PER_THREAD > 16
+            INIT_ARRAYS(16, lid + 16 * WG_SIZE);
+            INIT_ARRAYS(17, lid + 17 * WG_SIZE);
+            INIT_ARRAYS(18, lid + 18 * WG_SIZE);
+            INIT_ARRAYS(19, lid + 19 * WG_SIZE);
+            INIT_ARRAYS(20, lid + 20 * WG_SIZE);
+            INIT_ARRAYS(21, lid + 21 * WG_SIZE);
+            INIT_ARRAYS(22, lid + 22 * WG_SIZE);
+            INIT_ARRAYS(23, lid + 23 * WG_SIZE);
+            INIT_ARRAYS(24, lid + 24 * WG_SIZE);
+            INIT_ARRAYS(25, lid + 25 * WG_SIZE);
+            INIT_ARRAYS(26, lid + 126 * WG_SIZE);
+            INIT_ARRAYS(27, lid + 27 * WG_SIZE);
+            INIT_ARRAYS(28, lid + 28 * WG_SIZE);
+            INIT_ARRAYS(29, lid + 29 * WG_SIZE);
+            INIT_ARRAYS(30, lid + 30 * WG_SIZE);
+            INIT_ARRAYS(31, lid + 31 * WG_SIZE);
+#if K_PER_THREAD > 32
+#error "KERNEL UNROLLING LIMIT"
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+          }
+
+          for (uint i = 0; i < NUM_NEIGHBORS; ++i) {
+            Vertex neighbor = neighbors[i];
+            GLOBAL Float* pi_neighbor =
+                FloatRowPartitionedMatrix_Row((GLOBAL FloatRowPartitionedMatrix*)g_pi, neighbor);
+            Edge edge = MakeEdge(min(node, neighbor), max(node, neighbor));
+            bool y = Set_HasEdge(edge_set, edge);
+            Float e = (y == 1 ? EPSILON : FL(1.0) - EPSILON);
+            Float probs_sum = 0;
+            // probs
+            {
+              CALC_PROBS(0, lid + 0 * WG_SIZE);
+#if K_PER_THREAD > 1
+              CALC_PROBS(1, lid + 1 * WG_SIZE);
+#if K_PER_THREAD > 2
+              CALC_PROBS(2, lid + 2 * WG_SIZE);
+              CALC_PROBS(3, lid + 3 * WG_SIZE);
+#if K_PER_THREAD > 4
+              CALC_PROBS(4, lid + 4 * WG_SIZE);
+              CALC_PROBS(5, lid + 5 * WG_SIZE);
+              CALC_PROBS(6, lid + 6 * WG_SIZE);
+              CALC_PROBS(7, lid + 7 * WG_SIZE);
+#if K_PER_THREAD > 8
+              CALC_PROBS(8, lid + 8 * WG_SIZE);
+              CALC_PROBS(9, lid + 9 * WG_SIZE);
+              CALC_PROBS(10, lid + 10 * WG_SIZE);
+              CALC_PROBS(11, lid + 11 * WG_SIZE);
+#if K_PER_THREAD > 12
+              CALC_PROBS(12, lid + 12 * WG_SIZE);
+              CALC_PROBS(13, lid + 13 * WG_SIZE);
+              CALC_PROBS(14, lid + 14 * WG_SIZE);
+              CALC_PROBS(15, lid + 15 * WG_SIZE);
+#if K_PER_THREAD > 16
+              CALC_PROBS(16, lid + 16 * WG_SIZE);
+              CALC_PROBS(17, lid + 17 * WG_SIZE);
+              CALC_PROBS(18, lid + 18 * WG_SIZE);
+              CALC_PROBS(19, lid + 19 * WG_SIZE);
+              CALC_PROBS(20, lid + 20 * WG_SIZE);
+              CALC_PROBS(21, lid + 21 * WG_SIZE);
+              CALC_PROBS(22, lid + 22 * WG_SIZE);
+              CALC_PROBS(23, lid + 23 * WG_SIZE);
+              CALC_PROBS(24, lid + 24 * WG_SIZE);
+              CALC_PROBS(25, lid + 25 * WG_SIZE);
+              CALC_PROBS(26, lid + 126 * WG_SIZE);
+              CALC_PROBS(27, lid + 27 * WG_SIZE);
+              CALC_PROBS(28, lid + 28 * WG_SIZE);
+              CALC_PROBS(29, lid + 29 * WG_SIZE);
+              CALC_PROBS(30, lid + 30 * WG_SIZE);
+              CALC_PROBS(31, lid + 31 * WG_SIZE);
+#if K_PER_THREAD > 32
+#error "KERNEL UNROLLING LIMIT"
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+            }
+            aux[lid] = probs_sum;
+            BARRIER_LOCAL;
+            WG_SUM_Float_LOCAL_(aux, K);
+            probs_sum = aux[0];
+            BARRIER_LOCAL;
+            {
+              CALC_GRADS(0, lid + 0 * WG_SIZE);
+#if K_PER_THREAD > 1
+              CALC_GRADS(1, lid + 1 * WG_SIZE);
+#if K_PER_THREAD > 2
+              CALC_GRADS(2, lid + 2 * WG_SIZE);
+              CALC_GRADS(3, lid + 3 * WG_SIZE);
+#if K_PER_THREAD > 4
+              CALC_GRADS(4, lid + 4 * WG_SIZE);
+              CALC_GRADS(5, lid + 5 * WG_SIZE);
+              CALC_GRADS(6, lid + 6 * WG_SIZE);
+              CALC_GRADS(7, lid + 7 * WG_SIZE);
+#if K_PER_THREAD > 8
+              CALC_GRADS(8, lid + 8 * WG_SIZE);
+              CALC_GRADS(9, lid + 9 * WG_SIZE);
+              CALC_GRADS(10, lid + 10 * WG_SIZE);
+              CALC_GRADS(11, lid + 11 * WG_SIZE);
+#if K_PER_THREAD > 12
+              CALC_GRADS(12, lid + 12 * WG_SIZE);
+              CALC_GRADS(13, lid + 13 * WG_SIZE);
+              CALC_GRADS(14, lid + 14 * WG_SIZE);
+              CALC_GRADS(15, lid + 15 * WG_SIZE);
+#if K_PER_THREAD > 16
+              CALC_GRADS(16, lid + 16 * WG_SIZE);
+              CALC_GRADS(17, lid + 17 * WG_SIZE);
+              CALC_GRADS(18, lid + 18 * WG_SIZE);
+              CALC_GRADS(19, lid + 19 * WG_SIZE);
+              CALC_GRADS(20, lid + 20 * WG_SIZE);
+              CALC_GRADS(21, lid + 21 * WG_SIZE);
+              CALC_GRADS(22, lid + 22 * WG_SIZE);
+              CALC_GRADS(23, lid + 23 * WG_SIZE);
+              CALC_GRADS(24, lid + 24 * WG_SIZE);
+              CALC_GRADS(25, lid + 25 * WG_SIZE);
+              CALC_GRADS(26, lid + 126 * WG_SIZE);
+              CALC_GRADS(27, lid + 27 * WG_SIZE);
+              CALC_GRADS(28, lid + 28 * WG_SIZE);
+              CALC_GRADS(29, lid + 29 * WG_SIZE);
+              CALC_GRADS(30, lid + 30 * WG_SIZE);
+              CALC_GRADS(31, lid + 31 * WG_SIZE);
+#if K_PER_THREAD > 32
+#error "KERNEL UNROLLING LIMIT"
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+            }
+          }
+          Float Nn = (FL(1.0) * N) / NUM_NEIGHBORS;
+          {
+            CALC_PHI(0, lid + 0 * WG_SIZE);
+#if K_PER_THREAD > 1
+            CALC_PHI(1, lid + 1 * WG_SIZE);
+#if K_PER_THREAD > 2
+            CALC_PHI(2, lid + 2 * WG_SIZE);
+            CALC_PHI(3, lid + 3 * WG_SIZE);
+#if K_PER_THREAD > 4
+            CALC_PHI(4, lid + 4 * WG_SIZE);
+            CALC_PHI(5, lid + 5 * WG_SIZE);
+            CALC_PHI(6, lid + 6 * WG_SIZE);
+            CALC_PHI(7, lid + 7 * WG_SIZE);
+#if K_PER_THREAD > 8
+            CALC_PHI(8, lid + 8 * WG_SIZE);
+            CALC_PHI(9, lid + 9 * WG_SIZE);
+            CALC_PHI(10, lid + 10 * WG_SIZE);
+            CALC_PHI(11, lid + 11 * WG_SIZE);
+#if K_PER_THREAD > 12
+            CALC_PHI(12, lid + 12 * WG_SIZE);
+            CALC_PHI(13, lid + 13 * WG_SIZE);
+            CALC_PHI(14, lid + 14 * WG_SIZE);
+            CALC_PHI(15, lid + 15 * WG_SIZE);
+#if K_PER_THREAD > 16
+            CALC_PHI(16, lid + 16 * WG_SIZE);
+            CALC_PHI(17, lid + 17 * WG_SIZE);
+            CALC_PHI(18, lid + 18 * WG_SIZE);
+            CALC_PHI(19, lid + 19 * WG_SIZE);
+            CALC_PHI(20, lid + 20 * WG_SIZE);
+            CALC_PHI(21, lid + 21 * WG_SIZE);
+            CALC_PHI(22, lid + 22 * WG_SIZE);
+            CALC_PHI(23, lid + 23 * WG_SIZE);
+            CALC_PHI(24, lid + 24 * WG_SIZE);
+            CALC_PHI(25, lid + 25 * WG_SIZE);
+            CALC_PHI(26, lid + 126 * WG_SIZE);
+            CALC_PHI(27, lid + 27 * WG_SIZE);
+            CALC_PHI(28, lid + 28 * WG_SIZE);
+            CALC_PHI(29, lid + 29 * WG_SIZE);
+            CALC_PHI(30, lid + 30 * WG_SIZE);
+            CALC_PHI(31, lid + 31 * WG_SIZE);
+#if K_PER_THREAD > 32
+#error "KERNEL UNROLLING LIMIT"
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+          }
+        }
+
+        KERNEL void update_phi(
+            GLOBAL Float* g_beta, GLOBAL void* g_pi, GLOBAL Float* g_phi,
+            GLOBAL Float* g_phi_vec, GLOBAL void* training_edge_set,
+            GLOBAL Vertex* mini_batch_nodes,
+            GLOBAL Vertex*
+                neighbors,  // [mini_batch_nodes * num_neighbor_sample]
+            uint num_mini_batch_nodes,
+            uint step_count,
+            GLOBAL void* vrand) {
+          LOCAL_DECLARE Float aux[WG_SIZE];
+          LOCAL_DECLARE Float grads[K];
+          LOCAL_DECLARE Float pi_a[K];
+          uint i = GET_GROUP_ID();
+          uint gsize = GET_NUM_GROUPS();
+          GLOBAL Random* rand = (GLOBAL Random*)vrand;
+          if (i < num_mini_batch_nodes) {
+            random_seed_t rseed = rand->base_[GET_GLOBAL_ID()];
+            for (; i < num_mini_batch_nodes; i += gsize) {
+              Vertex node = mini_batch_nodes[i];
+              GLOBAL Vertex* node_neighbors = neighbors + i * NUM_NEIGHBORS;
+              GLOBAL Float* phi_vec = g_phi_vec + i * K;
+              update_phi_for_nodeWG(g_beta, g_pi, g_phi, phi_vec,
+                                    (GLOBAL Set*)training_edge_set, node, node_neighbors,
+                                    step_count, &rseed, aux, grads, pi_a);
             }
             rand->base_[GET_GLOBAL_ID()] = rseed;
           }
