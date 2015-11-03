@@ -116,7 +116,38 @@ const std::string kSourceBeta = kSourceBetaBase + R"%%(
 const std::string kSourceBetaWg =
     mcmc::algorithm::WorkGroupSum(type_name<Float>()) + "\n" +
     "#define WG_SUM_Float WG_SUM_" + type_name<Float>() + "\n" +
+    "#define WG_SUM_Float_LOCAL_ WG_SUM_" + type_name<Float>() + "_LOCAL_\n" +
     kSourceBetaBase + R"%%(
+    #define K_PER_THREAD ((K/WG_SIZE) + (K % WG_SIZE? 1 : 0))
+    #define CALC_PROBS(i, kk) \
+    {\
+      uint k = kk; \
+      if (k < K) { \
+          Float f = pi_a[k] * pi_b[k]; \
+          scratch += f; \
+          Float probs_k; \
+          Float beta_k = Beta(beta, k); \
+          if (y) { \
+            probs_k = beta_k * f; \
+          } else { \
+            probs_k = (FL(1.0) - beta_k) * f; \
+          } \
+          probs[i] = probs_k; \
+          probs_sum += probs_k; \
+      } \
+    }
+    #define CALC_GRADS(i, kk) \
+    {\
+      uint k = kk; \
+      if (k < K) {\
+        Float f = probs[i] / probs_sum;\
+        Float one_over_theta_sum = FL(1.0) / theta_sum[k];\
+        lgrads[2 * k] += f * ((1 - y) / Theta0(theta, k) - one_over_theta_sum);\
+        lgrads[2 * k + 1] += f * (y / Theta1(theta, k) - one_over_theta_sum);\
+      }\
+    }
+
+
     KERNEL void calculate_grads_partial(
         GLOBAL Float* theta,      // [K, 2]
         GLOBAL Float* theta_sum,  // [K]
@@ -124,21 +155,18 @@ const std::string kSourceBetaWg =
         GLOBAL void* g_pi,        // [N, K]
         GLOBAL void* vset /*EdgeSet*/, GLOBAL Edge* mini_batch_edges,
         uint num_mini_batch_edges,
-        GLOBAL Float* probs,    // [num_mini_batch_edges * K]
-        GLOBAL Float* grads,    // min(#edges, #num_threads) * [K, 2]
-        GLOBAL Float* scratch  // min(#edges, #num_threads) * [K]
+        GLOBAL Float* grads     // min(#edges, #num_threads) * [K, 2]
       ) {
       LOCAL_DECLARE Float aux[WG_SIZE];
+      LOCAL_DECLARE Float lgrads[2 * K];
+      Float probs[K_PER_THREAD];
       uint i = GET_GROUP_ID();
       const uint gsize = GET_NUM_GROUPS();
       const uint lid = GET_LOCAL_ID();
-      const uint lsize = GET_LOCAL_SIZE();
-      probs += i * K;
       grads += i * 2 * K;
-      scratch += i * K;
       // reset grads
       if (i < num_mini_batch_edges) {
-        for (uint j = lid; j < 2 * K; j += lsize) grads[j] = 0;
+        for (uint j = lid; j < 2 * K; j += WG_SIZE) lgrads[j] = 0;
       }
       for (; i < num_mini_batch_edges; i += gsize) {
         Edge edge = mini_batch_edges[i];
@@ -150,33 +178,120 @@ const std::string kSourceBetaWg =
         GLOBAL Float* pi_b = FloatRowPartitionedMatrix_Row((GLOBAL FloatRowPartitionedMatrix*)g_pi, v);
         Float pi_sum = 0;
         Float probs_sum = 0;
-
-        for (uint k = lid; k < K; k += lsize) {
-          Float f = pi_a[k] * pi_b[k];
-          scratch[k] = f;
-          Float probs_k;
-          Float beta_k = Beta(beta, k);
-          if (y) {
-            probs_k = beta_k * f;
-          } else {
-            probs_k = (FL(1.0) - beta_k) * f;
-          }
-          probs[k] = probs_k;
-        }
-        BARRIER_GLOBAL;
-        WG_SUM_Float(scratch, aux, K);
+        Float scratch = 0;
+        CALC_PROBS(0, lid + 0 * WG_SIZE);
+#if K_PER_THREAD > 1
+        CALC_PROBS(1, lid + 1 * WG_SIZE);
+#if K_PER_THREAD > 2
+        CALC_PROBS(2, lid + 2 * WG_SIZE);
+        CALC_PROBS(3, lid + 3 * WG_SIZE);
+#if K_PER_THREAD > 4
+        CALC_PROBS(4, lid + 4 * WG_SIZE);
+        CALC_PROBS(5, lid + 5 * WG_SIZE);
+        CALC_PROBS(6, lid + 6 * WG_SIZE);
+        CALC_PROBS(7, lid + 7 * WG_SIZE);
+#if K_PER_THREAD > 8
+        CALC_PROBS(8, lid + 8 * WG_SIZE);
+        CALC_PROBS(9, lid + 9 * WG_SIZE);
+        CALC_PROBS(10, lid + 10 * WG_SIZE);
+        CALC_PROBS(11, lid + 11 * WG_SIZE);
+#if K_PER_THREAD > 12
+        CALC_PROBS(12, lid + 12 * WG_SIZE);
+        CALC_PROBS(13, lid + 13 * WG_SIZE);
+        CALC_PROBS(14, lid + 14 * WG_SIZE);
+        CALC_PROBS(15, lid + 15 * WG_SIZE);
+#if K_PER_THREAD > 16
+        CALC_PROBS(16, lid + 16 * WG_SIZE);
+        CALC_PROBS(17, lid + 17 * WG_SIZE);
+        CALC_PROBS(18, lid + 18 * WG_SIZE);
+        CALC_PROBS(19, lid + 19 * WG_SIZE);
+        CALC_PROBS(20, lid + 20 * WG_SIZE);
+        CALC_PROBS(21, lid + 21 * WG_SIZE);
+        CALC_PROBS(22, lid + 22 * WG_SIZE);
+        CALC_PROBS(23, lid + 23 * WG_SIZE);
+        CALC_PROBS(24, lid + 24 * WG_SIZE);
+        CALC_PROBS(25, lid + 25 * WG_SIZE);
+        CALC_PROBS(26, lid + 126 * WG_SIZE);
+        CALC_PROBS(27, lid + 27 * WG_SIZE);
+        CALC_PROBS(28, lid + 28 * WG_SIZE);
+        CALC_PROBS(29, lid + 29 * WG_SIZE);
+        CALC_PROBS(30, lid + 30 * WG_SIZE);
+        CALC_PROBS(31, lid + 31 * WG_SIZE);
+#if K_PER_THREAD > 32
+#error "KERNEL UNROLLING LIMIT"
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+        aux[lid] = scratch;
+        BARRIER_LOCAL;
+        WG_SUM_Float_LOCAL_(aux, K);
         pi_sum = aux[0];
-        BARRIER_GLOBAL;
-        WG_SUM_Float(probs, aux, K);
+        BARRIER_LOCAL;
+        aux[lid] = probs_sum;
+        BARRIER_LOCAL;
+        WG_SUM_Float_LOCAL_(aux, K);
         probs_sum = aux[0];
 
         Float prob_0 = (y ? EPSILON : (FL(1.0) - EPSILON)) * (FL(1.0) - pi_sum);
         probs_sum += prob_0;
-        for (uint k = lid; k < K; k += lsize) {
-          Float f = probs[k] / probs_sum;
-          Float one_over_theta_sum = FL(1.0) / theta_sum[k];
-          grads[2 * k] += f * ((1 - y) / Theta0(theta, k) - one_over_theta_sum);
-          grads[2 * k + 1] += f * (y / Theta1(theta, k) - one_over_theta_sum);
+        CALC_GRADS(0, lid + 0 * WG_SIZE);
+#if K_PER_THREAD > 1
+        CALC_GRADS(1, lid + 1 * WG_SIZE);
+#if K_PER_THREAD > 2
+        CALC_GRADS(2, lid + 2 * WG_SIZE);
+        CALC_GRADS(3, lid + 3 * WG_SIZE);
+#if K_PER_THREAD > 4
+        CALC_GRADS(4, lid + 4 * WG_SIZE);
+        CALC_GRADS(5, lid + 5 * WG_SIZE);
+        CALC_GRADS(6, lid + 6 * WG_SIZE);
+        CALC_GRADS(7, lid + 7 * WG_SIZE);
+#if K_PER_THREAD > 8
+        CALC_GRADS(8, lid + 8 * WG_SIZE);
+        CALC_GRADS(9, lid + 9 * WG_SIZE);
+        CALC_GRADS(10, lid + 10 * WG_SIZE);
+        CALC_GRADS(11, lid + 11 * WG_SIZE);
+#if K_PER_THREAD > 12
+        CALC_GRADS(12, lid + 12 * WG_SIZE);
+        CALC_GRADS(13, lid + 13 * WG_SIZE);
+        CALC_GRADS(14, lid + 14 * WG_SIZE);
+        CALC_GRADS(15, lid + 15 * WG_SIZE);
+#if K_PER_THREAD > 16
+        CALC_GRADS(16, lid + 16 * WG_SIZE);
+        CALC_GRADS(17, lid + 17 * WG_SIZE);
+        CALC_GRADS(18, lid + 18 * WG_SIZE);
+        CALC_GRADS(19, lid + 19 * WG_SIZE);
+        CALC_GRADS(20, lid + 20 * WG_SIZE);
+        CALC_GRADS(21, lid + 21 * WG_SIZE);
+        CALC_GRADS(22, lid + 22 * WG_SIZE);
+        CALC_GRADS(23, lid + 23 * WG_SIZE);
+        CALC_GRADS(24, lid + 24 * WG_SIZE);
+        CALC_GRADS(25, lid + 25 * WG_SIZE);
+        CALC_GRADS(26, lid + 126 * WG_SIZE);
+        CALC_GRADS(27, lid + 27 * WG_SIZE);
+        CALC_GRADS(28, lid + 28 * WG_SIZE);
+        CALC_GRADS(29, lid + 29 * WG_SIZE);
+        CALC_GRADS(30, lid + 30 * WG_SIZE);
+        CALC_GRADS(31, lid + 31 * WG_SIZE);
+#if K_PER_THREAD > 32
+#error "KERNEL UNROLLING LIMIT"
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+
+      }
+      if (GET_GROUP_ID() < num_mini_batch_edges) {
+        BARRIER_LOCAL;
+        for (uint k = lid; k < K; k += WG_SIZE) {
+          grads[2 * k    ] = lgrads[2 * k    ];
+          grads[2 * k + 1] = lgrads[2 * k + 1];
         }
       }
     })%%";
@@ -203,7 +318,6 @@ BetaUpdater::BetaUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
       local_(cfg.beta_wg_size),
       theta_sum_(queue_.GetContext(), cfg.K),
       grads_(queue_.GetContext(), cfg.mini_batch_size * 2 * cfg.K),
-      probs_(queue_.GetContext(), cfg.mini_batch_size * cfg.K),
       t_theta_sum_(0),
       t_grads_partial_(0),
       t_grads_sum_(0),
@@ -215,8 +329,6 @@ BetaUpdater::BetaUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
       src = &kSourceBeta;
       break;
     case EDGE_PER_WORKGROUP:
-      scratch_.reset(new clcuda::Buffer<Float>(
-          queue_.GetContext(), cfg.mini_batch_size * 2 * cfg.K));
       src = &kSourceBetaWg;
       break;
     default:
@@ -248,10 +360,13 @@ BetaUpdater::BetaUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
   grads_partial_kernel_->SetArgument(2, beta_);
   grads_partial_kernel_->SetArgument(3, pi_->Get());
   grads_partial_kernel_->SetArgument(4, trainingSet->Get()());
-  grads_partial_kernel_->SetArgument(7, probs_);
-  grads_partial_kernel_->SetArgument(8, grads_);
-  if (mode_ == EDGE_PER_WORKGROUP) {
-    grads_partial_kernel_->SetArgument(9, *scratch_);
+  if (mode == EDGE_PER_THREAD) {
+    probs_.reset(new clcuda::Buffer<Float>(queue_.GetContext(),
+                                           cfg.mini_batch_size * cfg.K));
+    grads_partial_kernel_->SetArgument(7, *probs_);
+    grads_partial_kernel_->SetArgument(8, grads_);
+  } else {
+    grads_partial_kernel_->SetArgument(7, grads_);
   }
 
   grads_sum_kernel_.reset(new clcuda::Kernel(*prog_, "sum_grads"));

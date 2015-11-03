@@ -62,8 +62,7 @@ class BetaUpdater {
 
   clcuda::Buffer<Float> theta_sum_;                 // [K]
   clcuda::Buffer<Float> grads_;                     // [K, 2]
-  clcuda::Buffer<Float> probs_;                     // [mini_batch_edges, K]
-  std::unique_ptr<clcuda::Buffer<Float>> scratch_;  // [mini_batch_edges, K]
+  std::unique_ptr<clcuda::Buffer<Float>> probs_;                     // [mini_batch_edges, K]
 
   double t_theta_sum_;
   double t_grads_partial_;
