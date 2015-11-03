@@ -4,6 +4,7 @@
 #include <future>
 #include <glog/logging.h>
 #include <random>
+#include <iomanip>
 #include <unordered_set>
 #include <queue>
 #include <signal.h>
@@ -119,13 +120,7 @@ Learner::Learner(const Config& cfg, clcuda::Queue queue)
           compileFlags_, GetBaseFuncs()),
       stepCount_(1),
       time_(0),
-      heldoutPpxTime_(0),
-#ifdef MCMC_CALC_TRAIN_PPX
-      trainingPpxTime_(0),
-#endif
       samplingTime_(0),
-      piTime_(0),
-      betaTime_(0),
       samples_({Sample(cfg_, queue_), Sample(cfg_, queue_)}),
       phase_(0) {
   switch (cfg_.strategy) {
@@ -201,24 +196,13 @@ sig_atomic_t signaled = 0;
 void handler(int sig __attribute((unused))) { signaled = 1; }
 
 Float Learner::HeldoutPerplexity() {
-  auto tppx_start = high_resolution_clock::now();
   Float ppx = heldoutPerplexity_();
-  auto tppx_end = high_resolution_clock::now();
-  heldoutPpxTime_ += duration_cast<nanoseconds>(tppx_end - tppx_start).count();
-  //  LOG(INFO) << "ppx[" << stepCount_ << "] = " << ppx << ", "
-  //            << std::exp(ppx);
   return std::exp(ppx);
 }
 
 #ifdef MCMC_CALC_TRAIN_PPX
 Float Learner::TrainingPerplexity() {
-  auto ttppx_start = high_resolution_clock::now();
   Float train_ppx = trainingPerplexity_();
-  auto ttppx_end = high_resolution_clock::now();
-  trainingPpxTime_ +=
-      duration_cast<nanoseconds>(ttppx_end - ttppx_start).count();
-  //  LOG(INFO) << "train-ppx[" << stepCount_ << "] = " << train_ppx << ", "
-  //            << std::exp(train_ppx);
   return std::exp(train_ppx);
 }
 #endif
@@ -239,18 +223,12 @@ void Learner::Run(uint32_t max_iters) {
     samplingTime_ +=
         duration_cast<nanoseconds>(tsampling_end - tsampling_start).count();
 
-    auto tpi_start = high_resolution_clock::now();
     phiUpdater_(samples_[phase_].dev_nodes,
                 samples_[phase_].neighbor_sampler.GetData(),
                 samples_[phase_].nodes_vec.size());
-    auto tpi_end = high_resolution_clock::now();
-    piTime_ += duration_cast<nanoseconds>(tpi_end - tpi_start).count();
 
-    auto tbeta_start = high_resolution_clock::now();
     betaUpdater_(&samples_[phase_].dev_edges, samples_[phase_].edges.size(),
                  weight);
-    auto tbeta_end = high_resolution_clock::now();
-    betaTime_ += duration_cast<nanoseconds>(tbeta_end - tbeta_start).count();
 
     phase_ = 1 - phase_;
   }
@@ -261,32 +239,44 @@ void Learner::Run(uint32_t max_iters) {
 }
 
 void Learner::PrintStats() {
-  LOG(INFO) << "TOTAL    : " << time_ / 1e9;
-  LOG(INFO) << "PPX      : " << heldoutPpxTime_ / 1e9 << " (%"
-            << 100 * (heldoutPpxTime_ / 1e9) / (time_ / 1e9) << ")";
+  LOG(INFO) << "TOTAL    : " << time_ / 1.0e9;
+
+  LOG(INFO) << "PPX CALC : " << heldoutPerplexity_.PerplexityTime() / 1.0e3 << " (%"
+            << 100 * (heldoutPerplexity_.PerplexityTime() / 1.0e3) / (time_ / 1.0e9) << ")";
+  LOG(INFO) << "PPX ACCUM: " << heldoutPerplexity_.AccumulateTime() / 1.0e3 << " (%"
+            << 100 * (heldoutPerplexity_.AccumulateTime() / 1.0e3) / (time_ / 1.0e9) << ")";
+
 #ifdef MCMC_CALC_TRAIN_PPX
-  LOG(INFO) << "TRAIN PPX: " << trainingPpxTime_ / 1e9 << " (%"
-            << 100 * (trainingPpxTime_ / 1e9) / (time_ / 1e9) << ")";
+  LOG(INFO) << "TRAIN PPX CALC : " << trainingPerplexity_.PerplexityTime() / 1.0e3 << " (%"
+            << 100 * (trainingPerplexity_.PerplexityTime() / 1.0e3) / (time_ / 1.0e9) << ")";
+  LOG(INFO) << "TRAIN PPX ACCUM: " << trainingPerplexity_.AccumulateTime() / 1.0e3 << " (%"
+            << 100 * (trainingPerplexity_.AccumulateTime() / 1.0e3) / (time_ / 1.0e9) << ")";
 #endif
-  LOG(INFO) << "SAMPLING : " << samplingTime_ / 1e9 << " (%"
-            << 100 * (samplingTime_ / 1e9) / (time_ / 1e9) << ")";
-  LOG(INFO) << "PI       : " << piTime_ / 1e9 << " (%"
-            << 100 * (piTime_ / 1e9) / (time_ / 1e9) << ")";
-  LOG(INFO) << "BETA     : " << betaTime_ / 1e9 << " (%"
-            << 100 * (betaTime_ / 1e9) / (time_ / 1e9) << ")";
+  LOG(INFO) << "SAMPLING : " << samplingTime_ / 1.0e9 << " (%"
+            << 100 * (samplingTime_ / 1.0e9) / (time_ / 1.0e9) << ")";
+
+  LOG(INFO) << "PHI      : " << phiUpdater_.UpdatePhiTime() / 1.0e3 << " (%"
+            << 100 * (phiUpdater_.UpdatePhiTime() / 1.0e3) / (time_ / 1.0e9) << ")";
+  LOG(INFO) << "PI       : " << phiUpdater_.UpdatePiTime() / 1.0e3 << " (%"
+            << 100 * (phiUpdater_.UpdatePiTime() / 1.0e3) / (time_ / 1.0e9) << ")";
+
+  LOG(INFO) << "THETA SUM   : " << betaUpdater_.ThetaSumTime() / 1.0e3 << " (%"
+            << 100 * (betaUpdater_.ThetaSumTime() / 1.0e3) / (time_ / 1.0e9) << ")";
+  LOG(INFO) << "GRADS PAR   : " << betaUpdater_.GradsPartialTime() / 1.0e3 << " (%"
+            << 100 * (betaUpdater_.GradsPartialTime() / 1.0e3) / (time_ / 1.0e9) << ")";
+  LOG(INFO) << "GRADS SUM   : " << betaUpdater_.GradsSumTime() / 1.0e3 << " (%"
+            << 100 * (betaUpdater_.GradsSumTime() / 1.0e3) / (time_ / 1.0e9) << ")";
+  LOG(INFO) << "UPDATE THETA: " << betaUpdater_.UpdateThetaTime() / 1.0e3 << " (%"
+            << 100 * (betaUpdater_.UpdateThetaTime() / 1.0e3) / (time_ / 1.0e9) << ")";
+  LOG(INFO) << "NORM THETA  : " << betaUpdater_.NormalizeTime() / 1.0e3 << " (%"
+            << 100 * (betaUpdater_.NormalizeTime() / 1.0e3) / (time_ / 1.0e9) << ")";
 }
 
 bool Learner::Serialize(std::ostream* out) {
   LearnerProperties props;
   props.set_stepcount(stepCount_);
   props.set_time(time_);
-  props.set_heldoutppxtime(heldoutPpxTime_);
-#ifdef MCMC_CALC_TRAIN_PPX
-  props.set_trainingppxtime(trainingPpxTime_);
-#endif
   props.set_samplingtime(samplingTime_);
-  props.set_pitime(piTime_);
-  props.set_betatime(betaTime_);
   props.set_phase(phase_);
   Float weight = futures_[phase_].get();
   // reset future
@@ -319,13 +309,7 @@ bool Learner::Parse(std::istream* in) {
       heldoutPerplexity_.Parse(in) && ::mcmc::ParseMessage(in, &props)) {
     stepCount_ = props.stepcount();
     time_ = props.time();
-    heldoutPpxTime_ = props.heldoutppxtime();
-#ifdef MCMC_CALC_TRAIN_PPX
-    trainingPpxTime = props.trainingppxtime();
-#endif
     samplingTime_ = props.samplingtime();
-    piTime_ = props.pitime();
-    betaTime_ = props.betatime();
     phase_ = props.phase();
     if (samples_[0].Parse(in) && samples_[1].Parse(in)) {
       Float weight = static_cast<Float>(props.weight());

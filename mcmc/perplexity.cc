@@ -1,6 +1,7 @@
 #include "mcmc/perplexity.h"
 
 #include <algorithm>
+#include <chrono>
 #ifdef MCMC_USE_CL
 #include <boost/compute/algorithm/reduce.hpp>
 #endif
@@ -196,7 +197,8 @@ PerplexityCalculatorBase::PerplexityCalculatorBase(
       link_likelihood_(1),
       non_link_likelihood_(1),
       count_calls_(0),
-      local_(cfg.ppx_wg_size) {
+      local_(cfg.ppx_wg_size),
+      t_ppx_(0), t_accumulate_(0) {
   std::vector<Float> ppx_init(ppx_per_edge_.GetSize() / sizeof(Float), 0);
   ppx_per_edge_.Write(queue_, ppx_init.size(), ppx_init);
   const std::string* src = NULL;
@@ -246,16 +248,19 @@ PerplexityCalculatorBase::PerplexityCalculatorBase(
   }
 }
 
-uint64_t PerplexityCalculatorBase::LastInvocationTime() const {
-  return event_.GetElapsedTime();
-}
-
 Float PerplexityCalculatorBase::operator()() {
   count_calls_++;
   kernel_->SetArgument(10, count_calls_);
-  kernel_->Launch(queue_, {global_}, {local_}, event_);
+  clcuda::Event event;
+  kernel_->Launch(queue_, {global_}, {local_}, event);
   queue_.Finish();
+  t_ppx_ += event.GetElapsedTime();
+  
+  auto t1 = std::chrono::high_resolution_clock::now();
   AccumulateVectors();
+  auto t2 = std::chrono::high_resolution_clock::now();
+  t_accumulate_ +=
+    std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t2).count();
   double avg_likelihood = 0.0;
   if (link_count_[0] + non_link_count_[0] != 0) {
     avg_likelihood = (link_likelihood_[0] + non_link_likelihood_[0]) /

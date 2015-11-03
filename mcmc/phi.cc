@@ -724,7 +724,8 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
           random::random_seed_t{cfg.phi_seed[0], cfg.phi_seed[1]})),
       count_calls_(0),
       k_(cfg.K),
-      local_(cfg.phi_wg_size) {
+      local_(cfg.phi_wg_size),
+      t_update_phi_(0), t_update_pi_(0) {
   const std::string* src = nullptr;
   switch (mode_) {
     case NODE_PER_THREAD:
@@ -808,16 +809,12 @@ void PhiUpdater::operator()(
   phi_kernel_->SetArgument(8, count_calls_);
   phi_kernel_->Launch(queue_, {global}, {local_}, phi_event_);
   queue_.Finish();
-  //  LOG(INFO) << phi_event_.duration<boost::chrono::nanoseconds>().count();
+  t_update_phi_ += phi_event_.GetElapsedTime();
   pi_kernel_->SetArgument(2, mini_batch_nodes);
   pi_kernel_->SetArgument(3, num_mini_batch_nodes);
   pi_kernel_->Launch(queue_, {global}, {local_}, pi_event_);
   queue_.Finish();
-  //  LOG(INFO) << pi_event_.duration<boost::chrono::nanoseconds>().count();
-}
-
-uint64_t PhiUpdater::LastInvocationTime() const {
-  return phi_event_.GetElapsedTime() + pi_event_.GetElapsedTime();
+  t_update_pi_ += pi_event_.GetElapsedTime();
 }
 
 bool PhiUpdater::Serialize(std::ostream* out) {

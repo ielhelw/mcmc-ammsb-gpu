@@ -33,7 +33,9 @@ class PerplexityCalculatorBase {
 
   Float operator()();
 
-  uint64_t LastInvocationTime() const;
+  double PerplexityTime() const { return t_ppx_; }
+
+  double AccumulateTime() const { return t_accumulate_; }
 
   bool Serialize(std::ostream* out);
 
@@ -43,7 +45,6 @@ class PerplexityCalculatorBase {
   virtual void AccumulateVectors() = 0;
 
   clcuda::Queue queue_;
-  clcuda::Event event_;
 
   clcuda::Buffer<Float>& beta_;      // [K]
   RowPartitionedMatrix<Float>* pi_;  // [N,K]
@@ -62,6 +63,9 @@ class PerplexityCalculatorBase {
 
   uint32_t count_calls_;
   uint32_t global_, local_;
+
+  double t_ppx_;
+  double t_accumulate_;
 };
 
 #ifdef MCMC_USE_CL

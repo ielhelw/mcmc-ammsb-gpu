@@ -201,7 +201,12 @@ BetaUpdater::BetaUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
       local_(cfg.beta_wg_size),
       theta_sum_(queue_.GetContext(), cfg.K),
       grads_(queue_.GetContext(), cfg.mini_batch_size * 2 * cfg.K),
-      probs_(queue_.GetContext(), cfg.mini_batch_size * cfg.K) {
+      probs_(queue_.GetContext(), cfg.mini_batch_size * cfg.K),
+      t_theta_sum_(0),
+      t_grads_partial_(0),
+      t_grads_sum_(0),
+      t_update_theta_(0),
+      t_normalize_(0) {
   const std::string* src = nullptr;
   switch (mode) {
     case EDGE_PER_THREAD:
@@ -260,8 +265,10 @@ void BetaUpdater::operator()(clcuda::Buffer<Edge>* edges, uint32_t num_edges,
                              Float scale) {
   ++count_calls_;
   {
-    theta_sum_kernel_->Launch(queue_, {k_}, {32}, theta_sum_event_);
+    clcuda::Event theta_sum_event;
+    theta_sum_kernel_->Launch(queue_, {k_}, {32}, theta_sum_event);
     queue_.Finish();
+    t_theta_sum_ += theta_sum_event.GetElapsedTime();
   }
   {
     uint32_t global = 0;
@@ -273,36 +280,35 @@ void BetaUpdater::operator()(clcuda::Buffer<Edge>* edges, uint32_t num_edges,
       global = num_edges;
     }
     global = std::min(global, GetMaxGroups()) * local_;
+    clcuda::Event grads_partial_event;
     grads_partial_kernel_->Launch(queue_, {global}, {local_},
-                                  grads_partial_event_);
+                                  grads_partial_event);
     queue_.Finish();
+    t_grads_partial_ += grads_partial_event.GetElapsedTime();
 
     uint32_t num_partials = std::min(global, num_edges);
     grads_sum_kernel_->SetArgument(1, num_partials);
-    grads_sum_kernel_->Launch(queue_, {2 * k_}, {32}, grads_sum_event_);
+    clcuda::Event grads_sum_event;
+    grads_sum_kernel_->Launch(queue_, {2 * k_}, {32}, grads_sum_event);
     queue_.Finish();
+    t_grads_sum_ += grads_sum_event.GetElapsedTime();
   }
   {
     update_theta_kernel_->SetArgument(2, count_calls_);
     update_theta_kernel_->SetArgument(3, scale);
-    update_theta_kernel_->Launch(queue_, {k_}, {32}, update_theta_event_);
+    clcuda::Event update_theta_event;
+    update_theta_kernel_->Launch(queue_, {k_}, {32}, update_theta_event);
     queue_.Finish();
+    t_update_theta_ += update_theta_event.GetElapsedTime();
   }
   {
     auto t1 = std::chrono::high_resolution_clock::now();
     theta_.CopyTo(queue_, theta_.GetSize() / sizeof(Float), beta_);
     normalizer_();
     auto t2 = std::chrono::high_resolution_clock::now();
-    normalize_time_ =
-        std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t2).count();
+    t_normalize_ +=
+        std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t2).count();
   }
-}
-
-uint64_t BetaUpdater::LastInvocationTime() const {
-  return theta_sum_event_.GetElapsedTime() +
-         grads_partial_event_.GetElapsedTime() +
-         grads_sum_event_.GetElapsedTime() +
-         update_theta_event_.GetElapsedTime() + normalize_time_;
 }
 
 bool BetaUpdater::Serialize(std::ostream* out) {

@@ -22,7 +22,9 @@ class PhiUpdater {
       clcuda::Buffer<Vertex>& neighbors,  // [MINI_BATCH_NODES, NUM_NEIGHBORS]
       uint32_t num_mini_batch_nodes);
 
-  uint64_t LastInvocationTime() const;
+  double UpdatePhiTime() const { return t_update_phi_; }
+
+  double UpdatePiTime() const { return t_update_pi_; }
 
   bool Serialize(std::ostream* out);
 
@@ -53,6 +55,9 @@ class PhiUpdater {
 
   std::unique_ptr<clcuda::Buffer<Float>> grads_;  // [mini_batch, K]
   std::unique_ptr<clcuda::Buffer<Float>> probs_;  // [mini_batch, K]
+
+  double t_update_phi_;
+  double t_update_pi_;
 };
 
 }  // namespace mcmc

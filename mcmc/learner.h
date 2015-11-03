@@ -74,13 +74,7 @@ class Learner {
 
   uint32_t stepCount_;
   uint64_t time_;
-  uint64_t heldoutPpxTime_;
-#ifdef MCMC_CALC_TRAIN_PPX
-  uint64_t trainingPpxTime_;
-#endif
   uint64_t samplingTime_;
-  uint64_t piTime_;
-  uint64_t betaTime_;
   Sample samples_[2];
   std::future<Float> futures_[2];
   int phase_;

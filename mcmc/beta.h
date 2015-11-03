@@ -24,10 +24,14 @@ class BetaUpdater {
 
   void operator()(clcuda::Buffer<Edge>* edges, uint32_t num_edges, Float scale);
 
-  uint64_t LastInvocationTime() const;
-
   clcuda::Buffer<Float>& GetThetaSum() { return theta_sum_; }
   clcuda::Buffer<Float>& GetGrads() { return grads_; }
+
+  double ThetaSumTime() const { return t_theta_sum_; }
+  double GradsPartialTime() const { return t_grads_partial_; }
+  double GradsSumTime() const { return t_grads_sum_; }
+  double UpdateThetaTime() const { return t_update_theta_; }
+  double NormalizeTime() const { return t_normalize_; }
 
   bool Serialize(std::ostream* out);
 
@@ -47,7 +51,6 @@ class BetaUpdater {
   std::unique_ptr<clcuda::Kernel> grads_partial_kernel_;
   std::unique_ptr<clcuda::Kernel> grads_sum_kernel_;
   std::unique_ptr<clcuda::Kernel> update_theta_kernel_;
-  std::unique_ptr<clcuda::Kernel> beta_kernel_;
   algorithm::Normalizer<Float> normalizer_;
 
   std::shared_ptr<random::OpenClRandomFactory> randFactory_;
@@ -62,11 +65,11 @@ class BetaUpdater {
   clcuda::Buffer<Float> probs_;                     // [mini_batch_edges, K]
   std::unique_ptr<clcuda::Buffer<Float>> scratch_;  // [mini_batch_edges, K]
 
-  clcuda::Event theta_sum_event_;
-  clcuda::Event grads_partial_event_;
-  clcuda::Event grads_sum_event_;
-  clcuda::Event update_theta_event_;
-  uint64_t normalize_time_;
+  double t_theta_sum_;
+  double t_grads_partial_;
+  double t_grads_sum_;
+  double t_update_theta_;
+  double t_normalize_;
 };
 
 }  // namespace mcmc
