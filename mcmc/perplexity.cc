@@ -25,13 +25,13 @@ const std::string kSourcePerplexity = R"%%(
         uint k = 0;
         for (; k < K; ++k) {
           Float f = pi_a[k] * pi_b[k];
-          s += f * (((Float)1.0) - Beta(beta, k));
+          s += f * (FL(1.0) - Beta(beta, k));
           sum += f;
         }
-        s += (((Float)1.0) - sum) * (((Float)1.0) - EPSILON);
+        s += (FL(1.0) - sum) * (FL(1.0) - EPSILON);
       }
-      if (s < ((Float)1.0e-30)) {
-        s = ((Float)1.0e-30);
+      if (s < FL(1.0e-30)) {
+        s = FL(1.0e-30);
       }
       return s;
     }
@@ -111,15 +111,15 @@ const std::string kSourcePerplexityWg =
             sum = aux[0];
             BARRIER_LOCAL;
             for (uint i = lid; i < K; i += GET_LOCAL_SIZE()) {
-              scratch[i] = pi_a[i] * pi_b[i] * (((Float)1.0) - Beta(beta, i));
+              scratch[i] = pi_a[i] * pi_b[i] * (FL(1.0) - Beta(beta, i));
             }
             BARRIER_GLOBAL;
             WG_SUM_Float(scratch, aux, K);
             s = aux[0];
-            s += (((Float)1.0) - sum) * (((Float)1.0) - EPSILON);
+            s += (FL(1.0) - sum) * (FL(1.0) - EPSILON);
           }
-          if (s < ((Float)1.0e-30)) {
-            s = ((Float)1.0e-30);
+          if (s < FL(1.0e-30)) {
+            s = FL(1.0e-30);
           }
           return s;
         }

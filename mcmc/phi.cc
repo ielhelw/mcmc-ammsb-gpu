@@ -29,7 +29,7 @@ const std::string kSourcePhi = random::GetRandomHeader() + R"%%(
                 FloatRowPartitionedMatrix_Row((GLOBAL FloatRowPartitionedMatrix*)g_pi, neighbor);
             Edge edge = MakeEdge(min(node, neighbor), max(node, neighbor));
             bool y = Set_HasEdge(edge_set, edge);
-            Float e = (y == 1 ? EPSILON : ((Float)1.0) - EPSILON);
+            Float e = (y == 1 ? EPSILON : FL(1.0) - EPSILON);
             Float probs_sum = 0;
             for (uint k = 0; k < K; ++k) {
               Float f = (y == 1) ? (Beta(beta, k) - EPSILON)
@@ -40,10 +40,10 @@ const std::string kSourcePhi = random::GetRandomHeader() + R"%%(
             }
             for (uint k = 0; k < K; ++k) {
               grads[k] +=
-                  (probs[k] / probs_sum) / (pi[k] * phi_sum) - ((Float)1.0) / phi_sum;
+                  (probs[k] / probs_sum) / (pi[k] * phi_sum) - FL(1.0) / phi_sum;
             }
           }
-          Float Nn = (((Float)1.0) * N) / NUM_NEIGHBORS;
+          Float Nn = (FL(1.0) * N) / NUM_NEIGHBORS;
           for (uint k = 0; k < K; ++k) {
             Float noise = PHI_RANDN(rseed);
             Float phi_k = pi[k] * phi_sum;
@@ -145,7 +145,7 @@ const std::string kSourcePhi = random::GetRandomHeader() + R"%%(
                 FloatRowPartitionedMatrix_Row((GLOBAL FloatRowPartitionedMatrix*)g_pi, neighbor);
             Edge edge = MakeEdge(min(node, neighbor), max(node, neighbor));
             bool y = Set_HasEdge(edge_set, edge);
-            Float e = (y == 1 ? EPSILON : ((Float)1.0) - EPSILON);
+            Float e = (y == 1 ? EPSILON : FL(1.0) - EPSILON);
             // probs
             for (uint i = 0, k = lid; k < K; ++i, k += WG_SIZE) {
                 Float beta_k = Beta(beta, k);
@@ -168,10 +168,10 @@ const std::string kSourcePhi = random::GetRandomHeader() + R"%%(
             for (uint i = 0, k = lid; k < K; ++i, k += WG_SIZE) {
                 Float pi_k = pi_a[i];
                 Float probs_k = probs[i];
-                grads[i] += (probs_k / probs_sum) / (pi_k * phi_sum) - ((Float)1.0) / phi_sum;
+                grads[i] += (probs_k / probs_sum) / (pi_k * phi_sum) - FL(1.0) / phi_sum;
             }
           }
-          Float Nn = (((Float)1.0) * N) / NUM_NEIGHBORS;
+          Float Nn = (FL(1.0) * N) / NUM_NEIGHBORS;
           for (uint i = 0, k = lid; k < K; ++i, k += WG_SIZE) {
               Float noise = PHI_RANDN(rseed);
               Float phi_k = pi_a[i] * phi_sum;
@@ -272,7 +272,7 @@ const std::string kSourcePhiWg =
                 FloatRowPartitionedMatrix_Row((GLOBAL FloatRowPartitionedMatrix*)g_pi, neighbor);
             Edge edge = MakeEdge(min(node, neighbor), max(node, neighbor));
             bool y = Set_HasEdge(edge_set, edge);
-            Float e = (y == 1 ? EPSILON : ((Float)1.0) - EPSILON);
+            Float e = (y == 1 ? EPSILON : FL(1.0) - EPSILON);
             // probs
             for (uint i = 0, k = lid; k < K; ++i, k += WG_SIZE) {
                 Float beta_k = Beta(beta, k);
@@ -295,10 +295,10 @@ const std::string kSourcePhiWg =
             for (uint i = 0, k = lid; k < K; ++i, k += WG_SIZE) {
                 Float pi_k = pi_a[k];
                 Float probs_k = probs[k];
-                grads[k] += (probs_k / probs_sum) / (pi_k * phi_sum) - ((Float)1.0) / phi_sum;
+                grads[k] += (probs_k / probs_sum) / (pi_k * phi_sum) - FL(1.0) / phi_sum;
             }
           }
-          Float Nn = (((Float)1.0) * N) / NUM_NEIGHBORS;
+          Float Nn = (FL(1.0) * N) / NUM_NEIGHBORS;
           for (uint i = 0, k = lid; k < K; ++i, k += WG_SIZE) {
               Float noise = PHI_RANDN(rseed);
               Float phi_k = pi_a[k] * phi_sum;

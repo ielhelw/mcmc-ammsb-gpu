@@ -15,20 +15,26 @@ const std::string& GetSourceGuard() {
       "#ifndef EDGE_TYPE \n"
       "#  error \"EDGE_TYPE is required\" \n"
       "#endif \n"
-      "#ifndef ALPHA_ \n"
-      "#  error \"ALPHA_ is required\" \n"
+      "#ifndef ALPHA \n"
+      "#  error \"ALPHA is required\" \n"
       "#endif \n"
-      "#ifndef EPS_A_ \n"
-      "#  error \"EPS_A_ is required\" \n"
+      "#ifndef EPS_A \n"
+      "#  error \"EPS_A is required\" \n"
       "#endif \n"
-      "#ifndef EPS_B_ \n"
-      "#  error \"EPS_B_ is required\" \n"
+      "#ifndef EPS_B \n"
+      "#  error \"EPS_B is required\" \n"
       "#endif \n"
-      "#ifndef EPS_C_ \n"
-      "#  error \"EPS_C_ is required\" \n"
+      "#ifndef EPS_C \n"
+      "#  error \"EPS_C is required\" \n"
       "#endif \n"
-      "#ifndef EPSILON_ \n"
-      "#  error \"EPSILON_ is required\" \n"
+      "#ifndef EPSILON \n"
+      "#  error \"EPSILON is required\" \n"
+      "#endif \n"
+      "#ifndef ETA0 \n"
+      "#  error \"ETA0 is required\" \n"
+      "#endif \n"
+      "#ifndef ETA1 \n"
+      "#  error \"ETA1 is required\" \n"
       "#endif \n"
       "#ifndef K \n"
       "#  error \"K is required\" \n"
@@ -42,32 +48,27 @@ const std::string& GetSourceGuard() {
       "#ifndef NUM_NEIGHBORS \n"
       "#  error \"NUM_NEIGHBORS is required\" \n"
       "#endif \n"
-      "#define ALPHA ((Float)ALPHA_) \n"
-      "#define EPS_A ((Float)EPS_A_) \n"
-      "#define EPS_B ((Float)EPS_B_) \n"
-      "#define EPS_C ((Float)EPS_C_) \n"
-      "#define ETA0 ((Float)ETA0_) \n"
-      "#define ETA1 ((Float)ETA1_) \n"
-      "#define EPSILON ((Float)EPSILON_) \n");
+      );
   return kSourceGuards;
 }
 
 std::vector<std::string> MakeCompileFlags(const Config& cfg) {
-  std::vector<std::string> ret = {
-      std::string("-DFLOAT_TYPE=") + type_name<Float>(),
-      "-DVERTEX_TYPE=uint",
-      "-DEDGE_TYPE=ulong",
-      std::string("-DK=") + std::to_string(cfg.K),
-      std::string("-DN=") + std::to_string(cfg.N),
-      std::string("-DE=") + std::to_string(cfg.E),
-      std::string("-DALPHA_=") + std::to_string(cfg.alpha),
-      std::string("-DEPS_A_=") + std::to_string(cfg.a),
-      std::string("-DEPS_B_=") + std::to_string(cfg.b),
-      std::string("-DEPS_C_=") + std::to_string(cfg.c),
-      std::string("-DEPSILON_=") + std::to_string(cfg.epsilon),
-      std::string("-DETA0_=") + std::to_string(cfg.eta0),
-      std::string("-DETA1_=") + std::to_string(cfg.eta1),
-      std::string("-DNUM_NEIGHBORS=") + std::to_string(cfg.num_node_sample)};
+  std::string float_suffix = (type_name<Float>() == "float" ? "f" : "");
+  std::vector<std::string> ret;
+  ret.push_back(std::string("-DFLOAT_TYPE=") + type_name<Float>());
+  ret.push_back("-DVERTEX_TYPE=uint");
+  ret.push_back("-DEDGE_TYPE=ulong");
+  ret.push_back(std::string("-DK=") + std::to_string(cfg.K));
+  ret.push_back(std::string("-DN=") + std::to_string(cfg.N));
+  ret.push_back(std::string("-DE=") + std::to_string(cfg.E));
+  ret.push_back(std::string("-DALPHA=") + std::to_string(cfg.alpha) + float_suffix);
+  ret.push_back(std::string("-DEPS_A=") + std::to_string(cfg.a) + float_suffix);
+  ret.push_back(std::string("-DEPS_B=") + std::to_string(cfg.b) + float_suffix);
+  ret.push_back(std::string("-DEPS_C=") + std::to_string(cfg.c) + float_suffix);
+  ret.push_back(std::string("-DEPSILON=") + std::to_string(cfg.epsilon) + float_suffix);
+  ret.push_back(std::string("-DETA0=") + std::to_string(cfg.eta0) + float_suffix);
+  ret.push_back(std::string("-DETA1=") + std::to_string(cfg.eta1) + float_suffix);
+  ret.push_back(std::string("-DNUM_NEIGHBORS=") + std::to_string(cfg.num_node_sample));
   return ret;
 }
 

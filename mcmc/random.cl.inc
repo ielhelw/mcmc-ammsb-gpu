@@ -2,7 +2,7 @@
 const std::string GetRandomHeader() {
   static const std::string kClRandomHeader =
       GetClTypes() + GetRandomTypes() +
-      "#define PARAM_R ((Float)3.44428647676) \n"
+      "#define PARAM_R FL(3.44428647676) \n"
       "#define gsl_rng_get(randomState) rand(randomState)  \n"
       "#define gsl_rng_uniform(randomState) random(randomState) \n"
       "#define gsl_rng_uniform_int(randomState, n) randint(randomState, 0, n) "
@@ -32,7 +32,7 @@ const std::string GetRandomHeader() {
               }
 
               inline Float random(random_seed_t *
-                                  s) { return (((Float)1.0) * rand(s) / ULONG_MAX); }
+                                  s) { return (FL(1.0) * rand(s) / ULONG_MAX); }
 
               inline int randint(random_seed_t * s, int from, int upto) {
 #if 1
@@ -261,13 +261,13 @@ const std::string GetRandomHeader() {
                     y = y1 + (y0 - y1) * U1;
                   } else {
                     Float U1, U2;
-                    U1 = ((Float)1.0) - gsl_rng_uniform(randomState);
+                    U1 = FL(1.0) - gsl_rng_uniform(randomState);
                     U2 = gsl_rng_uniform(randomState);
                     x = PARAM_R - LOG(U1) / PARAM_R;
-                    y = EXP(-PARAM_R * (x - ((Float)0.5) * PARAM_R)) * U2;
+                    y = EXP(-PARAM_R * (x - FL(0.5) * PARAM_R)) * U2;
                   }
 
-                  if (y < EXP(-((Float)0.5) * x * x)) break;
+                  if (y < EXP(-FL(0.5) * x * x)) break;
                 }
 
                 return sign * sigma * x;
@@ -275,7 +275,7 @@ const std::string GetRandomHeader() {
 
               inline Float randn(gsl_rng * randomSeed) {
                 // FIXME: width parameter 0.5, or better 0.1?
-                return gsl_ran_gaussian_ziggurat(randomSeed, ((Float)1.0));
+                return gsl_ran_gaussian_ziggurat(randomSeed, FL(1.0));
               }
 
               /* rng/gsl_rng.h
@@ -353,37 +353,37 @@ const std::string GetRandomHeader() {
               Float gsl_ran_gamma(gsl_rng * r, Float a, Float b) {
                 /* assume a > 0 */
 
-                Float f = ((Float)1.0);
+                Float f = FL(1.0);
 #ifdef SUPPORT_RECURSION
                 if (a < 1) {
                   Float u = gsl_rng_uniform_pos(r);
-                  return gsl_ran_gamma(r, ((Float)1.0) + a, b) * POW(u, ((Float)1.0) / a);
+                  return gsl_ran_gamma(r, FL(1.0) + a, b) * POW(u, FL(1.0) / a);
                 }
 #else
                 while (a < 1) {
                   Float u = gsl_rng_uniform_pos(r);
-                  f = f * POW(u, ((Float)1.0) / a);
-                  a = ((Float)1.0) + a;
+                  f = f * POW(u, FL(1.0) / a);
+                  a = FL(1.0) + a;
                 }
 #endif
 
                 {
                   Float x, v, u;
-                  Float d = a - ((Float)1.0) / ((Float)3.0);
-                  Float c = (((Float)1.0) / ((Float)3.0)) / SQRT(d);
+                  Float d = a - FL(1.0) / FL(3.0);
+                  Float c = (FL(1.0) / FL(3.0)) / SQRT(d);
 
                   while (1) {
                     do {
-                      x = gsl_ran_gaussian_ziggurat(r, ((Float)1.0));
-                      v = ((Float)1.0) + c * x;
+                      x = gsl_ran_gaussian_ziggurat(r, FL(1.0));
+                      v = FL(1.0) + c * x;
                     } while (v <= 0);
 
                     v = v * v * v;
                     u = gsl_rng_uniform_pos(r);
 
-                    if (u < 1 - ((Float)0.0331) * x * x * x * x) break;
+                    if (u < 1 - FL(0.0331) * x * x * x * x) break;
 
-                    if (LOG(u) < ((Float)0.5) * x * x + d * (1 - v + LOG(v))) break;
+                    if (LOG(u) < FL(0.5) * x * x + d * (1 - v + LOG(v))) break;
                   }
 
                   return f * b * d * v;

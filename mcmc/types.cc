@@ -9,6 +9,11 @@ namespace mcmc {
 
 std::string GetClTypes() {
   std::ostringstream out;
+  if (type_name<Float>() == std::string("double")) {
+    out << "#define FL(X) (X)" << std::endl;
+  } else {
+    out << "#define FL(X) (X ## f)" << std::endl;
+  }
 #ifdef MCMC_USE_CL
   if (type_name<Float>() == std::string("double")) {
     out << "#pragma OPENCL EXTENSION cl_khr_fp64: enable " << std::endl;
@@ -104,7 +109,7 @@ std::istream& operator>>(std::istream& in, ulong2& v) {
         boost::program_options::validation_error::invalid_option_value,
         "Invalid ulong2");
   }
-  in >> v[1];
+  in >> v[2];
   return in;
 }
 
