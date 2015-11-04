@@ -49,11 +49,9 @@ class WgBetaTest : public ContextTest,
     ContextTest::SetUp();
     std::vector<Edge> edges = GenerateRandomEdges(32 * cfg_.N);
     Set set(edges.size());
-    for (auto it = edges.begin(); it != edges.end(); ++it) {
-      ASSERT_TRUE(set.Insert(*it));
-    }
+    ASSERT_TRUE(set.SetContents(edges.begin(), edges.end()));
     factory_ = OpenClSetFactory::New(*queue_);
-    dev_set_.reset(factory_->CreateSet(set.Serialize()));
+    dev_set_.reset(factory_->CreateSet(set));
     theta_.reset(new clcuda::Buffer<Float>(*context_, 2 * cfg_.K));
     beta_.reset(new clcuda::Buffer<Float>(*context_, 2 * cfg_.K));
     allocFactory = RowPartitionedMatrixFactory<Float>::New(*queue_);

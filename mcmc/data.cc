@@ -87,27 +87,25 @@ bool GenerateSetsFromEdges(uint64_t N, const std::vector<Edge>& vals,
   size_t heldout_len = vals.size() - training_len;
   if (heldout_len > 0) {
     heldout->reset(new Set(heldout_len));
-    for (auto it = vals.begin(); it != vals.begin() + heldout_len; ++it) {
-      if (!(*heldout)->Insert(*it)) {
-        LOG(ERROR) << "Failed to insert into heldout set";
-        heldout->reset();
-        return false;
-      }
-      heldout_edges->push_back(*it);
-    }
-  }
-  training->reset(new Set(training_len));
-  for (auto it = vals.begin() + heldout_len; it != vals.end(); ++it) {
-    if (!(*training)->Insert(*it)) {
-      LOG(ERROR) << "Failed to insert into training set";
-      training->reset();
-      if (heldout_len > 0) {
-        heldout->reset();
-      }
+    if (!(*heldout)->SetContents(vals.begin(), vals.begin() + heldout_len)) {
+      LOG(ERROR) << "Failed to insert into heldout set";
+      heldout->reset();
       return false;
     }
-    training_edges->push_back(*it);
+    heldout_edges->insert(heldout_edges->end(), vals.begin(),
+                          vals.begin() + heldout_len);
   }
+  training->reset(new Set(training_len));
+  if (!(*training)->SetContents(vals.begin() + heldout_len, vals.end())) {
+    LOG(ERROR) << "Failed to insert into training set";
+    training->reset();
+    if (heldout_len > 0) {
+      heldout->reset();
+    }
+    return false;
+  }
+  training_edges->insert(training_edges->end(), vals.begin() + heldout_len,
+                         vals.end());
   if (heldout_len > 0) {
     std::unordered_set<Edge> fake_edges;
     for (uint32_t i = 0; i < heldout_len; ++i) {

@@ -83,8 +83,8 @@ Learner::Learner(const Config& cfg, clcuda::Queue queue)
       pi_(allocFactory_->CreateMatrix(cfg_.N, cfg_.K)),
       phi_(queue_.GetContext(), cfg_.N),
       setFactory_(OpenClSetFactory::New(queue_)),
-      trainingSet_(setFactory_->CreateSet(cfg_.training->Serialize())),
-      heldoutSet_(setFactory_->CreateSet(cfg_.heldout->Serialize())),
+      trainingSet_(setFactory_->CreateSet(*cfg_.training)),
+      heldoutSet_(setFactory_->CreateSet(*cfg_.heldout)),
       trainingEdges_(queue_.GetContext(), queue_, cfg_.training_edges.begin(),
                      cfg_.training_edges.end()),
       heldoutEdges_(queue_.GetContext(), queue_, cfg_.heldout_edges.begin(),
@@ -325,8 +325,7 @@ bool Learner::Serialize(std::ostream* out) {
           heldoutPerplexity_.Serialize(out) &&
           ::mcmc::SerializeMessage(out, props)
 #ifdef MCMC_SAMPLE_PARALLEL
-          && samples_[0].Serialize(out)
-          && samples_[1].Serialize(out)
+          && samples_[0].Serialize(out) && samples_[1].Serialize(out)
 #endif
           );
 }

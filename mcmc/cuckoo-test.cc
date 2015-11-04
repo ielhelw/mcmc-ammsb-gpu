@@ -33,9 +33,7 @@ TEST(CuckooSetTest, RandomMembership) {
   ASSERT_GT(in_len, static_cast<uint64_t>(0));
   ASSERT_GT(out_len, static_cast<uint64_t>(0));
   Set set(in_len);
-  for (auto it = edges.begin(); it != edges.begin() + in_len; ++it) {
-    ASSERT_TRUE(set.Insert(*it));
-  }
+  ASSERT_TRUE(set.SetContents(edges.begin(), edges.begin() + in_len));
   for (auto it = edges.begin(); it != edges.begin() + in_len; ++it) {
     ASSERT_TRUE(set.Has(*it));
   }
@@ -61,10 +59,7 @@ TEST(OpenClCuckooSetTest, RandomMembership) {
   ASSERT_GT(in_len, static_cast<uint64_t>(0));
   ASSERT_GT(out_len, static_cast<uint64_t>(0));
   Set set(in_len);
-  for (auto it = edges.begin(); it != edges.begin() + in_len; ++it) {
-    ASSERT_TRUE(set.Insert(*it));
-  }
-  std::vector<Edge> serialized_set = set.Serialize();
+  ASSERT_TRUE(set.SetContents(edges.begin(), edges.begin() + in_len));
   clcuda::Platform platform((size_t)0);
   clcuda::Device dev(platform, 0);
   clcuda::Context context(dev);
@@ -77,7 +72,7 @@ TEST(OpenClCuckooSetTest, RandomMembership) {
   LOG_IF(FATAL, status != clcuda::BuildStatus::kSuccess)
       << prog.GetBuildInfo(dev);
   auto set_factory = OpenClSetFactory::New(queue);
-  std::unique_ptr<OpenClSet> dev_set(set_factory->CreateSet(serialized_set));
+  std::unique_ptr<OpenClSet> dev_set(set_factory->CreateSet(set));
   std::unique_ptr<clcuda::Buffer<Edge>> dev_input(new clcuda::Buffer<Edge>(
       context, queue, edges.begin(), edges.begin() + in_len));
   std::unique_ptr<clcuda::Buffer<Edge>> dev_output(

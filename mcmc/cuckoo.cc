@@ -17,6 +17,7 @@ const std::string GetSetTypes() {
       typedef struct {
         GLOBAL uint64_t* base_;
         uint64_t num_bins_;
+        uint32_t primes_idx_;
       } Set;
 
       )%%";
@@ -28,12 +29,18 @@ const std::string& GetSetHeader() {
 
           CONSTANT uint64_t NUM_BUCKETS = 2;
           CONSTANT uint64_t NUM_SLOTS = 4;
+          CONSTANT uint64_t SET_PRIMES[] = {
+            15485807, 920429591,
+            379906717, 740320571,
+            256204747, 379927517,
+            13, 17
+          };
 
           uint64_t hash1(uint64_t num_bins,
-                         uint64_t k) { return (1003 * k) % num_bins; }
+                         uint64_t k, uint32_t pidx) { return (SET_PRIMES[2*pidx] * k) % num_bins; }
 
           uint64_t hash2(uint64_t num_bins,
-                         uint64_t k) { return (k ^ 179440147) % num_bins; }
+                         uint64_t k, uint32_t pidx) { return (k ^ SET_PRIMES[2*pidx+1]) % num_bins; }
 
           bool Set_SlotHasEdge_(GLOBAL uint64_t * slot, uint64_t k) {
             if (k == slot[0]) return true;
@@ -44,12 +51,12 @@ const std::string& GetSetHeader() {
           }
 
           bool Set_HasEdge(GLOBAL Set * set, uint64_t k) {
-            uint64_t h1 = hash1(set->num_bins_, k);
+            uint64_t h1 = hash1(set->num_bins_, k, set->primes_idx_);
             if (Set_SlotHasEdge_(set->base_ + 0 * set->num_bins_ * NUM_SLOTS +
                                      h1 * NUM_SLOTS,
                                  k))
               return true;
-            uint64_t h2 = hash2(set->num_bins_, k);
+            uint64_t h2 = hash2(set->num_bins_, k, set->primes_idx_);
             if (Set_SlotHasEdge_(set->base_ + 1 * set->num_bins_ * NUM_SLOTS +
                                      h2 * NUM_SLOTS,
                                  k))
@@ -68,10 +75,11 @@ const std::string& GetSetSource() {
                                   size) { *size = sizeof(Set); }
 
           KERNEL void SetInit(GLOBAL void* vset, GLOBAL uint64_t* data,
-                                uint64_t num_bins) {
+                                uint64_t num_bins, uint32_t primes_idx) {
             GLOBAL Set* set = (GLOBAL Set*)vset;
             set->base_ = data;
             set->num_bins_ = num_bins;
+            set->primes_idx_ = primes_idx;
           }
 
           )%%";
@@ -81,13 +89,21 @@ const std::string& GetSetSource() {
 }  // namespace internal
 
 const Edge Set::KEY_INVALID = std::numeric_limits<Edge>::max();
+const std::vector<std::pair<uint64_t, uint64_t>> Set::PRIMES = {
+    std::make_pair<uint64_t, uint64_t>(15485807, 920429591),
+    std::make_pair<uint64_t, uint64_t>(379906717, 740320571),
+    std::make_pair<uint64_t, uint64_t>(256204747, 379927517),
+    std::make_pair<uint64_t, uint64_t>(13, 17)};
 
 Set::Set(size_t n)
     : count_(0),
       N_(static_cast<size_t>(
-          1 + std::ceil((1.23 * n) / (NUM_BUCKETS * NUM_SLOTS)))),
+          1 + std::ceil((1.15 * n) / (NUM_BUCKETS * NUM_SLOTS)))),
       seed_(42),
-      displacements_max_(n / 2 + 1) {
+      displacements_max_(n / 2 + 1),
+      primeIdx_(0) {}
+
+void Set::Reset() {
   for (auto& bucket : buckets_) {
     bucket.resize(N_);
     for (auto& slot : bucket) {
@@ -96,6 +112,20 @@ Set::Set(size_t n)
       }
     }
   }
+}
+
+bool Set::SetContents(std::vector<Edge>::const_iterator start,
+                      std::vector<Edge>::const_iterator end) {
+  for (primeIdx_ = 0; primeIdx_ < PRIMES.size(); ++primeIdx_) {
+    Reset();
+    bool ok = true;
+    for (auto it = start; ok && it != end; ++it) {
+      ok = Insert(*it);
+    }
+    if (ok) return ok;
+    LOG(ERROR) << "Attempt(" << primeIdx_ << ") to create Set failed";
+  }
+  return false;
 }
 
 bool Set::IsSlotNotFullAndKeyNotInIt(Edge k, const Slot& slot) const {
@@ -170,9 +200,9 @@ size_t Set::Hash(Edge k, size_t bidx) const {
   assert(bidx < NUM_BUCKETS);
   switch (bidx) {
     case 0:
-      return (1003 * k) % N_;
+      return (PRIMES[primeIdx_].first * k) % N_;
     case 1:
-      return (k ^ 179440147) % N_;
+      return (k ^ PRIMES[primeIdx_].second) % N_;
     default:
       abort();
   }
@@ -191,17 +221,18 @@ std::vector<Edge> Set::Serialize() const {
 
 OpenClSet::OpenClSet(std::shared_ptr<OpenClSetFactory> factory,
                      clcuda::Kernel* init, clcuda::Queue* queue,
-                     uint64_t sizeOfSet, const std::vector<uint64_t>& data)
+                     uint64_t sizeOfSet, const Set& set)
     : factory_(factory),
       queue_(*queue),
-      data_(queue_.GetContext(), data.size()),
-      num_bins_((data_.GetSize() / sizeof(Edge)) /
-                (Set::NUM_BUCKETS * Set::NUM_SLOTS)),
+      data_(queue_.GetContext(), set.Capacity()),
+      num_bins_(set.BinsPerBucket()),
       buf_(queue_.GetContext(), sizeOfSet) {
+  auto data = set.Serialize();
   data_.Write(queue_, data.size(), data);
   init->SetArgument(0, buf_);
   init->SetArgument(1, data_);
   init->SetArgument(2, num_bins_);
+  init->SetArgument(3, set.PrimeIdx());
   clcuda::Event e;
   init->Launch(queue_, {1}, {1}, e);
   queue_.Finish();
@@ -215,9 +246,9 @@ std::shared_ptr<OpenClSetFactory> OpenClSetFactory::New(clcuda::Queue queue) {
   return std::shared_ptr<OpenClSetFactory>(new OpenClSetFactory(queue));
 }
 
-OpenClSet* OpenClSetFactory::CreateSet(const std::vector<uint64_t>& data) {
+OpenClSet* OpenClSetFactory::CreateSet(const Set& set) {
   return new OpenClSet(shared_from_this(), init_kernel_.get(), &queue_,
-                       sizeOfSet_, data);
+                       sizeOfSet_, set);
 }
 
 OpenClSetFactory::OpenClSetFactory(clcuda::Queue queue)

@@ -26,7 +26,8 @@ class Set {
 
   Set(size_t n);
 
-  bool Insert(Edge k);
+  bool SetContents(std::vector<Edge>::const_iterator start,
+                   std::vector<Edge>::const_iterator end);
 
   bool Has(Edge k) const;
 
@@ -38,7 +39,15 @@ class Set {
 
   std::vector<Edge> Serialize() const;
 
+  uint32_t PrimeIdx() const { return primeIdx_; }
+
  private:
+  static const std::vector<std::pair<uint64_t, uint64_t>> PRIMES;
+
+  void Reset();
+
+  bool Insert(Edge k);
+
   bool IsSlotNotFullAndKeyNotInIt(Edge k, const Slot& slot) const;
 
   bool IsSlotFull(const Slot& slot) const;
@@ -54,6 +63,7 @@ class Set {
   Buckets buckets_;
   uint32_t seed_;
   const size_t displacements_max_;
+  uint32_t primeIdx_;
 };
 
 class OpenClSetFactory;
@@ -64,8 +74,7 @@ class OpenClSet {
 
  private:
   OpenClSet(std::shared_ptr<OpenClSetFactory> factory, clcuda::Kernel* init,
-            clcuda::Queue* queue, uint64_t sizeOfSet,
-            const std::vector<Edge>& data);
+            clcuda::Queue* queue, uint64_t sizeOfSet, const Set& set);
 
   std::shared_ptr<OpenClSetFactory> factory_;
   clcuda::Queue queue_;
@@ -82,7 +91,7 @@ class OpenClSetFactory : public std::enable_shared_from_this<OpenClSetFactory> {
 
   static std::shared_ptr<OpenClSetFactory> New(clcuda::Queue queue);
 
-  OpenClSet* CreateSet(const std::vector<uint64_t>& data);
+  OpenClSet* CreateSet(const Set& set);
 
  private:
   OpenClSetFactory(clcuda::Queue queue);

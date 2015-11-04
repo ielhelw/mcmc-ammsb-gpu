@@ -37,11 +37,9 @@ class WgPerplexityTest : public ContextTest,
     dev_edges_.reset(new clcuda::Buffer<Edge>(*context_, *queue_, edges.begin(),
                                               edges.end()));
     Set set(edges.size());
-    for (auto it = edges.begin(); it != edges.end(); ++it) {
-      ASSERT_TRUE(set.Insert(*it));
-    }
+    ASSERT_TRUE(set.SetContents(edges.begin(), edges.end()));
     factory_ = OpenClSetFactory::New(*queue_);
-    dev_set_.reset(factory_->CreateSet(set.Serialize()));
+    dev_set_.reset(factory_->CreateSet(set));
     std::mt19937 mt19937;
     std::gamma_distribution<Float> gamma_dist(1, 1);
     auto gen = std::bind(gamma_dist, mt19937);
