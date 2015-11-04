@@ -23,7 +23,9 @@ class Learner {
 
   Float HeldoutPerplexity();
 
+#ifdef MCMC_CALC_TRAIN_PPX
   Float TrainingPerplexity();
+#endif
 
   void PrintStats();
 

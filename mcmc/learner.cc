@@ -195,13 +195,19 @@ Float Learner::DoSample(Sample* sample) {
 }
 
 Float Learner::HeldoutPerplexity() {
+  auto T1 = high_resolution_clock::now();
   Float ppx = heldoutPerplexity_();
+  auto T2 = high_resolution_clock::now();
+  time_ += duration_cast<nanoseconds>(T2 - T1).count();
   return std::exp(ppx);
 }
 
 #ifdef MCMC_CALC_TRAIN_PPX
 Float Learner::TrainingPerplexity() {
+  auto T1 = high_resolution_clock::now();
   Float train_ppx = trainingPerplexity_();
+  auto T2 = high_resolution_clock::now();
+  time_ += duration_cast<nanoseconds>(T2 - T1).count();
   return std::exp(train_ppx);
 }
 #endif
