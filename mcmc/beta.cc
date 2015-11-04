@@ -306,9 +306,11 @@ BetaUpdater::BetaUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
 void BetaUpdater::operator()(clcuda::Buffer<Edge>* edges, uint32_t num_edges,
                              Float scale) {
   ++count_calls_;
+  uint32_t wg = 32;
+  uint32_t kwg = (k_ / wg + (k_ % wg? 1 : 0)) * wg;
   {
     clcuda::Event theta_sum_event;
-    theta_sum_kernel_->Launch(queue_, {k_}, {32}, theta_sum_event);
+    theta_sum_kernel_->Launch(queue_, {kwg}, {wg}, theta_sum_event);
     queue_.Finish();
     t_theta_sum_ += theta_sum_event.GetElapsedTime();
   }
@@ -331,7 +333,7 @@ void BetaUpdater::operator()(clcuda::Buffer<Edge>* edges, uint32_t num_edges,
     uint32_t num_partials = std::min(global, num_edges);
     grads_sum_kernel_->SetArgument(1, num_partials);
     clcuda::Event grads_sum_event;
-    grads_sum_kernel_->Launch(queue_, {2 * k_}, {32}, grads_sum_event);
+    grads_sum_kernel_->Launch(queue_, {2 * kwg}, {wg}, grads_sum_event);
     queue_.Finish();
     t_grads_sum_ += grads_sum_event.GetElapsedTime();
   }
@@ -339,7 +341,7 @@ void BetaUpdater::operator()(clcuda::Buffer<Edge>* edges, uint32_t num_edges,
     update_theta_kernel_->SetArgument(2, count_calls_);
     update_theta_kernel_->SetArgument(3, scale);
     clcuda::Event update_theta_event;
-    update_theta_kernel_->Launch(queue_, {k_}, {32}, update_theta_event);
+    update_theta_kernel_->Launch(queue_, {kwg}, {wg}, update_theta_event);
     queue_.Finish();
     t_update_theta_ += update_theta_event.GetElapsedTime();
   }
