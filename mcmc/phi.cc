@@ -1,5 +1,6 @@
 #include "mcmc/phi.h"
 
+#include <boost/algorithm/string/replace.hpp>
 #include <glog/logging.h>
 
 #include "mcmc/algorithm/sum.h"
@@ -118,7 +119,6 @@ const std::string kSourcePhi = random::GetRandomHeader() + R"%%(
     type_name<Float>() + "\n" + random::GetRandomHeader() + R"%%(
 
         #define K_PER_THREAD ((K/WG_SIZE) + (K % WG_SIZE? 1 : 0))
-        #define K_IDX(k) ((k/WG_SIZE))
 
         void update_phi_for_nodeWG(GLOBAL Float* beta, GLOBAL void* g_pi,
                                    GLOBAL Float* g_phi, GLOBAL Float* phi_vec,
@@ -244,7 +244,6 @@ const std::string kSourcePhiWg =
     type_name<Float>() + "\n" + random::GetRandomHeader() + R"%%(
 
         #define K_PER_THREAD ((K/WG_SIZE) + (K % WG_SIZE? 1 : 0))
-        #define K_IDX(k) ((k/WG_SIZE))
 
         void update_phi_for_nodeWG(GLOBAL Float* beta, GLOBAL void* g_pi,
                                    GLOBAL Float* g_phi, GLOBAL Float* phi_vec,
@@ -377,7 +376,6 @@ const std::string kSourcePhiWg =
     type_name<Float>() + "\n" + random::GetRandomHeader() + R"%%(
 
         #define K_PER_THREAD ((K/WG_SIZE) + (K % WG_SIZE? 1 : 0))
-        #define K_IDX(k) ((k/WG_SIZE))
 
         #define INIT_ARRAYS(i, kk) \
         {\
@@ -439,53 +437,12 @@ const std::string kSourcePhiWg =
           Float phi_sum = g_phi[node];
           // reset grads
           {
-            INIT_ARRAYS(0, lid + 0 * WG_SIZE);
-#if K_PER_THREAD > 1
-            INIT_ARRAYS(1, lid + 1 * WG_SIZE);
-#if K_PER_THREAD > 2
-            INIT_ARRAYS(2, lid + 2 * WG_SIZE);
-            INIT_ARRAYS(3, lid + 3 * WG_SIZE);
-#if K_PER_THREAD > 4
-            INIT_ARRAYS(4, lid + 4 * WG_SIZE);
-            INIT_ARRAYS(5, lid + 5 * WG_SIZE);
-            INIT_ARRAYS(6, lid + 6 * WG_SIZE);
-            INIT_ARRAYS(7, lid + 7 * WG_SIZE);
-#if K_PER_THREAD > 8
-            INIT_ARRAYS(8, lid + 8 * WG_SIZE);
-            INIT_ARRAYS(9, lid + 9 * WG_SIZE);
-            INIT_ARRAYS(10, lid + 10 * WG_SIZE);
-            INIT_ARRAYS(11, lid + 11 * WG_SIZE);
-#if K_PER_THREAD > 12
-            INIT_ARRAYS(12, lid + 12 * WG_SIZE);
-            INIT_ARRAYS(13, lid + 13 * WG_SIZE);
-            INIT_ARRAYS(14, lid + 14 * WG_SIZE);
-            INIT_ARRAYS(15, lid + 15 * WG_SIZE);
-#if K_PER_THREAD > 16
-            INIT_ARRAYS(16, lid + 16 * WG_SIZE);
-            INIT_ARRAYS(17, lid + 17 * WG_SIZE);
-            INIT_ARRAYS(18, lid + 18 * WG_SIZE);
-            INIT_ARRAYS(19, lid + 19 * WG_SIZE);
-            INIT_ARRAYS(20, lid + 20 * WG_SIZE);
-            INIT_ARRAYS(21, lid + 21 * WG_SIZE);
-            INIT_ARRAYS(22, lid + 22 * WG_SIZE);
-            INIT_ARRAYS(23, lid + 23 * WG_SIZE);
-            INIT_ARRAYS(24, lid + 24 * WG_SIZE);
-            INIT_ARRAYS(25, lid + 25 * WG_SIZE);
-            INIT_ARRAYS(26, lid + 126 * WG_SIZE);
-            INIT_ARRAYS(27, lid + 27 * WG_SIZE);
-            INIT_ARRAYS(28, lid + 28 * WG_SIZE);
-            INIT_ARRAYS(29, lid + 29 * WG_SIZE);
-            INIT_ARRAYS(30, lid + 30 * WG_SIZE);
-            INIT_ARRAYS(31, lid + 31 * WG_SIZE);
-#if K_PER_THREAD > 32
-#error "KERNEL UNROLLING LIMIT"
-#endif
-#endif
-#endif
-#endif
-#endif
-#endif
-#endif
+            GENERATE_INIT_ARRAYS
+            // eg:
+            // INIT_ARRAYS(0, lid + 0 * WG_SIZE);
+            // INIT_ARRAYS(1, lid + 1 * WG_SIZE);
+            // INIT_ARRAYS(2, lid + 2 * WG_SIZE);
+            // INIT_ARRAYS(3, lid + 3 * WG_SIZE);
           }
 
           for (uint i = 0; i < NUM_NEIGHBORS; ++i) {
@@ -498,53 +455,12 @@ const std::string kSourcePhiWg =
             Float probs_sum = 0;
             // probs
             {
-              CALC_PROBS(0, lid + 0 * WG_SIZE);
-#if K_PER_THREAD > 1
-              CALC_PROBS(1, lid + 1 * WG_SIZE);
-#if K_PER_THREAD > 2
-              CALC_PROBS(2, lid + 2 * WG_SIZE);
-              CALC_PROBS(3, lid + 3 * WG_SIZE);
-#if K_PER_THREAD > 4
-              CALC_PROBS(4, lid + 4 * WG_SIZE);
-              CALC_PROBS(5, lid + 5 * WG_SIZE);
-              CALC_PROBS(6, lid + 6 * WG_SIZE);
-              CALC_PROBS(7, lid + 7 * WG_SIZE);
-#if K_PER_THREAD > 8
-              CALC_PROBS(8, lid + 8 * WG_SIZE);
-              CALC_PROBS(9, lid + 9 * WG_SIZE);
-              CALC_PROBS(10, lid + 10 * WG_SIZE);
-              CALC_PROBS(11, lid + 11 * WG_SIZE);
-#if K_PER_THREAD > 12
-              CALC_PROBS(12, lid + 12 * WG_SIZE);
-              CALC_PROBS(13, lid + 13 * WG_SIZE);
-              CALC_PROBS(14, lid + 14 * WG_SIZE);
-              CALC_PROBS(15, lid + 15 * WG_SIZE);
-#if K_PER_THREAD > 16
-              CALC_PROBS(16, lid + 16 * WG_SIZE);
-              CALC_PROBS(17, lid + 17 * WG_SIZE);
-              CALC_PROBS(18, lid + 18 * WG_SIZE);
-              CALC_PROBS(19, lid + 19 * WG_SIZE);
-              CALC_PROBS(20, lid + 20 * WG_SIZE);
-              CALC_PROBS(21, lid + 21 * WG_SIZE);
-              CALC_PROBS(22, lid + 22 * WG_SIZE);
-              CALC_PROBS(23, lid + 23 * WG_SIZE);
-              CALC_PROBS(24, lid + 24 * WG_SIZE);
-              CALC_PROBS(25, lid + 25 * WG_SIZE);
-              CALC_PROBS(26, lid + 126 * WG_SIZE);
-              CALC_PROBS(27, lid + 27 * WG_SIZE);
-              CALC_PROBS(28, lid + 28 * WG_SIZE);
-              CALC_PROBS(29, lid + 29 * WG_SIZE);
-              CALC_PROBS(30, lid + 30 * WG_SIZE);
-              CALC_PROBS(31, lid + 31 * WG_SIZE);
-#if K_PER_THREAD > 32
-#error "KERNEL UNROLLING LIMIT"
-#endif
-#endif
-#endif
-#endif
-#endif
-#endif
-#endif
+              GENERATE_CALC_PROBS
+              // eg:
+              // CALC_PROBS(0, lid + 0 * WG_SIZE);
+              // CALC_PROBS(1, lid + 1 * WG_SIZE);
+              // CALC_PROBS(2, lid + 2 * WG_SIZE);
+              // CALC_PROBS(3, lid + 3 * WG_SIZE);
             }
             aux[lid] = probs_sum;
             BARRIER_LOCAL;
@@ -552,104 +468,12 @@ const std::string kSourcePhiWg =
             probs_sum = aux[0];
             BARRIER_LOCAL;
             {
-              CALC_GRADS(0, lid + 0 * WG_SIZE);
-#if K_PER_THREAD > 1
-              CALC_GRADS(1, lid + 1 * WG_SIZE);
-#if K_PER_THREAD > 2
-              CALC_GRADS(2, lid + 2 * WG_SIZE);
-              CALC_GRADS(3, lid + 3 * WG_SIZE);
-#if K_PER_THREAD > 4
-              CALC_GRADS(4, lid + 4 * WG_SIZE);
-              CALC_GRADS(5, lid + 5 * WG_SIZE);
-              CALC_GRADS(6, lid + 6 * WG_SIZE);
-              CALC_GRADS(7, lid + 7 * WG_SIZE);
-#if K_PER_THREAD > 8
-              CALC_GRADS(8, lid + 8 * WG_SIZE);
-              CALC_GRADS(9, lid + 9 * WG_SIZE);
-              CALC_GRADS(10, lid + 10 * WG_SIZE);
-              CALC_GRADS(11, lid + 11 * WG_SIZE);
-#if K_PER_THREAD > 12
-              CALC_GRADS(12, lid + 12 * WG_SIZE);
-              CALC_GRADS(13, lid + 13 * WG_SIZE);
-              CALC_GRADS(14, lid + 14 * WG_SIZE);
-              CALC_GRADS(15, lid + 15 * WG_SIZE);
-#if K_PER_THREAD > 16
-              CALC_GRADS(16, lid + 16 * WG_SIZE);
-              CALC_GRADS(17, lid + 17 * WG_SIZE);
-              CALC_GRADS(18, lid + 18 * WG_SIZE);
-              CALC_GRADS(19, lid + 19 * WG_SIZE);
-              CALC_GRADS(20, lid + 20 * WG_SIZE);
-              CALC_GRADS(21, lid + 21 * WG_SIZE);
-              CALC_GRADS(22, lid + 22 * WG_SIZE);
-              CALC_GRADS(23, lid + 23 * WG_SIZE);
-              CALC_GRADS(24, lid + 24 * WG_SIZE);
-              CALC_GRADS(25, lid + 25 * WG_SIZE);
-              CALC_GRADS(26, lid + 126 * WG_SIZE);
-              CALC_GRADS(27, lid + 27 * WG_SIZE);
-              CALC_GRADS(28, lid + 28 * WG_SIZE);
-              CALC_GRADS(29, lid + 29 * WG_SIZE);
-              CALC_GRADS(30, lid + 30 * WG_SIZE);
-              CALC_GRADS(31, lid + 31 * WG_SIZE);
-#if K_PER_THREAD > 32
-#error "KERNEL UNROLLING LIMIT"
-#endif
-#endif
-#endif
-#endif
-#endif
-#endif
-#endif
+              GENERATE_CALC_GRADS
             }
           }
           Float Nn = (FL(1.0) * N) / NUM_NEIGHBORS;
           {
-            CALC_PHI(0, lid + 0 * WG_SIZE);
-#if K_PER_THREAD > 1
-            CALC_PHI(1, lid + 1 * WG_SIZE);
-#if K_PER_THREAD > 2
-            CALC_PHI(2, lid + 2 * WG_SIZE);
-            CALC_PHI(3, lid + 3 * WG_SIZE);
-#if K_PER_THREAD > 4
-            CALC_PHI(4, lid + 4 * WG_SIZE);
-            CALC_PHI(5, lid + 5 * WG_SIZE);
-            CALC_PHI(6, lid + 6 * WG_SIZE);
-            CALC_PHI(7, lid + 7 * WG_SIZE);
-#if K_PER_THREAD > 8
-            CALC_PHI(8, lid + 8 * WG_SIZE);
-            CALC_PHI(9, lid + 9 * WG_SIZE);
-            CALC_PHI(10, lid + 10 * WG_SIZE);
-            CALC_PHI(11, lid + 11 * WG_SIZE);
-#if K_PER_THREAD > 12
-            CALC_PHI(12, lid + 12 * WG_SIZE);
-            CALC_PHI(13, lid + 13 * WG_SIZE);
-            CALC_PHI(14, lid + 14 * WG_SIZE);
-            CALC_PHI(15, lid + 15 * WG_SIZE);
-#if K_PER_THREAD > 16
-            CALC_PHI(16, lid + 16 * WG_SIZE);
-            CALC_PHI(17, lid + 17 * WG_SIZE);
-            CALC_PHI(18, lid + 18 * WG_SIZE);
-            CALC_PHI(19, lid + 19 * WG_SIZE);
-            CALC_PHI(20, lid + 20 * WG_SIZE);
-            CALC_PHI(21, lid + 21 * WG_SIZE);
-            CALC_PHI(22, lid + 22 * WG_SIZE);
-            CALC_PHI(23, lid + 23 * WG_SIZE);
-            CALC_PHI(24, lid + 24 * WG_SIZE);
-            CALC_PHI(25, lid + 25 * WG_SIZE);
-            CALC_PHI(26, lid + 126 * WG_SIZE);
-            CALC_PHI(27, lid + 27 * WG_SIZE);
-            CALC_PHI(28, lid + 28 * WG_SIZE);
-            CALC_PHI(29, lid + 29 * WG_SIZE);
-            CALC_PHI(30, lid + 30 * WG_SIZE);
-            CALC_PHI(31, lid + 31 * WG_SIZE);
-#if K_PER_THREAD > 32
-#error "KERNEL UNROLLING LIMIT"
-#endif
-#endif
-#endif
-#endif
-#endif
-#endif
-#endif
+            GENERATE_CALC_PHI
           }
         }
 
@@ -725,19 +549,31 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
       count_calls_(0),
       k_(cfg.K),
       local_(cfg.phi_wg_size),
-      t_update_phi_(0), t_update_pi_(0) {
-  const std::string* src = nullptr;
+      t_update_phi_(0),
+      t_update_pi_(0) {
+  std::string src;
   switch (mode_) {
     case NODE_PER_THREAD:
-      src = &kSourcePhi;
+      src = kSourcePhi;
       grads_.reset(new clcuda::Buffer<Float>(queue_.GetContext(),
                                              2 * cfg.mini_batch_size * cfg.K));
       probs_.reset(new clcuda::Buffer<Float>(queue_.GetContext(),
                                              2 * cfg.mini_batch_size * cfg.K));
       break;
-    case NODE_PER_WORKGROUP:
-      src = &kSourcePhiWg;
-      break;
+    case NODE_PER_WORKGROUP: {
+      src = kSourcePhiWg;
+      uint32_t k_per_thread = k_ / local_ + (k_ % local_ ? 1 : 0);
+      for (auto s : std::vector<std::string>{"INIT_ARRAYS", "CALC_PROBS",
+                                             "CALC_GRADS",  "CALC_PHI"}) {
+        std::ostringstream out;
+        for (uint i = 0; i < k_per_thread; ++i) {
+          // INIT_ARRAYS(0, lid + 0 * WG_SIZE);
+          out << s << "(" << i << ", lid + " << i << " * WG_SIZE);\n";
+        }
+        src = boost::replace_all_copy(
+            src, std::string("GENERATE_") + s, out.str());
+      }
+    } break;
     default:
       LOG(FATAL) << "Cannot recognize mode";
   }
@@ -751,7 +587,7 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
       << std::endl << "#define FloatRowPartitionedMatrix " << type_name<Float>()
       << "RowPartitionedMatrix\n"
       << "#define FloatRowPartitionedMatrix_Row " << type_name<Float>()
-      << "RowPartitionedMatrix_Row\n" << *src << std::endl;
+      << "RowPartitionedMatrix_Row\n" << src << std::endl;
   prog_.reset(new clcuda::Program(queue_.GetContext(), out.str()));
   std::vector<std::string> opts =
       ::mcmc::GetClFlags(mode == NODE_PER_WORKGROUP ? local_ : 0);

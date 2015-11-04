@@ -1,5 +1,6 @@
 #include "mcmc/beta.h"
 
+#include <boost/algorithm/string/replace.hpp>
 #include <chrono>
 #include <glog/logging.h>
 
@@ -179,53 +180,10 @@ const std::string kSourceBetaWg =
         Float pi_sum = 0;
         Float probs_sum = 0;
         Float scratch = 0;
-        CALC_PROBS(0, lid + 0 * WG_SIZE);
-#if K_PER_THREAD > 1
-        CALC_PROBS(1, lid + 1 * WG_SIZE);
-#if K_PER_THREAD > 2
-        CALC_PROBS(2, lid + 2 * WG_SIZE);
-        CALC_PROBS(3, lid + 3 * WG_SIZE);
-#if K_PER_THREAD > 4
-        CALC_PROBS(4, lid + 4 * WG_SIZE);
-        CALC_PROBS(5, lid + 5 * WG_SIZE);
-        CALC_PROBS(6, lid + 6 * WG_SIZE);
-        CALC_PROBS(7, lid + 7 * WG_SIZE);
-#if K_PER_THREAD > 8
-        CALC_PROBS(8, lid + 8 * WG_SIZE);
-        CALC_PROBS(9, lid + 9 * WG_SIZE);
-        CALC_PROBS(10, lid + 10 * WG_SIZE);
-        CALC_PROBS(11, lid + 11 * WG_SIZE);
-#if K_PER_THREAD > 12
-        CALC_PROBS(12, lid + 12 * WG_SIZE);
-        CALC_PROBS(13, lid + 13 * WG_SIZE);
-        CALC_PROBS(14, lid + 14 * WG_SIZE);
-        CALC_PROBS(15, lid + 15 * WG_SIZE);
-#if K_PER_THREAD > 16
-        CALC_PROBS(16, lid + 16 * WG_SIZE);
-        CALC_PROBS(17, lid + 17 * WG_SIZE);
-        CALC_PROBS(18, lid + 18 * WG_SIZE);
-        CALC_PROBS(19, lid + 19 * WG_SIZE);
-        CALC_PROBS(20, lid + 20 * WG_SIZE);
-        CALC_PROBS(21, lid + 21 * WG_SIZE);
-        CALC_PROBS(22, lid + 22 * WG_SIZE);
-        CALC_PROBS(23, lid + 23 * WG_SIZE);
-        CALC_PROBS(24, lid + 24 * WG_SIZE);
-        CALC_PROBS(25, lid + 25 * WG_SIZE);
-        CALC_PROBS(26, lid + 126 * WG_SIZE);
-        CALC_PROBS(27, lid + 27 * WG_SIZE);
-        CALC_PROBS(28, lid + 28 * WG_SIZE);
-        CALC_PROBS(29, lid + 29 * WG_SIZE);
-        CALC_PROBS(30, lid + 30 * WG_SIZE);
-        CALC_PROBS(31, lid + 31 * WG_SIZE);
-#if K_PER_THREAD > 32
-#error "KERNEL UNROLLING LIMIT"
-#endif
-#endif
-#endif
-#endif
-#endif
-#endif
-#endif
+        {
+          GENERATE_CALC_PROBS
+          // CALC_PROBS(0, lid + 0 * WG_SIZE);
+        }
         aux[lid] = scratch;
         BARRIER_LOCAL;
         WG_SUM_Float_LOCAL_(aux, K);
@@ -238,53 +196,10 @@ const std::string kSourceBetaWg =
 
         Float prob_0 = (y ? EPSILON : (FL(1.0) - EPSILON)) * (FL(1.0) - pi_sum);
         probs_sum += prob_0;
-        CALC_GRADS(0, lid + 0 * WG_SIZE);
-#if K_PER_THREAD > 1
-        CALC_GRADS(1, lid + 1 * WG_SIZE);
-#if K_PER_THREAD > 2
-        CALC_GRADS(2, lid + 2 * WG_SIZE);
-        CALC_GRADS(3, lid + 3 * WG_SIZE);
-#if K_PER_THREAD > 4
-        CALC_GRADS(4, lid + 4 * WG_SIZE);
-        CALC_GRADS(5, lid + 5 * WG_SIZE);
-        CALC_GRADS(6, lid + 6 * WG_SIZE);
-        CALC_GRADS(7, lid + 7 * WG_SIZE);
-#if K_PER_THREAD > 8
-        CALC_GRADS(8, lid + 8 * WG_SIZE);
-        CALC_GRADS(9, lid + 9 * WG_SIZE);
-        CALC_GRADS(10, lid + 10 * WG_SIZE);
-        CALC_GRADS(11, lid + 11 * WG_SIZE);
-#if K_PER_THREAD > 12
-        CALC_GRADS(12, lid + 12 * WG_SIZE);
-        CALC_GRADS(13, lid + 13 * WG_SIZE);
-        CALC_GRADS(14, lid + 14 * WG_SIZE);
-        CALC_GRADS(15, lid + 15 * WG_SIZE);
-#if K_PER_THREAD > 16
-        CALC_GRADS(16, lid + 16 * WG_SIZE);
-        CALC_GRADS(17, lid + 17 * WG_SIZE);
-        CALC_GRADS(18, lid + 18 * WG_SIZE);
-        CALC_GRADS(19, lid + 19 * WG_SIZE);
-        CALC_GRADS(20, lid + 20 * WG_SIZE);
-        CALC_GRADS(21, lid + 21 * WG_SIZE);
-        CALC_GRADS(22, lid + 22 * WG_SIZE);
-        CALC_GRADS(23, lid + 23 * WG_SIZE);
-        CALC_GRADS(24, lid + 24 * WG_SIZE);
-        CALC_GRADS(25, lid + 25 * WG_SIZE);
-        CALC_GRADS(26, lid + 126 * WG_SIZE);
-        CALC_GRADS(27, lid + 27 * WG_SIZE);
-        CALC_GRADS(28, lid + 28 * WG_SIZE);
-        CALC_GRADS(29, lid + 29 * WG_SIZE);
-        CALC_GRADS(30, lid + 30 * WG_SIZE);
-        CALC_GRADS(31, lid + 31 * WG_SIZE);
-#if K_PER_THREAD > 32
-#error "KERNEL UNROLLING LIMIT"
-#endif
-#endif
-#endif
-#endif
-#endif
-#endif
-#endif
+        {
+          GENERATE_CALC_GRADS
+          //  CALC_GRADS(0, lid + 0 * WG_SIZE);
+        }
 
       }
       if (GET_GROUP_ID() < num_mini_batch_edges) {
@@ -323,14 +238,24 @@ BetaUpdater::BetaUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
       t_grads_sum_(0),
       t_update_theta_(0),
       t_normalize_(0) {
-  const std::string* src = nullptr;
+  std::string src;
   switch (mode) {
     case EDGE_PER_THREAD:
-      src = &kSourceBeta;
+      src = kSourceBeta;
       break;
-    case EDGE_PER_WORKGROUP:
-      src = &kSourceBetaWg;
-      break;
+    case EDGE_PER_WORKGROUP: {
+      src = kSourceBetaWg;
+      uint32_t k_per_thread = k_ / local_ + (k_ % local_ ? 1 : 0);
+      for (auto s : std::vector<std::string>{"CALC_PROBS", "CALC_GRADS"}) {
+        std::ostringstream out;
+        for (uint i = 0; i < k_per_thread; ++i) {
+          // CALC_PROBS(0, lid + 0 * WG_SIZE);
+          out << s << "(" << i << ", lid + " << i << " * WG_SIZE);\n";
+        }
+        src = boost::replace_all_copy(src, std::string("GENERATE_") + s,
+                                      out.str());
+      }
+    } break;
     default:
       LOG(FATAL) << "Failed to recognize mode";
   }
@@ -340,7 +265,7 @@ BetaUpdater::BetaUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
           "#define FloatRowPartitionedMatrix " + type_name<Float>() +
           "RowPartitionedMatrix\n"
           "#define FloatRowPartitionedMatrix_Row " +
-          type_name<Float>() + "RowPartitionedMatrix_Row\n" + *src));
+          type_name<Float>() + "RowPartitionedMatrix_Row\n" + src));
   std::vector<std::string> opts =
       ::mcmc::GetClFlags(mode_ == EDGE_PER_WORKGROUP ? local_ : 0);
   opts.insert(opts.end(), compileFlags.begin(), compileFlags.end());
