@@ -16,14 +16,23 @@ message OpenClRandomStorage {
 
 message BetaProperties {
   required uint32 count_calls = 1;
+  required double theta_sum_time = 2;
+  required double grads_partial_time = 3;
+  required double grads_sum_time = 4;
+  required double update_theta_time = 5;
+  required double normalize_time = 6;
 }
 
 message PhiProperties {
   required uint32 count_calls = 1;
+  required double update_phi_time = 2;
+  required double update_pi_time = 3;
 }
 
 message PerplexityProperties {
   required uint32 count_calls = 1;
+  required double ppx_time = 2;
+  required double accumulate_time = 3;
 }
 
 message SampleStorage {
@@ -35,11 +44,7 @@ message SampleStorage {
 message LearnerProperties {
   required uint32 stepCount = 1;
   required uint64 time = 2;
-  required uint64 heldoutPpxTime = 3;
-  optional uint64 trainingPpxTime = 4;
-  required uint64 samplingTime = 5;
-  required uint64 piTime = 6;
-  required uint64 betaTime = 7;
-  required int32 phase = 8;
-  required double weight = 9;
+  required uint64 samplingTime = 3;
+  required int32 phase = 4;
+  required double weight = 5;
 }

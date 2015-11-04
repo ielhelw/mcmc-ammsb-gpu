@@ -820,6 +820,8 @@ void PhiUpdater::operator()(
 bool PhiUpdater::Serialize(std::ostream* out) {
   PhiProperties props;
   props.set_count_calls(count_calls_);
+  props.set_update_phi_time(t_update_phi_);
+  props.set_update_pi_time(t_update_pi_);
   return (rand_->Serialize(out) && ::mcmc::SerializeMessage(out, props));
 }
 
@@ -827,6 +829,8 @@ bool PhiUpdater::Parse(std::istream* in) {
   PhiProperties props;
   if (rand_->Parse(in) && ::mcmc::ParseMessage(in, &props)) {
     count_calls_ = props.count_calls();
+    t_update_phi_ = props.update_phi_time();
+    t_update_pi_ = props.update_pi_time();
     return true;
   } else {
     return false;

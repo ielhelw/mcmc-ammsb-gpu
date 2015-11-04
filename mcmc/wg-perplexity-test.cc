@@ -93,40 +93,20 @@ TEST_P(WgPerplexityTest, Equal) {
       dev_pi_.get(), *dev_edges_, dev_set_.get(), MakeCompileFlags(cfg_),
       Learner::GetBaseFuncs());
   Float error = 0.05;
-  double ppx1_time = 0;
-  double ppx1_total_time = 0;
   std::vector<double> ppxs1;
   for (uint32_t i = 0; i < num_tries_; ++i) {
-    auto t1 = std::chrono::high_resolution_clock::now();
     ppxs1.push_back(ppxSimple());
-    auto t2 = std::chrono::high_resolution_clock::now();
-    ppx1_time += ppxSimple.LastInvocationTime();
-    ppx1_total_time +=
-        std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count();
   }
   mcmc::PerplexityCalculator ppxWg(
       mcmc::PerplexityCalculator::EDGE_PER_WORKGROUP, cfg_, *queue_, *dev_beta_,
       dev_pi_.get(), *dev_edges_, dev_set_.get(), MakeCompileFlags(cfg_),
       Learner::GetBaseFuncs());
-  double ppx2_time = 0;
-  double ppx2_total_time = 0;
   std::vector<double> ppxs2;
   for (uint32_t i = 0; i < num_tries_; ++i) {
-    auto t1 = std::chrono::high_resolution_clock::now();
     ppxs2.push_back(ppxWg());
-    auto t2 = std::chrono::high_resolution_clock::now();
     ASSERT_NEAR(ppxs1[i], ppxs2[i], /*INCREASE ERROREVERY ITERATION */(i + 1) *
                                         error * std::abs(ppxs1[i]));
-    ppx2_time += ppxWg.LastInvocationTime();
-    ppx2_total_time +=
-        std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count();
   }
-  LOG(INFO) << "K=" << K_ << ", WG=" << cfg_.ppx_wg_size
-            << ", EDGE_PER_THREAD=" << ppx1_time / num_tries_ << " ("
-            << 100 * ppx1_time / ppx1_total_time << "%)"
-            << ", EDGE_PER_WG=" << ppx2_time / num_tries_ << " ("
-            << 100 * ppx2_time / ppx2_total_time << "%)"
-            << " (" << (ppx1_time / ppx2_time) << "x)";
 }
 INSTANTIATE_TEST_CASE_P(
     WorkGroups, WgPerplexityTest,

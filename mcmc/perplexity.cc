@@ -276,6 +276,8 @@ Float PerplexityCalculatorBase::operator()() {
 bool PerplexityCalculatorBase::Serialize(std::ostream* out) {
   PerplexityProperties props;
   props.set_count_calls(count_calls_);
+  props.set_ppx_time(t_ppx_);
+  props.set_accumulate_time(t_accumulate_);
   return ::mcmc::SerializeMessage(out, props) &&
          ::mcmc::Serialize(out, &ppx_per_edge_, &queue_);
 }
@@ -284,6 +286,8 @@ bool PerplexityCalculatorBase::Parse(std::istream* in) {
   PerplexityProperties props;
   if (!::mcmc::ParseMessage(in, &props)) return false;
   count_calls_ = props.count_calls();
+  t_ppx_ = props.ppx_time();
+  t_accumulate_ = props.accumulate_time();
   if (!::mcmc::Parse(in, &ppx_per_edge_, &queue_)) return false;
   return true;
 }

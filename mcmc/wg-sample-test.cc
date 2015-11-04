@@ -24,6 +24,7 @@ TEST_F(WgBTest, AA) {
   cfg.N = 12000;
   cfg.num_node_sample = 20;
   cfg.mini_batch_size = 32*1024;
+  cfg.trainingGraph.reset(new ::mcmc::Graph(cfg.N, {}));
   ::mcmc::NeighborSampler sampler(cfg, *queue_);
   std::vector<Vertex> mini_batch(cfg.mini_batch_size);
   std::generate(mini_batch.begin(), mini_batch.end(),

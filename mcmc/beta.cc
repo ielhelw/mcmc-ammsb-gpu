@@ -431,6 +431,11 @@ void BetaUpdater::operator()(clcuda::Buffer<Edge>* edges, uint32_t num_edges,
 bool BetaUpdater::Serialize(std::ostream* out) {
   BetaProperties props;
   props.set_count_calls(count_calls_);
+  props.set_theta_sum_time(t_theta_sum_);
+  props.set_grads_partial_time(t_grads_partial_);
+  props.set_grads_sum_time(t_grads_sum_);
+  props.set_update_theta_time(t_update_theta_);
+  props.set_normalize_time(t_normalize_);
   return (rand_->Serialize(out) &&
           ::mcmc::Serialize(out, &theta_sum_, &queue_) &&
           ::mcmc::SerializeMessage(out, props));
@@ -441,6 +446,11 @@ bool BetaUpdater::Parse(std::istream* in) {
   if (rand_->Parse(in) && ::mcmc::Parse(in, &theta_sum_, &queue_) &&
       ::mcmc::ParseMessage(in, &props)) {
     count_calls_ = props.count_calls();
+    t_theta_sum_ = props.theta_sum_time();
+    t_grads_partial_ = props.grads_partial_time();
+    t_grads_sum_ = props.grads_sum_time();
+    t_update_theta_ = props.update_theta_time();
+    t_normalize_ = props.normalize_time();
     return true;
   } else {
     return false;

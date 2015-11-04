@@ -83,16 +83,13 @@ class WgBetaTest : public ContextTest,
     std::vector<Edge> random_edges = GenerateRandomEdges(1024);
     clcuda::Buffer<Edge> edges(*context_, *queue_, random_edges.begin(),
                                random_edges.end());
-    double time = 0;
     for (uint32_t i = 0; i < num_tries_; ++i) {
       Reset();
       theta_->Read(*queue_, host_theta.size(), host_theta);
       (*updater_)(&edges, edges.GetSize() / sizeof(Edge), 0.01);
-      time += updater_->LastInvocationTime();
       updater_->GetThetaSum().Read(*queue_, host_theta_sum.size(),
                                    host_theta_sum);
     }
-    LOG(INFO) << "WG=" << cfg_.beta_wg_size << ", nano=" << time / num_tries_;
   }
 
   Config cfg_;

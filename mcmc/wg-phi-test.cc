@@ -92,18 +92,15 @@ class WgPhiTest : public ContextTest,
     clcuda::Buffer<uint> n(*context_, *queue_, hn.begin(), hn.end());
     std::vector<Float> host_pi_tmp(cfg_.N * cfg_.K);
     std::vector<Float> host_pi(cfg_.N * cfg_.K);
-    double time = 0;
     for (uint32_t i = 0; i < num_tries_; ++i) {
       Reset();
       updater(mbn, n, static_cast<uint32_t>(hmbn.size()));
-      time += updater.LastInvocationTime();
       if (i == 0) {
         pi_->Blocks()[0].Read(*queue_, host_pi.size(), host_pi);
       } else {
         pi_->Blocks()[0].Read(*queue_, host_pi_tmp.size(), host_pi_tmp);
       }
     }
-    LOG(INFO) << "WG=" << cfg_.phi_wg_size << ", nano=" << time / num_tries_;
   }
 
   uint32_t num_tries_;
