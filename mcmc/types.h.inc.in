@@ -1,4 +1,5 @@
 
 #cmakedefine MCMC_USE_CL
 #cmakedefine MCMC_CALC_TRAIN_PPX
+#cmakedefine MCMC_SAMPLE_PARALLEL
 

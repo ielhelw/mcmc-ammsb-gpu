@@ -13,7 +13,7 @@ find_package(Boost REQUIRED COMPONENTS
 )
 find_package(Protobuf REQUIRED)
 
-OPTION(MCMC_USE_CL "Use OpenCL / else CUDA with nvcc" ON)
+OPTION(MCMC_USE_CL "Use OpenCL / else CUDA with nvcc" OFF)
 IF (MCMC_USE_CL)
   find_package(OpenCL REQUIRED)
   find_package(BoostCompute CONFIG REQUIRED)
@@ -38,6 +38,7 @@ ELSE()
 ENDIF()
 
 OPTION(MCMC_CALC_TRAIN_PPX "Calculate training perplexity" OFF)
+OPTION(MCMC_SAMPLE_PARALLEL "Overlap neighbor sampling with rest of kernels" ON)
 
 configure_file(mcmc/types.h.inc.in mcmc/types.h.inc)
 

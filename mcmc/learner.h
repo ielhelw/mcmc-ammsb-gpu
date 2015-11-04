@@ -76,7 +76,11 @@ class Learner {
   uint32_t stepCount_;
   uint64_t time_;
   uint64_t samplingTime_;
+#ifdef MCMC_SAMPLE_PARALLEL
   Sample samples_[2];
+#else
+  Sample samples_[1];
+#endif
   std::future<Float> futures_[2];
   int phase_;
 };

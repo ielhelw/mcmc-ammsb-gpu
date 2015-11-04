@@ -120,7 +120,11 @@ Learner::Learner(const Config& cfg, clcuda::Queue queue)
       stepCount_(1),
       time_(0),
       samplingTime_(0),
+#ifdef MCMC_SAMPLE_PARALLEL
       samples_({Sample(cfg_, queue_), Sample(cfg_, queue_)}),
+#else
+      samples_({Sample(cfg_, queue_)}),
+#endif
       phase_(0) {
   switch (cfg_.strategy) {
     case NodeLink:
@@ -204,17 +208,23 @@ Float Learner::TrainingPerplexity() {
 
 void Learner::Run(uint32_t max_iters, sig_atomic_t* signaled) {
   auto T1 = high_resolution_clock::now();
+#ifdef MCMC_SAMPLE_PARALLEL
   if (stepCount_ == 1) {
     futures_[phase_] = std::async(std::launch::async, &Learner::DoSample, this,
                                   &samples_[phase_]);
   }
+#endif
   for (uint64_t I = 0;
        I < max_iters && (signaled != nullptr ? !*signaled : true);
        ++I, ++stepCount_) {
     auto tsampling_start = high_resolution_clock::now();
+#ifdef MCMC_SAMPLE_PARALLEL
     Float weight = futures_[phase_].get();
     futures_[1 - phase_] = std::async(std::launch::async, &Learner::DoSample,
                                       this, &samples_[1 - phase_]);
+#else
+    Float weight = DoSample(&samples_[phase_]);
+#endif
     auto tsampling_end = high_resolution_clock::now();
     samplingTime_ +=
         duration_cast<nanoseconds>(tsampling_end - tsampling_start).count();
@@ -226,7 +236,9 @@ void Learner::Run(uint32_t max_iters, sig_atomic_t* signaled) {
     betaUpdater_(&samples_[phase_].dev_edges, samples_[phase_].edges.size(),
                  weight);
 
+#ifdef MCMC_SAMPLE_PARALLEL
     phase_ = 1 - phase_;
+#endif
   }
   auto T2 = high_resolution_clock::now();
   time_ += duration_cast<nanoseconds>(T2 - T1).count();
@@ -287,10 +299,14 @@ bool Learner::Serialize(std::ostream* out) {
   props.set_time(time_);
   props.set_samplingtime(samplingTime_);
   props.set_phase(phase_);
+#ifdef MCMC_SAMPLE_PARALLEL
   Float weight = futures_[phase_].get();
   // reset future
   futures_[phase_] =
       std::async(std::launch::async, [weight]()->Float { return weight; });
+#else
+  Float weight = 0;
+#endif
   props.set_weight(weight);
   return (::mcmc::Serialize(out, &beta_, &queue_) &&
           ::mcmc::Serialize(out, &theta_, &queue_) &&
@@ -301,8 +317,12 @@ bool Learner::Serialize(std::ostream* out) {
           trainingPerplexity_.Serialize(out) &&
 #endif
           heldoutPerplexity_.Serialize(out) &&
-          ::mcmc::SerializeMessage(out, props) && samples_[0].Serialize(out) &&
-          samples_[1].Serialize(out));
+          ::mcmc::SerializeMessage(out, props)
+#ifdef MCMC_SAMPLE_PARALLEL
+          && samples_[0].Serialize(out)
+          && samples_[1].Serialize(out)
+#endif
+          );
 }
 
 bool Learner::Parse(std::istream* in) {
@@ -320,12 +340,16 @@ bool Learner::Parse(std::istream* in) {
     time_ = props.time();
     samplingTime_ = props.samplingtime();
     phase_ = props.phase();
+#ifdef MCMC_SAMPLE_PARALLEL
     if (samples_[0].Parse(in) && samples_[1].Parse(in)) {
       Float weight = static_cast<Float>(props.weight());
       futures_[phase_] =
           std::async(std::launch::async, [weight]()->Float { return weight; });
       return true;
     }
+#else
+    return true;
+#endif
   }
   return false;
 }
