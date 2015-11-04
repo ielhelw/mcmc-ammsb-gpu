@@ -323,9 +323,10 @@ bool Learner::Serialize(std::ostream* out) {
           trainingPerplexity_.Serialize(out) &&
 #endif
           heldoutPerplexity_.Serialize(out) &&
-          ::mcmc::SerializeMessage(out, props)
+          ::mcmc::SerializeMessage(out, props) &&
+          samples_[0].Serialize(out)
 #ifdef MCMC_SAMPLE_PARALLEL
-          && samples_[0].Serialize(out) && samples_[1].Serialize(out)
+          && samples_[1].Serialize(out)
 #endif
           );
 }
@@ -353,7 +354,9 @@ bool Learner::Parse(std::istream* in) {
       return true;
     }
 #else
-    return true;
+    if (samples_[0].Parse(in)) {
+      return true;
+    }
 #endif
   }
   return false;
