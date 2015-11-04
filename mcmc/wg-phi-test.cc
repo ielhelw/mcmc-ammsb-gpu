@@ -130,11 +130,11 @@ TEST_P(WgPhiTest, VerifyModes) {
 
   for (uint32_t k = 0; k < host_phi1.size(); ++k) {
     ASSERT_NEAR(host_phi1[k], host_phi2[k],
-                std::max(1e-5, 0.02 * std::abs(host_phi1[k])));
+                0.02 * std::abs(host_phi1[k]));
   }
   for (uint32_t k = 0; k < host_phi1.size(); ++k) {
     ASSERT_NEAR(host_pi1[k], host_pi2[k],
-                std::max(1e-5, 0.02 * std::abs(host_pi1[k])));
+                0.02 * std::abs(host_pi1[k]));
   }
 }
 

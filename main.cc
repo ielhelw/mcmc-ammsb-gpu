@@ -12,8 +12,6 @@ namespace po = boost::program_options;
 namespace fs = boost::filesystem;
 namespace clcuda = mcmc::clcuda;
 
-struct State {};
-
 clcuda::Device ChooseDevice() {
   clcuda::Platform platform((size_t)0);
   return clcuda::Device(platform, 0);
@@ -98,6 +96,7 @@ int main(int argc, char **argv) {
   LOG(INFO) << cfg;
   signal(SIGINT, handler);
   mcmc::Learner learner(cfg, queue);
+  LOG(INFO) << "ppx[0] = " << learner.HeldoutPerplexity();
   for (uint64_t i = 0; i < max_iters && !signaled; i += cfg.ppx_interval) {
     uint64_t step = std::min<uint64_t>(max_iters - i, cfg.ppx_interval);
     learner.Run(step);

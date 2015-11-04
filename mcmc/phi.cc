@@ -85,6 +85,7 @@ const std::string kSourcePhi = random::GetRandomHeader() + R"%%(
         }
 
         KERNEL void update_pi(GLOBAL void* g_pi, GLOBAL Float* g_phi_vec,
+                              GLOBAL Float* g_phi,
                               GLOBAL Vertex* mini_batch_nodes,
                               uint num_mini_batch_nodes) {
           uint i = GET_GLOBAL_ID();
@@ -100,6 +101,7 @@ const std::string kSourcePhi = random::GetRandomHeader() + R"%%(
             for (uint k = 0; k < K; ++k) {
               pi[k] = phi[k] / sum;
             }
+            g_phi[n] = sum;
           }
         }
 
@@ -209,6 +211,7 @@ const std::string kSourcePhi = random::GetRandomHeader() + R"%%(
         }
 
         KERNEL void update_pi(GLOBAL void* g_pi, GLOBAL Float* g_phi_vec,
+                              GLOBAL Float* g_phi,
                               GLOBAL Vertex* mini_batch_nodes,
                               uint num_mini_batch_nodes) {
           LOCAL_DECLARE Float aux[WG_SIZE];
@@ -224,6 +227,7 @@ const std::string kSourcePhi = random::GetRandomHeader() + R"%%(
             }
             BARRIER_GLOBAL;
             WG_NORMALIZE_Float(pi, aux, K);
+            if (lid == 0) g_phi[n] = aux[0];
           }
         }
 
@@ -338,6 +342,7 @@ const std::string kSourcePhiWg =
         }
 
         KERNEL void update_pi(GLOBAL void* g_pi, GLOBAL Float* g_phi_vec,
+                              GLOBAL Float* g_phi,
                               GLOBAL Vertex* mini_batch_nodes,
                               uint num_mini_batch_nodes) {
           LOCAL_DECLARE Float aux[WG_SIZE];
@@ -353,11 +358,12 @@ const std::string kSourcePhiWg =
             }
             BARRIER_GLOBAL;
             WG_NORMALIZE_Float(pi, aux, K);
+            if (lid == 0) g_phi[n] = aux[0];
           }
         }
 
         )%%";
-#else
+#elif 1
 // grads/pi_a in shared memory, probs in registers.
 // Optimal block size for Titan X = 128
 // Note: tried moving more arrays in registers, worked but was slower. Using
@@ -507,6 +513,7 @@ const std::string kSourcePhiWg =
         }
 
         KERNEL void update_pi(GLOBAL void* g_pi, GLOBAL Float* g_phi_vec,
+                              GLOBAL Float* g_phi,
                               GLOBAL Vertex* mini_batch_nodes,
                               uint num_mini_batch_nodes) {
           LOCAL_DECLARE Float aux[WG_SIZE];
@@ -522,6 +529,7 @@ const std::string kSourcePhiWg =
             }
             BARRIER_GLOBAL;
             WG_NORMALIZE_Float(pi, aux, K);
+            if (lid == 0) g_phi[n] = aux[0];
           }
         }
 
@@ -614,6 +622,7 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
   pi_kernel_.reset(new clcuda::Kernel(*prog_, "update_pi"));
   pi_kernel_->SetArgument(0, pi_->Get());
   pi_kernel_->SetArgument(1, phi_vec);
+  pi_kernel_->SetArgument(2, phi_);
 }
 
 void PhiUpdater::operator()(
@@ -646,8 +655,8 @@ void PhiUpdater::operator()(
   phi_kernel_->Launch(queue_, {global}, {local_}, phi_event_);
   queue_.Finish();
   t_update_phi_ += phi_event_.GetElapsedTime();
-  pi_kernel_->SetArgument(2, mini_batch_nodes);
-  pi_kernel_->SetArgument(3, num_mini_batch_nodes);
+  pi_kernel_->SetArgument(3, mini_batch_nodes);
+  pi_kernel_->SetArgument(4, num_mini_batch_nodes);
   pi_kernel_->Launch(queue_, {global}, {local_}, pi_event_);
   queue_.Finish();
   t_update_pi_ += pi_event_.GetElapsedTime();
