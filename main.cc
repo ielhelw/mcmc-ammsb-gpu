@@ -15,25 +15,13 @@ namespace clcuda = mcmc::clcuda;
 struct State {};
 
 clcuda::Device ChooseDevice() {
-  // FIXME FIXME
   clcuda::Platform platform((size_t)0);
   return clcuda::Device(platform, 0);
-#if 0
-  auto devices = compute::system::devices();
-  if (devices.size() == 1) {
-    return devices[0];
-  }
-  for (uint32_t i = 0; i < devices.size(); ++i) {
-    cout << i << ": " << devices[i].platform().name() << " | "
-         << devices[i].name() << endl;
-  }
-  cout << "Select device: ";
-  cout.flush();
-  uint32_t choice;
-  cin >> choice;
-  return devices[choice];
-#endif
 }
+
+sig_atomic_t signaled = 0;
+
+void handler(int sig __attribute((unused))) { signaled = 1; }
 
 int main(int argc, char **argv) {
   FLAGS_logtostderr = 1;
@@ -108,12 +96,16 @@ int main(int argc, char **argv) {
             << " (training max fan out = " << cfg.trainingGraph->MaxFanOut()
             << ", heldout max fan out = " << cfg.heldoutGraph->MaxFanOut() << ")";
   LOG(INFO) << cfg;
+  signal(SIGINT, handler);
   mcmc::Learner learner(cfg, queue);
-  for (uint64_t i = 0; i < max_iters; i += cfg.ppx_interval) {
+  for (uint64_t i = 0; i < max_iters && !signaled; i += cfg.ppx_interval) {
     uint64_t step = std::min<uint64_t>(max_iters - i, cfg.ppx_interval);
     learner.Run(step);
-    LOG(INFO) << "ppx[" << i + step << "] = " << learner.HeldoutPerplexity();
+    if (!signaled) {
+      LOG(INFO) << "ppx[" << i + step << "] = " << learner.HeldoutPerplexity();
+    }
   }
+  LOG_IF(INFO, signaled) << "FORCED TERMINATE";
   learner.PrintStats();
   return 0;
 }

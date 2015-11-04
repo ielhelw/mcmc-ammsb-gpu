@@ -7,7 +7,6 @@
 #include <iomanip>
 #include <unordered_set>
 #include <queue>
-#include <signal.h>
 
 #include "mcmc/algorithm/sum.h"
 
@@ -191,10 +190,6 @@ Float Learner::DoSample(Sample* sample) {
   return weight;
 }
 
-sig_atomic_t signaled = 0;
-
-void handler(int sig __attribute((unused))) { signaled = 1; }
-
 Float Learner::HeldoutPerplexity() {
   Float ppx = heldoutPerplexity_();
   return std::exp(ppx);
@@ -207,14 +202,15 @@ Float Learner::TrainingPerplexity() {
 }
 #endif
 
-void Learner::Run(uint32_t max_iters) {
+void Learner::Run(uint32_t max_iters, sig_atomic_t* signaled) {
   auto T1 = high_resolution_clock::now();
   if (stepCount_ == 1) {
     futures_[phase_] = std::async(std::launch::async, &Learner::DoSample, this,
                                   &samples_[phase_]);
   }
-  auto prev_handler = signal(SIGINT, handler);
-  for (uint64_t I = 0; I < max_iters && !signaled; ++I, ++stepCount_) {
+  for (uint64_t I = 0;
+       I < max_iters && (signaled != nullptr ? !*signaled : true);
+       ++I, ++stepCount_) {
     auto tsampling_start = high_resolution_clock::now();
     Float weight = futures_[phase_].get();
     futures_[1 - phase_] = std::async(std::launch::async, &Learner::DoSample,
@@ -234,42 +230,55 @@ void Learner::Run(uint32_t max_iters) {
   }
   auto T2 = high_resolution_clock::now();
   time_ += duration_cast<nanoseconds>(T2 - T1).count();
-  LOG_IF(INFO, signaled) << "FORCED TERMINATE";
-  signal(SIGINT, prev_handler);
 }
 
 void Learner::PrintStats() {
   LOG(INFO) << "TOTAL    : " << time_ / 1.0e9;
 
-  LOG(INFO) << "PPX CALC : " << heldoutPerplexity_.PerplexityTime() / 1.0e3 << " (%"
-            << 100 * (heldoutPerplexity_.PerplexityTime() / 1.0e3) / (time_ / 1.0e9) << ")";
-  LOG(INFO) << "PPX ACCUM: " << heldoutPerplexity_.AccumulateTime() / 1.0e3 << " (%"
-            << 100 * (heldoutPerplexity_.AccumulateTime() / 1.0e3) / (time_ / 1.0e9) << ")";
+  LOG(INFO) << "PPX CALC : " << heldoutPerplexity_.PerplexityTime() / 1.0e3
+            << " (%" << 100 * (heldoutPerplexity_.PerplexityTime() / 1.0e3) /
+                            (time_ / 1.0e9) << ")";
+  LOG(INFO) << "PPX ACCUM: " << heldoutPerplexity_.AccumulateTime() / 1.0e3
+            << " (%" << 100 * (heldoutPerplexity_.AccumulateTime() / 1.0e3) /
+                            (time_ / 1.0e9) << ")";
 
 #ifdef MCMC_CALC_TRAIN_PPX
-  LOG(INFO) << "TRAIN PPX CALC : " << trainingPerplexity_.PerplexityTime() / 1.0e3 << " (%"
-            << 100 * (trainingPerplexity_.PerplexityTime() / 1.0e3) / (time_ / 1.0e9) << ")";
-  LOG(INFO) << "TRAIN PPX ACCUM: " << trainingPerplexity_.AccumulateTime() / 1.0e3 << " (%"
-            << 100 * (trainingPerplexity_.AccumulateTime() / 1.0e3) / (time_ / 1.0e9) << ")";
+  LOG(INFO) << "TRAIN PPX CALC : "
+            << trainingPerplexity_.PerplexityTime() / 1.0e3 << " (%"
+            << 100 * (trainingPerplexity_.PerplexityTime() / 1.0e3) /
+                   (time_ / 1.0e9) << ")";
+  LOG(INFO) << "TRAIN PPX ACCUM: "
+            << trainingPerplexity_.AccumulateTime() / 1.0e3 << " (%"
+            << 100 * (trainingPerplexity_.AccumulateTime() / 1.0e3) /
+                   (time_ / 1.0e9) << ")";
 #endif
   LOG(INFO) << "SAMPLING : " << samplingTime_ / 1.0e9 << " (%"
             << 100 * (samplingTime_ / 1.0e9) / (time_ / 1.0e9) << ")";
 
   LOG(INFO) << "PHI      : " << phiUpdater_.UpdatePhiTime() / 1.0e3 << " (%"
-            << 100 * (phiUpdater_.UpdatePhiTime() / 1.0e3) / (time_ / 1.0e9) << ")";
+            << 100 * (phiUpdater_.UpdatePhiTime() / 1.0e3) / (time_ / 1.0e9)
+            << ")";
   LOG(INFO) << "PI       : " << phiUpdater_.UpdatePiTime() / 1.0e3 << " (%"
-            << 100 * (phiUpdater_.UpdatePiTime() / 1.0e3) / (time_ / 1.0e9) << ")";
+            << 100 * (phiUpdater_.UpdatePiTime() / 1.0e3) / (time_ / 1.0e9)
+            << ")";
 
   LOG(INFO) << "THETA SUM   : " << betaUpdater_.ThetaSumTime() / 1.0e3 << " (%"
-            << 100 * (betaUpdater_.ThetaSumTime() / 1.0e3) / (time_ / 1.0e9) << ")";
-  LOG(INFO) << "GRADS PAR   : " << betaUpdater_.GradsPartialTime() / 1.0e3 << " (%"
-            << 100 * (betaUpdater_.GradsPartialTime() / 1.0e3) / (time_ / 1.0e9) << ")";
+            << 100 * (betaUpdater_.ThetaSumTime() / 1.0e3) / (time_ / 1.0e9)
+            << ")";
+  LOG(INFO) << "GRADS PAR   : " << betaUpdater_.GradsPartialTime() / 1.0e3
+            << " (%"
+            << 100 * (betaUpdater_.GradsPartialTime() / 1.0e3) / (time_ / 1.0e9)
+            << ")";
   LOG(INFO) << "GRADS SUM   : " << betaUpdater_.GradsSumTime() / 1.0e3 << " (%"
-            << 100 * (betaUpdater_.GradsSumTime() / 1.0e3) / (time_ / 1.0e9) << ")";
-  LOG(INFO) << "UPDATE THETA: " << betaUpdater_.UpdateThetaTime() / 1.0e3 << " (%"
-            << 100 * (betaUpdater_.UpdateThetaTime() / 1.0e3) / (time_ / 1.0e9) << ")";
+            << 100 * (betaUpdater_.GradsSumTime() / 1.0e3) / (time_ / 1.0e9)
+            << ")";
+  LOG(INFO) << "UPDATE THETA: " << betaUpdater_.UpdateThetaTime() / 1.0e3
+            << " (%"
+            << 100 * (betaUpdater_.UpdateThetaTime() / 1.0e3) / (time_ / 1.0e9)
+            << ")";
   LOG(INFO) << "NORM THETA  : " << betaUpdater_.NormalizeTime() / 1.0e3 << " (%"
-            << 100 * (betaUpdater_.NormalizeTime() / 1.0e3) / (time_ / 1.0e9) << ")";
+            << 100 * (betaUpdater_.NormalizeTime() / 1.0e3) / (time_ / 1.0e9)
+            << ")";
 }
 
 bool Learner::Serialize(std::ostream* out) {
@@ -281,7 +290,7 @@ bool Learner::Serialize(std::ostream* out) {
   Float weight = futures_[phase_].get();
   // reset future
   futures_[phase_] =
-      std::async(std::launch::async, [weight]() -> Float { return weight; });
+      std::async(std::launch::async, [weight]()->Float { return weight; });
   props.set_weight(weight);
   return (::mcmc::Serialize(out, &beta_, &queue_) &&
           ::mcmc::Serialize(out, &theta_, &queue_) &&
@@ -313,8 +322,8 @@ bool Learner::Parse(std::istream* in) {
     phase_ = props.phase();
     if (samples_[0].Parse(in) && samples_[1].Parse(in)) {
       Float weight = static_cast<Float>(props.weight());
-      futures_[phase_] = std::async(std::launch::async,
-                                    [weight]() -> Float { return weight; });
+      futures_[phase_] =
+          std::async(std::launch::async, [weight]()->Float { return weight; });
       return true;
     }
   }

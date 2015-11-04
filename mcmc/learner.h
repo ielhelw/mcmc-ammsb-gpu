@@ -4,6 +4,7 @@
 #include <boost/program_options.hpp>
 #include <future>
 #include <ostream>
+#include <signal.h>
 
 #include "mcmc/algorithm/normalize.h"
 #include "mcmc/config.h"
@@ -18,7 +19,7 @@ class Learner {
  public:
   Learner(const Config& cfg, clcuda::Queue queue);
 
-  void Run(uint32_t max_iters);
+  void Run(uint32_t max_iters, sig_atomic_t* signaled = nullptr);
 
   Float HeldoutPerplexity();
 
