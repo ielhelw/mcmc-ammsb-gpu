@@ -46,6 +46,10 @@ struct Config {
 
   SampleStrategy strategy;
 
+  bool phi_probs_shared;
+  bool phi_grads_shared;
+  bool phi_pi_shared;
+
   Config() {
 #ifdef MCMC_CALC_TRAIN_PPX
     training_ppx_ratio = 0.01;
@@ -71,6 +75,9 @@ struct Config {
     beta_seed = {113, 117};
     neighbor_seed = {3337, 54351};
     strategy = Node;
+    phi_probs_shared = true;
+    phi_grads_shared = true;
+    phi_pi_shared = true;
   }
 };
 

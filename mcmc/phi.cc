@@ -106,7 +106,32 @@ const std::string kSourcePhi = random::GetRandomHeader() + R"%%(
         }
 
         )%%";
-#if 0  // pi_a/probs/grads in thread local memory. Not enough registers, spills.
+
+  const std::string kSourcePiWg =
+    R"%%(
+        KERNEL void update_pi(GLOBAL void* g_pi, GLOBAL Float* g_phi_vec,
+                              GLOBAL Float* g_phi,
+                              GLOBAL Vertex* mini_batch_nodes,
+                              uint num_mini_batch_nodes) {
+          LOCAL_DECLARE Float aux[WG_SIZE];
+          uint i = GET_GROUP_ID();
+          uint gsize = GET_NUM_GROUPS();
+          uint lid = GET_LOCAL_ID();
+          for (; i < num_mini_batch_nodes; i += gsize) {
+            Vertex n = mini_batch_nodes[i];
+            GLOBAL Float* pi = FloatRowPartitionedMatrix_Row((GLOBAL FloatRowPartitionedMatrix*)g_pi, n);
+            GLOBAL Float* phi = g_phi_vec + i * K;
+            for (uint k = lid; k < K; k += WG_SIZE) {
+              pi[k] = phi[k];
+            }
+            BARRIER_GLOBAL;
+            WG_NORMALIZE_Float(pi, aux, K);
+            if (lid == 0) g_phi[n] = aux[0];
+          }
+        }
+
+    )%%";
+// pi_a/probs/grads in thread local memory. Not enough registers, spills.
  const std::string kSourcePhiWg =
     mcmc::algorithm::WorkGroupNormalizeProgram(type_name<Float>()) + "\n" +
     "#define WG_SUM_Float WG_SUM_" + type_name<Float>() +
@@ -210,31 +235,9 @@ const std::string kSourcePhi = random::GetRandomHeader() + R"%%(
           }
         }
 
-        KERNEL void update_pi(GLOBAL void* g_pi, GLOBAL Float* g_phi_vec,
-                              GLOBAL Float* g_phi,
-                              GLOBAL Vertex* mini_batch_nodes,
-                              uint num_mini_batch_nodes) {
-          LOCAL_DECLARE Float aux[WG_SIZE];
-          uint i = GET_GROUP_ID();
-          uint gsize = GET_NUM_GROUPS();
-          uint lid = GET_LOCAL_ID();
-          for (; i < num_mini_batch_nodes; i += gsize) {
-            Vertex n = mini_batch_nodes[i];
-            GLOBAL Float* pi = FloatRowPartitionedMatrix_Row((GLOBAL FloatRowPartitionedMatrix*)g_pi, n);
-            GLOBAL Float* phi = g_phi_vec + i * K;
-            for (uint k = lid; k < K; k += WG_SIZE) {
-              pi[k] = phi[k];
-            }
-            BARRIER_GLOBAL;
-            WG_NORMALIZE_Float(pi, aux, K);
-            if (lid == 0) g_phi[n] = aux[0];
-          }
-        }
-
         )%%";
-#elif 0
 // 25% improvement by placing pi_a/probs/grads in shared memory.
-const std::string kSourcePhiWg =
+const std::string kSourcePhiWgLMem =
     mcmc::algorithm::WorkGroupNormalizeProgram(type_name<Float>()) + "\n" +
     "#define WG_SUM_Float WG_SUM_" + type_name<Float>() +
     "\n"
@@ -341,34 +344,10 @@ const std::string kSourcePhiWg =
           }
         }
 
-        KERNEL void update_pi(GLOBAL void* g_pi, GLOBAL Float* g_phi_vec,
-                              GLOBAL Float* g_phi,
-                              GLOBAL Vertex* mini_batch_nodes,
-                              uint num_mini_batch_nodes) {
-          LOCAL_DECLARE Float aux[WG_SIZE];
-          uint i = GET_GROUP_ID();
-          uint gsize = GET_NUM_GROUPS();
-          uint lid = GET_LOCAL_ID();
-          for (; i < num_mini_batch_nodes; i += gsize) {
-            Vertex n = mini_batch_nodes[i];
-            GLOBAL Float* pi = FloatRowPartitionedMatrix_Row((GLOBAL FloatRowPartitionedMatrix*)g_pi, n);
-            GLOBAL Float* phi = g_phi_vec + i * K;
-            for (uint k = lid; k < K; k += WG_SIZE) {
-              pi[k] = phi[k];
-            }
-            BARRIER_GLOBAL;
-            WG_NORMALIZE_Float(pi, aux, K);
-            if (lid == 0) g_phi[n] = aux[0];
-          }
-        }
-
         )%%";
-#elif 1
 // grads/pi_a in shared memory, probs in registers.
 // Optimal block size for Titan X = 128
-// Note: tried moving more arrays in registers, worked but was slower. Using
-// too many registers limits number of concurrent blocks on a single SM.
-const std::string kSourcePhiWg =
+const std::string kSourcePhiWgLMemReg =
     mcmc::algorithm::WorkGroupNormalizeProgram(type_name<Float>()) + "\n" +
     "#define WG_SUM_Float WG_SUM_" + type_name<Float>() +
     "\n"
@@ -382,46 +361,60 @@ const std::string kSourcePhiWg =
     type_name<Float>() + "\n" + random::GetRandomHeader() + R"%%(
 
         #define K_PER_THREAD ((K/WG_SIZE) + (K % WG_SIZE? 1 : 0))
-
+        #ifdef PROBS_IS_SHARED
+          #define PROBS(i, k) probs[k]
+        #else
+          #define PROBS(i, k) probs[i]
+        #endif
+        #ifdef GRADS_IS_SHARED
+          #define GRADS(i, k) grads[k]
+        #else
+          #define GRADS(i, k) grads[i]
+        #endif
+        #ifdef PI_A_IS_SHARED
+          #define PI_A(i, k) pi_a[k]
+        #else
+          #define PI_A(i, k) pi_a[i]
+        #endif
         #define INIT_ARRAYS(i, kk) \
         {\
-          uint k = kk;\
+          const uint k = kk;\
           if (k < K) { \
-            grads[k] = 0; \
-            pi_a[k] = pi[k]; \
+            GRADS(i, k) = 0; \
+            PI_A(i, k) = pi[k]; \
           }\
         }
         #define CALC_PROBS(i, kk) \
         {\
-          uint k = kk;\
+          const uint k = kk;\
           if (k < K) { \
             Float beta_k = Beta(beta, k); \
             Float f = (y == 1) ? (beta_k - EPSILON) \
                                : (EPSILON - beta_k); \
-            Float pi_k = pi_a[k]; \
+            Float pi_k = PI_A(i, k); \
             Float pin_k = pi_neighbor[k]; \
             Float probs_k = pi_k * (pin_k * f + e); \
             probs_sum += probs_k; \
-            probs[i] = probs_k; \
+            PROBS(i, k) = probs_k; \
           }\
         }
         #define CALC_GRADS(i, kk) \
         {\
-          uint k = kk;\
+          const uint k = kk;\
           if (k < K) { \
-            Float pi_k = pi_a[k]; \
-            Float probs_k = probs[i]; \
-            grads[k] += (probs_k / probs_sum) / (pi_k * phi_sum) - FL(1.0) / phi_sum; \
+            Float pi_k = PI_A(i, k); \
+            Float probs_k = PROBS(i, k); \
+            GRADS(i, k) += (probs_k / probs_sum) / (pi_k * phi_sum) - FL(1.0) / phi_sum; \
           }\
         }
         #define CALC_PHI(i, kk) \
         {\
-          uint k = kk;\
+          const uint k = kk;\
           if (k < K) { \
             Float noise = PHI_RANDN(rseed); \
-            Float phi_k = pi_a[k] * phi_sum; \
+            Float phi_k = PI_A(i, k) * phi_sum; \
             phi_vec[k] = \
-                FABS(phi_k + eps_t / 2 * (ALPHA - phi_k + Nn * grads[k]) + \
+                FABS(phi_k + eps_t / 2 * (ALPHA - phi_k + Nn * GRADS(i, k)) + \
                      SQRT(eps_t * phi_k) * noise); \
           }\
         }
@@ -431,11 +424,26 @@ const std::string kSourcePhiWg =
                                    GLOBAL Set* edge_set, Vertex node,
                                    GLOBAL Vertex* neighbors, uint step_count,
                                    random_seed_t* rseed,
-                                   LOCAL Float* aux,
-                                   LOCAL Float* grads,
-                                   LOCAL Float *pi_a
+                                   LOCAL Float* aux
+#ifdef PROBS_IS_SHARED
+                                   , LOCAL Float* probs
+#endif
+#ifdef GRADS_IS_SHARED
+                                   , LOCAL Float* grads
+#endif
+#ifdef PI_A_IS_SHARED
+                                   , LOCAL Float *pi_a
+#endif
                                    ) {
+#ifndef PROBS_IS_SHARED
           Float probs[K_PER_THREAD];
+#endif
+#ifndef GRADS_IS_SHARED
+          Float grads[K_PER_THREAD];
+#endif
+#ifndef PI_A_IS_SHARED
+          Float pi_a[K_PER_THREAD];
+#endif
           GLOBAL Float* pi = FloatRowPartitionedMatrix_Row((GLOBAL FloatRowPartitionedMatrix*)g_pi, node);
           Float eps_t = get_eps_t(step_count);
           uint lid = GET_LOCAL_ID();
@@ -493,8 +501,15 @@ const std::string kSourcePhiWg =
             uint step_count,
             GLOBAL void* vrand) {
           LOCAL_DECLARE Float aux[WG_SIZE];
+#ifdef PROBS_IS_SHARED
+          LOCAL_DECLARE Float probs[K];
+#endif
+#ifdef GRADS_IS_SHARED
           LOCAL_DECLARE Float grads[K];
+#endif
+#ifdef PI_A_IS_SHARED
           LOCAL_DECLARE Float pi_a[K];
+#endif
           uint i = GET_GROUP_ID();
           uint gsize = GET_NUM_GROUPS();
           GLOBAL Random* rand = (GLOBAL Random*)vrand;
@@ -506,35 +521,23 @@ const std::string kSourcePhiWg =
               GLOBAL Float* phi_vec = g_phi_vec + i * K;
               update_phi_for_nodeWG(g_beta, g_pi, g_phi, phi_vec,
                                     (GLOBAL Set*)training_edge_set, node, node_neighbors,
-                                    step_count, &rseed, aux, grads, pi_a);
+                                    step_count, &rseed, aux
+#ifdef PROBS_IS_SHARED
+                                    , probs
+#endif
+#ifdef GRADS_IS_SHARED
+                                    , grads
+#endif
+#ifdef PI_A_IS_SHARED
+                                    , pi_a
+#endif
+                                    );
             }
             rand->base_[GET_GLOBAL_ID()] = rseed;
           }
         }
 
-        KERNEL void update_pi(GLOBAL void* g_pi, GLOBAL Float* g_phi_vec,
-                              GLOBAL Float* g_phi,
-                              GLOBAL Vertex* mini_batch_nodes,
-                              uint num_mini_batch_nodes) {
-          LOCAL_DECLARE Float aux[WG_SIZE];
-          uint i = GET_GROUP_ID();
-          uint gsize = GET_NUM_GROUPS();
-          uint lid = GET_LOCAL_ID();
-          for (; i < num_mini_batch_nodes; i += gsize) {
-            Vertex n = mini_batch_nodes[i];
-            GLOBAL Float* pi = FloatRowPartitionedMatrix_Row((GLOBAL FloatRowPartitionedMatrix*)g_pi, n);
-            GLOBAL Float* phi = g_phi_vec + i * K;
-            for (uint k = lid; k < K; k += WG_SIZE) {
-              pi[k] = phi[k];
-            }
-            BARRIER_GLOBAL;
-            WG_NORMALIZE_Float(pi, aux, K);
-            if (lid == 0) g_phi[n] = aux[0];
-          }
-        }
-
         )%%";
-#endif
 
 PhiUpdater::PhiUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
                        clcuda::Buffer<Float>& beta,
@@ -569,7 +572,9 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
                                              2 * cfg.mini_batch_size * cfg.K));
       break;
     case NODE_PER_WORKGROUP: {
-      src = kSourcePhiWg;
+//      src = kSourcePhiWg + kSourcePiWg;
+//      src = kSourcePhiWgLMem + kSourcePiWg;
+      src = kSourcePhiWgLMemReg + kSourcePiWg;
       uint32_t k_per_thread = k_ / local_ + (k_ % local_ ? 1 : 0);
       for (auto s : std::vector<std::string>{"INIT_ARRAYS", "CALC_PROBS",
                                              "CALC_GRADS",  "CALC_PHI"}) {
@@ -598,8 +603,11 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
       << "RowPartitionedMatrix_Row\n" << src << std::endl;
   prog_.reset(new clcuda::Program(queue_.GetContext(), out.str()));
   std::vector<std::string> opts =
-      ::mcmc::GetClFlags(mode == NODE_PER_WORKGROUP ? local_ : 0);
+      ::mcmc::GetClFlags(mode != NODE_PER_THREAD ? local_ : 0);
   opts.insert(opts.end(), compileFlags.begin(), compileFlags.end());
+  if (cfg.phi_probs_shared) opts.push_back("-DPROBS_IS_SHARED");
+  if (cfg.phi_grads_shared) opts.push_back("-DGRADS_IS_SHARED");
+  if (cfg.phi_pi_shared) opts.push_back("-DPI_A_IS_SHARED");
   clcuda::BuildStatus status = prog_->Build(queue_.GetDevice(), opts);
   LOG_IF(FATAL, status != clcuda::BuildStatus::kSuccess)
       << prog_->GetBuildInfo(queue_.GetDevice());
