@@ -8,11 +8,21 @@ namespace mcmc {
 namespace algorithm {
 
 static const std::string kSumSourceTemplate = R"%%(
+    uint power_of_2(uint v) {
+      v |= v >> 1;
+      v |= v >> 2;
+      v |= v >> 4;
+      v |= v >> 8;
+      v |= v >> 16;
+      return v + 1;
+    }
+
     void WG_SUM_TT_LOCAL_(LOCAL TT* aux, uint len) {
       uint lid = GET_LOCAL_ID();
-      for (uint s = GET_LOCAL_SIZE() >> 1; s > 0; s >>= 1) {
-        if (lid < s) {
-          aux[lid] += aux[lid + s];
+      uint lsize = GET_LOCAL_SIZE();
+      for (uint p2 = power_of_2(lsize) >> 1; p2 > 0; p2 >>= 1) {
+        if (lid < p2 && lid + p2 < lsize) {
+          aux[lid] += aux[lid + p2];
         }
         BARRIER_LOCAL;
       }

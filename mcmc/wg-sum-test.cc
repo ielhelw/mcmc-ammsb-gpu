@@ -45,7 +45,7 @@ TEST_P(WgSumParameterizedTest, VaryLength) {
 }
 INSTANTIATE_TEST_CASE_P(WorkGroups, WgSumParameterizedTest,
                         ::testing::ValuesIn(std::vector<uint32_t>({2,  4, 16,
-                                                                   32, 64})));
+                                                                   32, 64, 96, 113})));
 
 const uint32_t N = 1024;
 const uint32_t K = 1024;
