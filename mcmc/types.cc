@@ -1,5 +1,6 @@
 #include "mcmc/types.h"
 
+#include <boost/algorithm/string/replace.hpp>
 #include <boost/program_options.hpp>
 #include <glog/logging.h>
 
@@ -7,22 +8,201 @@
 
 namespace mcmc {
 
-std::string GetClTypes() {
+std::string apply_tuple2(const std::string& arg, const std::string& prefix,
+                         const std::string& suffix) {
   std::ostringstream out;
-  if (type_name<Float>() == std::string("double")) {
-    out << "#define FL(X) (X)" << std::endl;
-  } else {
-    out << "#define FL(X) (X ## f)" << std::endl;
+  out << "("
+      << "(" << prefix << " " << arg << ".x " << suffix << "),"
+      << "(" << prefix << " " << arg << ".y " << suffix << ")" << ")";
+  return out.str();
+}
+
+std::string apply_tuple4(const std::string& arg, const std::string& prefix,
+                         const std::string& suffix) {
+  std::ostringstream out;
+  out << "("
+      << "(" << prefix << " " << arg << ".x " << suffix << "),"
+      << "(" << prefix << " " << arg << ".y " << suffix << "),"
+      << "(" << prefix << " " << arg << ".z " << suffix << "),"
+      << "(" << prefix << " " << arg << ".w " << suffix << ")" << ")";
+  return out.str();
+}
+
+std::string apply_tuple(const std::string& arg, const std::string& prefix,
+                         const std::string& suffix, uint32_t vlen) {
+  switch (vlen) {
+    case 2:
+      return apply_tuple2(arg, prefix, suffix);
+    case 4:
+      return apply_tuple4(arg, prefix, suffix);
+    default:
+      LOG(FATAL) << "NOT IMPLEMENTED: " << vlen;
   }
+  return "";
+}
+
+std::string apply_tuple_tuple2(
+    const std::string& arg0, const std::string& arg1,
+    const std::string& prefix, const std::string join,
+    const std::string& suffix) {
+  std::ostringstream out;
+  out << "("
+      << "(" << prefix << " " << arg0 << ".x " << join << " " << arg1 << ".x" << suffix << "),"
+      << "(" << prefix << " " << arg0 << ".y " << join << " " << arg1 << ".y" << suffix << ")"
+      << ")";
+  return out.str();
+}
+
+std::string apply_tuple_tuple4(
+    const std::string& arg0, const std::string& arg1,
+    const std::string& prefix, const std::string join,
+    const std::string& suffix) {
+  std::ostringstream out;
+  out << "("
+      << "(" << prefix << " " << arg0 << ".x " << join << " " << arg1 << ".x" << suffix << "),"
+      << "(" << prefix << " " << arg0 << ".y " << join << " " << arg1 << ".y" << suffix << "),"
+      << "(" << prefix << " " << arg0 << ".z " << join << " " << arg1 << ".z" << suffix << "),"
+      << "(" << prefix << " " << arg0 << ".w " << join << " " << arg1 << ".w" << suffix << ")"
+      << ")";
+  return out.str();
+}
+
+std::string apply_tuple_tuple(
+    const std::string& arg0, const std::string& arg1,
+    const std::string& prefix, const std::string join,
+    const std::string& suffix, uint32_t vlen) {
+  switch (vlen) {
+    case 2:
+      return apply_tuple_tuple2(arg0, arg1, prefix, join, suffix);
+    case 4:
+      return apply_tuple_tuple4(arg0, arg1, prefix, join, suffix);
+    default:
+      LOG(FATAL) << "NOT IMPLEMENTED: " << vlen;
+  }
+  return "";
+}
+
+std::string apply_tuple_scalar2(const std::string& arg, const std::string& prefix,
+                         const std::string& suffix) {
+  std::ostringstream out;
+  out << "("
+      << "(" << prefix << arg << suffix << "),"
+      << "(" << prefix << arg << suffix << ")" << ")";
+  return out.str();
+}
+
+std::string apply_tuple_scalar4(const std::string& arg, const std::string& prefix,
+                         const std::string& suffix) {
+  std::ostringstream out;
+  out << "("
+      << "(" << prefix << arg << suffix << "),"
+      << "(" << prefix << arg << suffix << "),"
+      << "(" << prefix << arg << suffix << "),"
+      << "(" << prefix << arg << suffix << ")" << ")";
+  return out.str();
+}
+
+std::string apply_tuple_scalar(
+    const std::string& arg, const std::string& prefix, const std::string& suffix,
+    uint32_t vlen) {
+  switch (vlen) {
+    case 2:
+      return apply_tuple_scalar2(arg, prefix, suffix);
+    case 4:
+      return apply_tuple_scalar4(arg, prefix, suffix);
+    default:
+      LOG(FATAL) << "NOT IMPLEMENTED: " << vlen;
+  }
+  return "";
+}
+
+std::string apply_func_tuple2(const std::string& func, const std::string& arg) {
+  std::ostringstream out;
+  out << "("
+      << func << "(" << arg << ".x),"
+      << func << "(" << arg << ".y)" << ")";
+  return out.str();
+}
+
+std::string apply_func_tuple4(const std::string& func, const std::string& arg) {
+  std::ostringstream out;
+  out << "("
+      << func << "(" << arg << ".x),"
+      << func << "(" << arg << ".y),"
+      << func << "(" << arg << ".z),"
+      << func << "(" << arg << ".w)" << ")";
+  return out.str();
+}
+
+std::string apply_func_tuple(const std::string& func, const std::string& arg,
+                        uint32_t vlen) {
+  switch (vlen) {
+    case 2:
+      return apply_func_tuple2(func, arg);
+    case 4:
+      return apply_func_tuple4(func, arg);
+    default:
+      LOG(FATAL) << "NOT IMPLEMENTED: " << vlen;
+  }
+  return "";
+}
+
 #ifdef MCMC_USE_CL
+std::string make_v_macros(uint32_t vlen) {
+  std::ostringstream out;
+  out << "#define VOP" << vlen << "(a, b, op) (a op b)" << std::endl;
+  out << "#define VSOP" << vlen << "(a, s, op) (a op s)" << std::endl;
+  out << "#define SVOP" << vlen << "(s, a, op) (s op a)" << std::endl;
+  out << "#define V" << vlen << "(s) (Float" << vlen << ")"
+      << apply_tuple_scalar("s", "", "", vlen) << std::endl;
+  out << "#define VFABS" << vlen << "(a) (Float" << vlen << ")"
+      << apply_func_tuple("FABS", "a", vlen) << std::endl;
+  out << "#define VSQRT" << vlen << "(a) (Float" << vlen << ")"
+      << apply_func_tuple("SQRT", "a", vlen) << std::endl;
+  out << "#define VEXP" << vlen << "(a) (Float" << vlen << ")"
+      << apply_func_tuple("EXP", "a", vlen) << std::endl;
+  out << "#define VLOG" << vlen << "(a) (Float" << vlen << ")"
+      << apply_func_tuple("LOG", "a", vlen) << std::endl;
+  out << "#define VPOW" << vlen << "(a) (Float" << vlen << ")"
+      << apply_func_tuple("POW", "a", vlen) << std::endl;
+  return out.str();
+}
+#else
+std::string make_v_macros(uint32_t vlen) {
+  std::ostringstream out;
+  out << "#define VOP" << vlen << "(a, b, op) make_float" << vlen
+      // "(a.x op b.x, a.y op b.y)"
+      << apply_tuple_tuple("a", "b", "", "op", "", vlen) << std::endl;
+  out << "#define VSOP" << vlen << "(a, s, op) make_float" << vlen
+    //"(a.x op s, a.y op s)"
+      << apply_tuple("a", "", " op s", vlen) << std::endl;
+  out << "#define SVOP" << vlen << "(s, a, op) make_float" << vlen
+    //"(s op a.x, s op a.y)"
+      << apply_tuple("a", "s op ", "", vlen) << std::endl;
+  out << "#define V" << vlen << "(s) make_float" << vlen
+    //"(s, s)" << std::endl;
+      << apply_tuple_scalar("s", "", "", vlen) << std::endl;
+
+  out << "#define VFABS" << vlen << "(a) make_float" << vlen
+      << apply_func_tuple("FABS", "a", vlen) << std::endl;
+  out << "#define VSQRT" << vlen << "(a) make_float" << vlen
+      << apply_func_tuple("SQRT", "a", vlen) << std::endl;
+  out << "#define VEXP" << vlen << "(a) make_float" << vlen
+      << apply_func_tuple("EXP", "a", vlen) << std::endl;
+  out << "#define VLOG" << vlen << "(a) make_float" << vlen
+      << apply_func_tuple("LOG", "a", vlen) << std::endl;
+  out << "#define VPOW" << vlen << "(a) make_float" << vlen
+      << apply_func_tuple("POW", "a", vlen) << std::endl;
+  return out.str();
+}
+#endif
+
+#ifdef MCMC_USE_CL
+std::string make_base_macros() {
+  std::ostringstream out;
   if (type_name<Float>() == std::string("double")) {
     out << "#pragma OPENCL EXTENSION cl_khr_fp64: enable " << std::endl;
   }
-  out << "#define FABS fabs" << std::endl;
-  out << "#define EXP exp" << std::endl;
-  out << "#define SQRT sqrt" << std::endl;
-  out << "#define LOG log" << std::endl;
-  out << "#define POW pow" << std::endl;
   out << R"%%(
   #define KERNEL __kernel
   #define GLOBAL __global
@@ -38,20 +218,16 @@ std::string GetClTypes() {
   #define BARRIER_LOCAL  barrier(CLK_LOCAL_MEM_FENCE)
   #define BARRIER_GLOBAL  barrier(CLK_GLOBAL_MEM_FENCE)
   )%%";
+  out << "#define FABS fabs" << std::endl;
+  out << "#define EXP exp" << std::endl;
+  out << "#define SQRT sqrt" << std::endl;
+  out << "#define LOG log" << std::endl;
+  out << "#define POW pow" << std::endl;
+  return out.str();
+}
 #else
-  if (type_name<Float>() == std::string("double")) {
-    out << "#define FABS fabs" << std::endl;
-    out << "#define EXP exp" << std::endl;
-    out << "#define SQRT sqrt" << std::endl;
-    out << "#define LOG log" << std::endl;
-    out << "#define POW pow" << std::endl;
-  } else {
-    out << "#define FABS fabsf" << std::endl;
-    out << "#define EXP expf" << std::endl;
-    out << "#define SQRT sqrtf" << std::endl;
-    out << "#define LOG logf" << std::endl;
-    out << "#define POW powf" << std::endl;
-  }
+std::string make_base_macros() {
+  std::ostringstream out;
   out << R"%%(
   #define KERNEL extern "C" __global__
   #define GLOBAL
@@ -71,12 +247,88 @@ std::string GetClTypes() {
   typedef unsigned long ulong;
   #define ULONG_MAX 0xffffffffffffffffUL
   )%%";
+  if (type_name<Float>() == std::string("double")) {
+    out << "#define FABS fabs" << std::endl;
+    out << "#define EXP exp" << std::endl;
+    out << "#define SQRT sqrt" << std::endl;
+    out << "#define LOG log" << std::endl;
+    out << "#define POW pow" << std::endl;
+  } else {
+    out << "#define FABS fabsf" << std::endl;
+    out << "#define EXP expf" << std::endl;
+    out << "#define SQRT sqrtf" << std::endl;
+    out << "#define LOG logf" << std::endl;
+    out << "#define POW powf" << std::endl;
+  }
+  return out.str();
+}
 #endif
-  out << "typedef " << type_name<Float>() << " Float;" << std::endl;
+
+#ifdef MCMC_USE_CL
+std::string make_wg_macros() {
+  std::ostringstream out;
+  return out.str();
+}
+#else
+std::string make_wg_macros() {
+  std::ostringstream out;
+  return out.str();
+}
+#endif
+
+std::string make_leaf_v_macros(uint32_t vlen) {
+  std::string tmp = R"%%(
+  #define VTTADD(a, b) VOPTT(a, b, +)
+  #define VTTSUB(a, b) VOPTT(a, b, -)
+  #define VTTMUL(a, b) VOPTT(a, b, *)
+  #define VTTDIV(a, b) VOPTT(a, b, /)
+
+  #define VTTSADD(a, s) VSOPTT(a, s, +)
+  #define VTTSSUB(a, s) VSOPTT(a, s, -)
+  #define VTTSMUL(a, s) VSOPTT(a, s, *)
+  #define VTTSDIV(a, s) VSOPTT(a, s, /)
+
+  #define SVTTADD(s, a) SVOPTT(s, a, +)
+  #define SVTTSUB(s, a) SVOPTT(s, a, -)
+  #define SVTTMUL(s, a) SVOPTT(s, a, *)
+  #define SVTTDIV(s, a) SVOPTT(s, a, /)
+    inline FloatTT v_addTT(const FloatTT a, const FloatTT b) { return VTTADD(a, b); }
+    inline FloatTT v_subTT(const FloatTT a, const FloatTT b) { return VTTSUB(a, b); }
+    inline FloatTT v_mulTT(const FloatTT a, const FloatTT b) { return VTTMUL(a, b); }
+    inline FloatTT v_divTT(const FloatTT a, const FloatTT b) { return VTTDIV(a, b); }
+
+    inline FloatTT vs_addTT(const FloatTT a, const Float s) { return VTTSADD(a, s); }
+    inline FloatTT vs_subTT(const FloatTT a, const Float s) { return VTTSSUB(a, s); }
+    inline FloatTT vs_mulTT(const FloatTT a, const Float s) { return VTTSMUL(a, s); }
+    inline FloatTT vs_divTT(const FloatTT a, const Float s) { return VTTSDIV(a, s); }
+
+    inline FloatTT sv_addTT(const Float s, const FloatTT a) { return SVTTADD(s, a); }
+    inline FloatTT sv_subTT(const Float s, const FloatTT a) { return SVTTSUB(s, a); }
+    inline FloatTT sv_mulTT(const Float s, const FloatTT a) { return SVTTMUL(s, a); }
+    inline FloatTT sv_divTT(const Float s, const FloatTT a) { return SVTTDIV(s, a); }
+  )%%";
+  return boost::replace_all_copy(tmp, "TT", std::to_string(vlen));
+}
+
+std::string GetClTypes() {
+  std::ostringstream out;
+  out << "#define Float " << type_name<Float>() << "" << std::endl;
+  out << "#define Float2 " << type_name<Float>() << "2" << std::endl;
+  out << "#define Float4 " << type_name<Float>() << "4" << std::endl;
+  if (type_name<Float>() == std::string("double")) {
+    out << "#define FL(X) (X)" << std::endl;
+  } else {
+    out << "#define FL(X) (X ## f)" << std::endl;
+  }
+  out << make_base_macros();
   out << R"%%(
   typedef ulong uint64_t;
   typedef uint uint32_t;
   )%%";
+  out << make_v_macros(2);
+  out << make_leaf_v_macros(2);
+  out << make_v_macros(4);
+  out << make_leaf_v_macros(4);
   return gen::MakeHeader("CL_TYPES", out.str());
 }
 
