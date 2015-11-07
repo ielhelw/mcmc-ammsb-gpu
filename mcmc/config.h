@@ -49,6 +49,7 @@ struct Config {
   bool phi_probs_shared;
   bool phi_grads_shared;
   bool phi_pi_shared;
+  uint32_t phi_vector_width;
 
   Config() {
 #ifdef MCMC_CALC_TRAIN_PPX
@@ -78,6 +79,7 @@ struct Config {
     phi_probs_shared = true;
     phi_grads_shared = true;
     phi_pi_shared = true;
+    phi_vector_width = 1;
   }
 };
 

@@ -150,49 +150,42 @@ std::string apply_func_tuple(const std::string& func, const std::string& arg,
 #ifdef MCMC_USE_CL
 std::string make_v_macros(uint32_t vlen) {
   std::ostringstream out;
-  out << "#define VOP" << vlen << "(a, b, op) (a op b)" << std::endl;
-  out << "#define VSOP" << vlen << "(a, s, op) (a op s)" << std::endl;
-  out << "#define SVOP" << vlen << "(s, a, op) (s op a)" << std::endl;
-  out << "#define V" << vlen << "(s) (Float" << vlen << ")"
-      << apply_tuple_scalar("s", "", "", vlen) << std::endl;
-  out << "#define VFABS" << vlen << "(a) (Float" << vlen << ")"
-      << apply_func_tuple("FABS", "a", vlen) << std::endl;
-  out << "#define VSQRT" << vlen << "(a) (Float" << vlen << ")"
-      << apply_func_tuple("SQRT", "a", vlen) << std::endl;
-  out << "#define VEXP" << vlen << "(a) (Float" << vlen << ")"
-      << apply_func_tuple("EXP", "a", vlen) << std::endl;
-  out << "#define VLOG" << vlen << "(a) (Float" << vlen << ")"
-      << apply_func_tuple("LOG", "a", vlen) << std::endl;
-  out << "#define VPOW" << vlen << "(a) (Float" << vlen << ")"
-      << apply_func_tuple("POW", "a", vlen) << std::endl;
+  out << "inline Float" << vlen <<" MAKEV" << vlen << "(Float s) { return (Float" << vlen << ")"
+      << apply_tuple_scalar("s", "", "", vlen) << "; }" << std::endl;
+  out << "inline Float" << vlen << " vfabs" << vlen << "(const Float" << vlen << " a) { return (Float" << vlen << ")"
+      << apply_func_tuple("FABS", "a", vlen) << "; }" << std::endl;
+  out << "inline Float" << vlen << " vsqrt" << vlen << "(const Float" << vlen << " a) { return (Float" << vlen << ")"
+      << apply_func_tuple("SQRT", "a", vlen) << "; }" << std::endl;
+  out << "inline Float" << vlen << " vexp" << vlen << "(const Float" << vlen << " a) { return (Float" << vlen << ")"
+      << apply_func_tuple("EXP", "a", vlen) << "; }" << std::endl;
+  out << "inline Float" << vlen << " vlog" << vlen << "(const Float" << vlen << " a) { return (Float" << vlen << ")"
+      << apply_func_tuple("LOG", "a", vlen) << "; }" << std::endl;
   return out.str();
 }
 #else
 std::string make_v_macros(uint32_t vlen) {
   std::ostringstream out;
-  out << "#define VOP" << vlen << "(a, b, op) make_float" << vlen
+  out << "#define VOP" << vlen << "(a, b, op) MAKE_FLOAT" << vlen
       // "(a.x op b.x, a.y op b.y)"
       << apply_tuple_tuple("a", "b", "", "op", "", vlen) << std::endl;
-  out << "#define VSOP" << vlen << "(a, s, op) make_float" << vlen
+  out << "#define VSOP" << vlen << "(a, s, op) MAKE_FLOAT" << vlen
     //"(a.x op s, a.y op s)"
       << apply_tuple("a", "", " op s", vlen) << std::endl;
-  out << "#define SVOP" << vlen << "(s, a, op) make_float" << vlen
+  out << "#define SVOP" << vlen << "(s, a, op) MAKE_FLOAT" << vlen
     //"(s op a.x, s op a.y)"
       << apply_tuple("a", "s op ", "", vlen) << std::endl;
-  out << "#define V" << vlen << "(s) make_float" << vlen
+  out << "inline Float" << vlen << " MAKEV" << vlen << "(Float s) { return MAKE_FLOAT" << vlen
     //"(s, s)" << std::endl;
-      << apply_tuple_scalar("s", "", "", vlen) << std::endl;
+      << apply_tuple_scalar("s", "", "", vlen) << "; }" << std::endl;
 
-  out << "#define VFABS" << vlen << "(a) make_float" << vlen
-      << apply_func_tuple("FABS", "a", vlen) << std::endl;
-  out << "#define VSQRT" << vlen << "(a) make_float" << vlen
-      << apply_func_tuple("SQRT", "a", vlen) << std::endl;
-  out << "#define VEXP" << vlen << "(a) make_float" << vlen
-      << apply_func_tuple("EXP", "a", vlen) << std::endl;
-  out << "#define VLOG" << vlen << "(a) make_float" << vlen
-      << apply_func_tuple("LOG", "a", vlen) << std::endl;
-  out << "#define VPOW" << vlen << "(a) make_float" << vlen
-      << apply_func_tuple("POW", "a", vlen) << std::endl;
+  out << "inline Float" << vlen << " vfabs" << vlen << "(const Float" << vlen << " a)  { return MAKE_FLOAT" << vlen
+      << apply_func_tuple("FABS", "a", vlen) << "; }" << std::endl;
+  out << "inline Float" << vlen << " vsqrt" << vlen << "(const Float" << vlen << " a) { return MAKE_FLOAT" << vlen
+      << apply_func_tuple("SQRT", "a", vlen) << "; }" << std::endl;
+  out << "inline Float" << vlen << " vexp" << vlen << "(const Float" << vlen << " a) { return MAKE_FLOAT" << vlen
+      << apply_func_tuple("EXP", "a", vlen) << "; }" << std::endl;
+  out << "inline Float" << vlen << " vlog" << vlen << "(const Float" << vlen << " a) { return MAKE_FLOAT" << vlen
+      << apply_func_tuple("LOG", "a", vlen)  << "; }" << std::endl;
   return out.str();
 }
 #endif
@@ -247,6 +240,8 @@ std::string make_base_macros() {
   typedef unsigned long ulong;
   #define ULONG_MAX 0xffffffffffffffffUL
   )%%";
+  out << "#define MAKE_FLOAT2 make_" << type_name<Float>() << "2" << std::endl;
+  out << "#define MAKE_FLOAT4 make_" << type_name<Float>() << "4" << std::endl;
   if (type_name<Float>() == std::string("double")) {
     out << "#define FABS fabs" << std::endl;
     out << "#define EXP exp" << std::endl;
@@ -260,18 +255,6 @@ std::string make_base_macros() {
     out << "#define LOG logf" << std::endl;
     out << "#define POW powf" << std::endl;
   }
-  return out.str();
-}
-#endif
-
-#ifdef MCMC_USE_CL
-std::string make_wg_macros() {
-  std::ostringstream out;
-  return out.str();
-}
-#else
-std::string make_wg_macros() {
-  std::ostringstream out;
   return out.str();
 }
 #endif
@@ -292,20 +275,28 @@ std::string make_leaf_v_macros(uint32_t vlen) {
   #define SVTTSUB(s, a) SVOPTT(s, a, -)
   #define SVTTMUL(s, a) SVOPTT(s, a, *)
   #define SVTTDIV(s, a) SVOPTT(s, a, /)
-    inline FloatTT v_addTT(const FloatTT a, const FloatTT b) { return VTTADD(a, b); }
-    inline FloatTT v_subTT(const FloatTT a, const FloatTT b) { return VTTSUB(a, b); }
-    inline FloatTT v_mulTT(const FloatTT a, const FloatTT b) { return VTTMUL(a, b); }
-    inline FloatTT v_divTT(const FloatTT a, const FloatTT b) { return VTTDIV(a, b); }
+    inline FloatTT operator+(const FloatTT a, const FloatTT b) { return VTTADD(a, b); }
+    inline FloatTT operator-(const FloatTT a, const FloatTT b) { return VTTSUB(a, b); }
+    inline FloatTT operator*(const FloatTT a, const FloatTT b) { return VTTMUL(a, b); }
+    inline FloatTT operator/(const FloatTT a, const FloatTT b) { return VTTDIV(a, b); }
+    inline FloatTT operator+=(FloatTT& a, const FloatTT b) { return a = a + b; }
+    inline FloatTT operator-=(FloatTT& a, const FloatTT b) { return a = a - b; }
+    inline FloatTT operator*=(FloatTT& a, const FloatTT b) { return a = a * b; }
+    inline FloatTT operator/=(FloatTT& a, const FloatTT b) { return a = a / b; }
 
-    inline FloatTT vs_addTT(const FloatTT a, const Float s) { return VTTSADD(a, s); }
-    inline FloatTT vs_subTT(const FloatTT a, const Float s) { return VTTSSUB(a, s); }
-    inline FloatTT vs_mulTT(const FloatTT a, const Float s) { return VTTSMUL(a, s); }
-    inline FloatTT vs_divTT(const FloatTT a, const Float s) { return VTTSDIV(a, s); }
+    inline FloatTT operator+(const FloatTT a, const Float s) { return VTTSADD(a, s); }
+    inline FloatTT operator-(const FloatTT a, const Float s) { return VTTSSUB(a, s); }
+    inline FloatTT operator*(const FloatTT a, const Float s) { return VTTSMUL(a, s); }
+    inline FloatTT operator/(const FloatTT a, const Float s) { return VTTSDIV(a, s); }
+    inline FloatTT operator+=(FloatTT& a, const Float s) { return a = a + s; }
+    inline FloatTT operator-=(FloatTT& a, const Float s) { return a = a - s; }
+    inline FloatTT operator*=(FloatTT& a, const Float s) { return a = a * s; }
+    inline FloatTT operator/=(FloatTT& a, const Float s) { return a = a / s; }
 
-    inline FloatTT sv_addTT(const Float s, const FloatTT a) { return SVTTADD(s, a); }
-    inline FloatTT sv_subTT(const Float s, const FloatTT a) { return SVTTSUB(s, a); }
-    inline FloatTT sv_mulTT(const Float s, const FloatTT a) { return SVTTMUL(s, a); }
-    inline FloatTT sv_divTT(const Float s, const FloatTT a) { return SVTTDIV(s, a); }
+    inline FloatTT operator+(const Float s, const FloatTT a) { return SVTTADD(s, a); }
+    inline FloatTT operator-(const Float s, const FloatTT a) { return SVTTSUB(s, a); }
+    inline FloatTT operator*(const Float s, const FloatTT a) { return SVTTMUL(s, a); }
+    inline FloatTT operator/(const Float s, const FloatTT a) { return SVTTDIV(s, a); }
   )%%";
   return boost::replace_all_copy(tmp, "TT", std::to_string(vlen));
 }
@@ -326,9 +317,11 @@ std::string GetClTypes() {
   typedef uint uint32_t;
   )%%";
   out << make_v_macros(2);
-  out << make_leaf_v_macros(2);
   out << make_v_macros(4);
+#ifndef MCMC_USE_CL
+  out << make_leaf_v_macros(2);
   out << make_leaf_v_macros(4);
+#endif
   return gen::MakeHeader("CL_TYPES", out.str());
 }
 

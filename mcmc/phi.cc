@@ -1,6 +1,8 @@
 #include "mcmc/phi.h"
 
 #include <boost/algorithm/string/replace.hpp>
+#include <boost/algorithm/string/split.hpp>
+#include <boost/algorithm/string/classification.hpp>
 #include <glog/logging.h>
 
 #include "mcmc/algorithm/sum.h"
@@ -359,8 +361,44 @@ const std::string kSourcePhiWgLMemReg =
     "\n"
     "#define WG_NORMALIZE_Float WG_NORMALIZE_" +
     type_name<Float>() + "\n" + random::GetRandomHeader() + R"%%(
+        #ifdef VECTOR_WIDTH
+          #define Kn (K/VECTOR_WIDTH) 
+          #if VECTOR_WIDTH == 2
+            #define Floatn Float2
+            #define VFABSn vfabs2
+            #define VSQRTn vsqrt2
+            #define Vn(X) MAKEV2(X)
+            #ifdef __OPENCL_VERSION__
+              #define VBeta() (Float2)(Beta(beta, 2 * k), Beta(beta, 2 * k + 1))
+            #else
+              #define VBeta() MAKE_FLOAT2(Beta(beta, 2 * k), Beta(beta, 2 * k + 1))
+            #endif
+            inline Float v_accn(Float2 a) { return a.x + a.y; }
+          #elif VECTOR_WIDTH == 4
+            #define Floatn Float4
+            #define VFABSn vfabs4
+            #define VSQRTn vsqrt4
+            #define Vn(X) MAKEV4(X)
+            #ifdef __OPENCL_VERSION__
+              #define VBeta() (Float4)(Beta(beta, 4 * k), Beta(beta, 4 * k + 1), Beta(beta, 4 * k + 2), Beta(beta, 4 * k + 3))
+            #else
+              #define VBeta() MAKE_FLOAT4(Beta(beta, 4 * k), Beta(beta, 4 * k + 1), Beta(beta, 4 * k + 2), Beta(beta, 4 * k + 3))
+            #endif
+            inline Float v_accn(Float4 a) { return a.x + a.y + a.z + a.w; }
+          #else
+            #error "VECTOR_WIDTH MUST BE 2 OR 4"
+          #endif
+        #else
+          #define Kn K
+          #define Floatn Float
+          #define VFABSn FABS
+          #define VSQRTn SQRT
+          #define Vn(X) (X)
+          #define VBeta() (Beta(beta, k))
+          inline Float v_accn(Float a) { return a; }
+        #endif
+        #define K_PER_THREAD ((Kn/WG_SIZE) + (Kn % WG_SIZE? 1 : 0))
 
-        #define K_PER_THREAD ((K/WG_SIZE) + (K % WG_SIZE? 1 : 0))
         #ifdef PROBS_IS_SHARED
           #define PROBS(i, k) probs[k]
         #else
@@ -379,72 +417,72 @@ const std::string kSourcePhiWgLMemReg =
         #define INIT_ARRAYS(i, kk) \
         {\
           const uint k = kk;\
-          if (k < K) { \
-            GRADS(i, k) = 0; \
+          if (k < Kn) { \
+            GRADS(i, k) = Vn(FL(0.0)); \
             PI_A(i, k) = pi[k]; \
           }\
         }
         #define CALC_PROBS(i, kk) \
         {\
           const uint k = kk;\
-          if (k < K) { \
-            Float beta_k = Beta(beta, k); \
-            Float f = (y == 1) ? (beta_k - EPSILON) \
-                               : (EPSILON - beta_k); \
-            Float pi_k = PI_A(i, k); \
-            Float pin_k = pi_neighbor[k]; \
-            Float probs_k = pi_k * (pin_k * f + e); \
-            probs_sum += probs_k; \
+          if (k < Kn) { \
+            Floatn beta_k = VBeta();\
+            Floatn f = (y == 1) ? (beta_k - EPSILON) \
+                                : (EPSILON - beta_k); \
+            Floatn pi_k = PI_A(i, k); \
+            Floatn pin_k = pi_neighbor[k]; \
+            Floatn probs_k = pi_k * (pin_k * f + e); \
+            probs_sum += v_accn(probs_k); \
             PROBS(i, k) = probs_k; \
           }\
         }
         #define CALC_GRADS(i, kk) \
         {\
           const uint k = kk;\
-          if (k < K) { \
-            Float pi_k = PI_A(i, k); \
-            Float probs_k = PROBS(i, k); \
+          if (k < Kn) { \
+            Floatn pi_k = PI_A(i, k); \
+            Floatn probs_k = PROBS(i, k); \
             GRADS(i, k) += (probs_k / probs_sum) / (pi_k * phi_sum) - FL(1.0) / phi_sum; \
           }\
         }
         #define CALC_PHI(i, kk) \
         {\
           const uint k = kk;\
-          if (k < K) { \
+          if (k < Kn) { \
             Float noise = PHI_RANDN(rseed); \
-            Float phi_k = PI_A(i, k) * phi_sum; \
+            Floatn phi_k = (PI_A(i, k) * phi_sum); \
             phi_vec[k] = \
-                FABS(phi_k + eps_t / 2 * (ALPHA - phi_k + Nn * GRADS(i, k)) + \
-                     SQRT(eps_t * phi_k) * noise); \
+                VFABSn(phi_k + eps_t / 2 * (ALPHA - phi_k + Nn * GRADS(i, k)) + \
+                     VSQRTn(eps_t * phi_k) * noise); \
           }\
         }
 
         void update_phi_for_nodeWG(GLOBAL Float* beta, GLOBAL void* g_pi,
-                                   GLOBAL Float* g_phi, GLOBAL Float* phi_vec,
+                                   GLOBAL Float* g_phi, GLOBAL Floatn* phi_vec,
                                    GLOBAL Set* edge_set, Vertex node,
                                    GLOBAL Vertex* neighbors, uint step_count,
                                    random_seed_t* rseed,
                                    LOCAL Float* aux
 #ifdef PROBS_IS_SHARED
-                                   , LOCAL Float* probs
+                                   , LOCAL Floatn* probs
 #endif
 #ifdef GRADS_IS_SHARED
-                                   , LOCAL Float* grads
+                                   , LOCAL Floatn* grads
 #endif
 #ifdef PI_A_IS_SHARED
-                                   , LOCAL Float *pi_a
+                                   , LOCAL Floatn *pi_a
 #endif
                                    ) {
 #ifndef PROBS_IS_SHARED
-          Float probs[K_PER_THREAD];
+          Floatn probs[K_PER_THREAD];
 #endif
 #ifndef GRADS_IS_SHARED
-          Float grads[K_PER_THREAD];
+          Floatn grads[K_PER_THREAD];
 #endif
 #ifndef PI_A_IS_SHARED
-          Float pi_a[K_PER_THREAD];
+          Floatn pi_a[K_PER_THREAD];
 #endif
-          GLOBAL Float* pi = FloatRowPartitionedMatrix_Row((GLOBAL FloatRowPartitionedMatrix*)g_pi, node);
+          GLOBAL Floatn* pi = (GLOBAL Floatn*)FloatRowPartitionedMatrix_Row((GLOBAL FloatRowPartitionedMatrix*)g_pi, node);
           Float eps_t = get_eps_t(step_count);
           uint lid = GET_LOCAL_ID();
           // phi sum
@@ -461,7 +499,7 @@ const std::string kSourcePhiWgLMemReg =
 
           for (uint i = 0; i < NUM_NEIGHBORS; ++i) {
             Vertex neighbor = neighbors[i];
-            GLOBAL Float* pi_neighbor =
+            GLOBAL Floatn* pi_neighbor = (GLOBAL Floatn*)
                 FloatRowPartitionedMatrix_Row((GLOBAL FloatRowPartitionedMatrix*)g_pi, neighbor);
             Edge edge = MakeEdge(min(node, neighbor), max(node, neighbor));
             bool y = Set_HasEdge(edge_set, edge);
@@ -502,13 +540,13 @@ const std::string kSourcePhiWgLMemReg =
             GLOBAL void* vrand) {
           LOCAL_DECLARE Float aux[WG_SIZE];
 #ifdef PROBS_IS_SHARED
-          LOCAL_DECLARE Float probs[K];
+          LOCAL_DECLARE Floatn probs[Kn];
 #endif
 #ifdef GRADS_IS_SHARED
-          LOCAL_DECLARE Float grads[K];
+          LOCAL_DECLARE Floatn grads[Kn];
 #endif
 #ifdef PI_A_IS_SHARED
-          LOCAL_DECLARE Float pi_a[K];
+          LOCAL_DECLARE Floatn pi_a[Kn];
 #endif
           uint i = GET_GROUP_ID();
           uint gsize = GET_NUM_GROUPS();
@@ -519,7 +557,7 @@ const std::string kSourcePhiWgLMemReg =
               Vertex node = mini_batch_nodes[i];
               GLOBAL Vertex* node_neighbors = neighbors + i * NUM_NEIGHBORS;
               GLOBAL Float* phi_vec = g_phi_vec + i * K;
-              update_phi_for_nodeWG(g_beta, g_pi, g_phi, phi_vec,
+              update_phi_for_nodeWG(g_beta, g_pi, g_phi, (GLOBAL Floatn*)phi_vec,
                                     (GLOBAL Set*)training_edge_set, node, node_neighbors,
                                     step_count, &rseed, aux
 #ifdef PROBS_IS_SHARED
@@ -575,7 +613,7 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
 //      src = kSourcePhiWg + kSourcePiWg;
 //      src = kSourcePhiWgLMem + kSourcePiWg;
       src = kSourcePhiWgLMemReg + kSourcePiWg;
-      uint32_t k_per_thread = k_ / local_ + (k_ % local_ ? 1 : 0);
+      uint32_t k_per_thread = (k_ / cfg.phi_vector_width) / local_ + ((k_/cfg.phi_vector_width) % local_ ? 1 : 0);
       for (auto s : std::vector<std::string>{"INIT_ARRAYS", "CALC_PROBS",
                                              "CALC_GRADS",  "CALC_PHI"}) {
         std::ostringstream out;
@@ -608,6 +646,17 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
   if (cfg.phi_probs_shared) opts.push_back("-DPROBS_IS_SHARED");
   if (cfg.phi_grads_shared) opts.push_back("-DGRADS_IS_SHARED");
   if (cfg.phi_pi_shared) opts.push_back("-DPI_A_IS_SHARED");
+  if (cfg.phi_vector_width > 1) opts.push_back(std::string("-DVECTOR_WIDTH=") + std::to_string(cfg.phi_vector_width));
+#if 0
+  {
+    std::vector<std::string> strs;
+    std::string S = out.str();
+    boost::split(strs, S, boost::is_any_of("\n"));
+    for (uint32_t i = 0; i < strs.size(); ++i) {
+      LOG(INFO) << i << ": " << strs[i];
+    }
+  }
+#endif
   clcuda::BuildStatus status = prog_->Build(queue_.GetDevice(), opts);
   LOG_IF(FATAL, status != clcuda::BuildStatus::kSuccess)
       << prog_->GetBuildInfo(queue_.GetDevice());
