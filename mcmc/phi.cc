@@ -141,6 +141,7 @@ const std::string kSourcePhi = random::GetRandomHeader() + R"%%(
             #define VFABSn vfabs2
             #define VSQRTn vsqrt2
             #define Vn(X) MAKEV2(X)
+            #define VLn(X) VL2(X)
             #ifdef __OPENCL_VERSION__
               #define VBeta() (Float2)(Beta(beta, 2 * k), Beta(beta, 2 * k + 1))
             #else
@@ -152,6 +153,7 @@ const std::string kSourcePhi = random::GetRandomHeader() + R"%%(
             #define VFABSn vfabs4
             #define VSQRTn vsqrt4
             #define Vn(X) MAKEV4(X)
+            #define VLn(X) VL4(X)
             #ifdef __OPENCL_VERSION__
               #define VBeta() (Float4)(Beta(beta, 4 * k), Beta(beta, 4 * k + 1), Beta(beta, 4 * k + 2), Beta(beta, 4 * k + 3))
             #else
@@ -167,6 +169,7 @@ const std::string kSourcePhi = random::GetRandomHeader() + R"%%(
           #define VFABSn FABS
           #define VSQRTn SQRT
           #define Vn(X) (X)
+          #define VLn(X) (X)
           #define VBeta() (Beta(beta, k))
           inline Float v_accn(Float a) { return a; }
         #endif
@@ -239,7 +242,8 @@ const std::string kSourcePhi = random::GetRandomHeader() + R"%%(
           }
           Float Nn = (FL(1.0) * N) / NUM_NEIGHBORS;
           for (uint i = 0, k = lid; k < Kn; ++i, k += WG_SIZE) {
-              Float noise = PHI_RANDN(rseed);
+              // create "n" different noise elements
+              Floatn noise = VLn(PHI_RANDN(rseed));
               Floatn phi_k = pi_a[i] * phi_sum;
               phi_vec[k] =
                   VFABSn(phi_k + eps_t / 2 * (ALPHA - phi_k + Nn * grads[i]) +
@@ -343,7 +347,8 @@ const std::string kSourcePhiWgLMem =
           }
           Float Nn = (FL(1.0) * N) / NUM_NEIGHBORS;
           for (uint i = 0, k = lid; k < Kn; ++i, k += WG_SIZE) {
-              Float noise = PHI_RANDN(rseed);
+              // create "n" different noise elements
+              Floatn noise = VLn(PHI_RANDN(rseed));
               Floatn phi_k = pi_a[k] * phi_sum;
               phi_vec[k] =
                   VFABSn(phi_k + eps_t / 2 * (ALPHA - phi_k + Nn * grads[k]) +
@@ -446,7 +451,8 @@ const std::string kSourcePhiWgLMemReg =
         {\
           const uint k = kk;\
           if (k < Kn) { \
-            Float noise = PHI_RANDN(rseed); \
+            /* create "n" different noise elements */ \
+            Floatn noise = VLn(PHI_RANDN(rseed)); \
             Floatn phi_k = (PI_A(i, k) * phi_sum); \
             phi_vec[k] = \
                 VFABSn(phi_k + eps_t / 2 * (ALPHA - phi_k + Nn * GRADS(i, k)) + \

@@ -152,6 +152,10 @@ std::string make_v_macros(uint32_t vlen) {
   std::ostringstream out;
   out << "inline Float" << vlen <<" MAKEV" << vlen << "(Float s) { return (Float" << vlen << ")"
       << apply_tuple_scalar("s", "", "", vlen) << "; }" << std::endl;
+  // make vector out of exact literal
+  out << "#define VL" << vlen << "(s) (Float" << vlen << ")"
+      << apply_tuple_scalar("s", "", "", vlen) << std::endl;
+
   out << "inline Float" << vlen << " vfabs" << vlen << "(const Float" << vlen << " a) { return (Float" << vlen << ")"
       << apply_func_tuple("FABS", "a", vlen) << "; }" << std::endl;
   out << "inline Float" << vlen << " vsqrt" << vlen << "(const Float" << vlen << " a) { return (Float" << vlen << ")"
@@ -177,6 +181,10 @@ std::string make_v_macros(uint32_t vlen) {
   out << "inline Float" << vlen << " MAKEV" << vlen << "(Float s) { return MAKE_FLOAT" << vlen
     //"(s, s)" << std::endl;
       << apply_tuple_scalar("s", "", "", vlen) << "; }" << std::endl;
+  // make vector out of exact literal
+  out << "#define VL" << vlen << "(s) MAKE_FLOAT" << vlen
+    //"(s, s)" << std::endl;
+      << apply_tuple_scalar("s", "", "", vlen) << std::endl;
 
   out << "inline Float" << vlen << " vfabs" << vlen << "(const Float" << vlen << " a)  { return MAKE_FLOAT" << vlen
       << apply_func_tuple("FABS", "a", vlen) << "; }" << std::endl;
