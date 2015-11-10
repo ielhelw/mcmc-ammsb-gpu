@@ -107,11 +107,8 @@ Learner::Learner(const Config& cfg, clcuda::Queue queue)
                               : PerplexityCalculator::EDGE_PER_THREAD),
                          cfg_, queue_, beta_, pi_.get(), heldoutEdges_,
                          heldoutSet_.get(), compileFlags_, GetBaseFuncs()),
-      phiUpdater_(
-          (queue_.GetDevice().Type() == "GPU" ? PhiUpdater::NODE_PER_WORKGROUP
-                                              : PhiUpdater::NODE_PER_THREAD),
-          cfg_, queue_, beta_, pi_.get(), phi_, trainingSet_.get(),
-          compileFlags_, GetBaseFuncs()),
+      phiUpdater_(cfg_, queue_, beta_, pi_.get(), phi_, trainingSet_.get(),
+                  compileFlags_, GetBaseFuncs()),
       betaUpdater_(
           (queue_.GetDevice().Type() == "GPU" ? BetaUpdater::EDGE_PER_WORKGROUP
                                               : BetaUpdater::EDGE_PER_THREAD),
@@ -323,8 +320,7 @@ bool Learner::Serialize(std::ostream* out) {
           trainingPerplexity_.Serialize(out) &&
 #endif
           heldoutPerplexity_.Serialize(out) &&
-          ::mcmc::SerializeMessage(out, props) &&
-          samples_[0].Serialize(out)
+          ::mcmc::SerializeMessage(out, props) && samples_[0].Serialize(out)
 #ifdef MCMC_SAMPLE_PARALLEL
           && samples_[1].Serialize(out)
 #endif

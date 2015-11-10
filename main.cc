@@ -63,6 +63,7 @@ int main(int argc, char **argv) {
     ("phi-seed", po::value(&cfg.phi_seed)->default_value({42, 43}))
     ("beta-seed", po::value(&cfg.beta_seed)->default_value({44, 45}))
     ("neighbor-seed", po::value(&cfg.neighbor_seed)->default_value({56, 57}))
+    ("phi-mode", po::value(&cfg.phi_mode)->default_value(mcmc::PHI_NODE_PER_WORKGROUP_NAIVE))
     ("phi-probs-shared", po::value(&cfg.phi_probs_shared)->default_value(true))
     ("phi-grads-shared", po::value(&cfg.phi_grads_shared)->default_value(true))
     ("phi-pi-shared", po::value(&cfg.phi_pi_shared)->default_value(true))

@@ -9,9 +9,9 @@ namespace mcmc {
 
 class PhiUpdater {
  public:
-  enum Mode { NODE_PER_THREAD, NODE_PER_WORKGROUP };
+  typedef PhiUpdaterMode Mode;
 
-  PhiUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
+  PhiUpdater(const Config& cfg, clcuda::Queue queue,
              clcuda::Buffer<Float>& beta, RowPartitionedMatrix<Float>* pi,
              clcuda::Buffer<Float>& phi, OpenClSet* trainingSet,
              const std::vector<std::string>& compileFlags,

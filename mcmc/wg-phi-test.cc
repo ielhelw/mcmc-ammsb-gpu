@@ -75,8 +75,8 @@ class WgPhiTest : public ContextTest,
     ContextTest::TearDown();
   }
 
-  void Run(PhiUpdater::Mode mode) {
-    PhiUpdater updater(mode, cfg_, *queue_, *beta_, pi_.get(), *phi_,
+  void Run() {
+    PhiUpdater updater(cfg_, *queue_, *beta_, pi_.get(), *phi_,
                        dev_set_.get(), MakeCompileFlags(cfg_),
                        Learner::GetBaseFuncs());
     // generate random mini-batch nodes
@@ -116,13 +116,15 @@ TEST_P(WgPhiTest, VerifyModes) {
   num_tries_ = 1;
   cfg_.phi_wg_size = GetParam();
   cfg_.phi_disable_noise = true;
-  Run(PhiUpdater::NODE_PER_THREAD);
+  cfg_.phi_mode = mcmc::PHI_NODE_PER_THREAD;
+  Run();
   std::vector<Float> host_phi1(cfg_.N);
   phi_->Read(*queue_, host_phi1.size(), host_phi1);
   std::vector<Float> host_pi1(cfg_.N * cfg_.K);
   pi_->Blocks()[0].Read(*queue_, host_pi1.size(), host_pi1);
 
-  Run(PhiUpdater::NODE_PER_WORKGROUP);
+  cfg_.phi_mode = mcmc::PHI_NODE_PER_WORKGROUP_NAIVE;
+  Run();
   std::vector<Float> host_phi2(cfg_.N);
   phi_->Read(*queue_, host_phi2.size(), host_phi2);
   std::vector<Float> host_pi2(cfg_.N * cfg_.K);
@@ -140,12 +142,14 @@ TEST_P(WgPhiTest, VerifyModes) {
 
 TEST_P(WgPhiTest, NodePerThread) {
   cfg_.phi_wg_size = GetParam();
-  Run(PhiUpdater::NODE_PER_THREAD);
+  cfg_.phi_mode = mcmc::PHI_NODE_PER_THREAD;
+  Run();
 }
 
 TEST_P(WgPhiTest, NodePerWorkGroup) {
   cfg_.phi_wg_size = GetParam();
-  Run(PhiUpdater::NODE_PER_WORKGROUP);
+  cfg_.phi_mode = mcmc::PHI_NODE_PER_WORKGROUP_NAIVE;
+  Run();
 }
 
 INSTANTIATE_TEST_CASE_P(WorkGroups, WgPhiTest,

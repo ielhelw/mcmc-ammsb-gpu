@@ -100,7 +100,7 @@ enum SampleStrategy {
   BF,
 };
 
-std::string to_string(SampleStrategy s);
+std::string to_string(const SampleStrategy& s);
 
 std::istream& operator>>(std::istream& in, SampleStrategy& strategy);
 

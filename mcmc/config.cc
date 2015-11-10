@@ -1,5 +1,7 @@
 #include "mcmc/config.h"
 
+#include <boost/algorithm/string/predicate.hpp>
+#include <boost/program_options.hpp>
 #include <sstream>
 
 namespace mcmc {
@@ -83,19 +85,61 @@ std::ostream& operator<<(std::ostream& out, const Config& cfg) {
   out << "m: " << cfg.mini_batch_size << std::endl;
   out << "n: " << cfg.num_node_sample << std::endl;
   out << "strategy: " << to_string(cfg.strategy) << std::endl;
-  out << "ppx-wg: : " << cfg.ppx_wg_size << std::endl;
-  out << "phi-wg: : " << cfg.phi_wg_size << std::endl;
-  out << "beta-wg: : " << cfg.beta_wg_size << std::endl;
-  out << "phi-seed: : " << cfg.phi_seed << std::endl;
-  out << "beta-seed: : " << cfg.beta_seed << std::endl;
-  out << "neighbor-seed: : " << cfg.neighbor_seed << std::endl;
+  out << "ppx-wg: " << cfg.ppx_wg_size << std::endl;
+  out << "phi-wg: " << cfg.phi_wg_size << std::endl;
+  out << "beta-wg: " << cfg.beta_wg_size << std::endl;
+  out << "phi-seed: " << cfg.phi_seed << std::endl;
+  out << "beta-seed: " << cfg.beta_seed << std::endl;
+  out << "neighbor-seed: " << cfg.neighbor_seed << std::endl;
   out << "|N|: " << cfg.N << std::endl;
   out << "|E|: " << cfg.E << std::endl;
+  out << "phi_mode: " << to_string(cfg.phi_mode) << std::endl;
+  out << "phi_vwidth: " << cfg.phi_vector_width << std::endl;
+  if (cfg.phi_mode == PHI_NODE_PER_WORKGROUP_CODE_GEN) {
+    out << "phi_probs_shared: " << cfg.phi_probs_shared << std::endl;
+    out << "phi_grads_shared: " << cfg.phi_grads_shared << std::endl;
+    out << "phi_pi_shared: " << cfg.phi_pi_shared << std::endl;
+  }
   if (cfg.training)
     out << "|Training edges|: " << cfg.training->Size() << std::endl;
   if (cfg.heldout)
     out << "|Heldout edges|: " << cfg.heldout->Size() << std::endl;
   return out;
+}
+
+std::istream& operator>>(std::istream& in, PhiUpdaterMode& mode) {
+  std::string token;
+  in >> token;
+  if (boost::iequals(token, "THREAD")) {
+    mode = PHI_NODE_PER_THREAD;
+  } else if (boost::iequals(token, "WG-NAIVE")) {
+    mode = PHI_NODE_PER_WORKGROUP_NAIVE;
+  } else if (boost::iequals(token, "WG-SHARED")) {
+    mode = PHI_NODE_PER_WORKGROUP_SHARED;
+  } else if (boost::iequals(token, "WG-GEN")) {
+    mode = PHI_NODE_PER_WORKGROUP_CODE_GEN;
+  } else {
+    throw boost::program_options::validation_error(
+        boost::program_options::validation_error::invalid_option_value,
+        "Invalid phi mode");
+  }
+  return in;
+}
+
+std::string to_string(const PhiUpdaterMode& mode) {
+  switch (mode) {
+    case PHI_NODE_PER_THREAD:
+      return "THREAD";
+    case PHI_NODE_PER_WORKGROUP_NAIVE:
+      return "WG-NAIVE";
+    case PHI_NODE_PER_WORKGROUP_SHARED:
+      return "WG-SHARED";
+    case PHI_NODE_PER_WORKGROUP_CODE_GEN:
+      return "WG-GEN";
+    default:
+      LOG(FATAL) << "Invalid phi mode";
+  }
+  return "";
 }
 
 }  // namespace mcmc

@@ -11,9 +11,21 @@
 
 namespace mcmc {
 
+enum PhiUpdaterMode {
+  PHI_NODE_PER_THREAD,
+  PHI_NODE_PER_WORKGROUP_NAIVE,
+  PHI_NODE_PER_WORKGROUP_SHARED,
+  PHI_NODE_PER_WORKGROUP_CODE_GEN
+};
+
+std::istream& operator>>(std::istream& in, PhiUpdaterMode& mode);
+
+std::string to_string(const PhiUpdaterMode& mode);
+
 struct Config {
 #ifdef MCMC_CALC_TRAIN_PPX
-  Float training_ppx_ratio; // subset of training edges used for training ppx calculation
+  Float training_ppx_ratio;  // subset of training edges used for training ppx
+                             // calculation
 #endif
   Float heldout_ratio;
   Float alpha;
@@ -46,6 +58,8 @@ struct Config {
 
   SampleStrategy strategy;
 
+  PhiUpdaterMode phi_mode;
+
   bool phi_probs_shared;
   bool phi_grads_shared;
   bool phi_pi_shared;
@@ -76,6 +90,7 @@ struct Config {
     beta_seed = {113, 117};
     neighbor_seed = {3337, 54351};
     strategy = Node;
+    phi_mode = PHI_NODE_PER_WORKGROUP_NAIVE;
     phi_probs_shared = true;
     phi_grads_shared = true;
     phi_pi_shared = true;

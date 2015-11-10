@@ -580,13 +580,13 @@ const std::string kSourcePhiWgLMemReg =
 
         )%%";
 
-PhiUpdater::PhiUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
+PhiUpdater::PhiUpdater(const Config& cfg, clcuda::Queue queue,
                        clcuda::Buffer<Float>& beta,
                        RowPartitionedMatrix<Float>* pi,
                        clcuda::Buffer<Float>& phi, OpenClSet* trainingSet,
                        const std::vector<std::string>& compileFlags,
                        const std::string& baseFuncs)
-    : mode_(mode),
+    : mode_(cfg.phi_mode),
       queue_(queue),
       beta_(beta),
       pi_(pi),
@@ -596,7 +596,7 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
       randFactory_(random::OpenClRandomFactory::New(queue_)),
       rand_(randFactory_->CreateRandom(
           2 * cfg.mini_batch_size *
-              (mode == NODE_PER_THREAD ? 1 : cfg.phi_wg_size),
+              (mode_ == PHI_NODE_PER_THREAD ? 1 : cfg.phi_wg_size),
           random::random_seed_t{cfg.phi_seed[0], cfg.phi_seed[1]})),
       count_calls_(0),
       k_(cfg.K),
@@ -605,16 +605,20 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
       t_update_pi_(0) {
   std::string src;
   switch (mode_) {
-    case NODE_PER_THREAD:
+    case PHI_NODE_PER_THREAD:
       src = kSourcePhi;
       grads_.reset(new clcuda::Buffer<Float>(queue_.GetContext(),
                                              2 * cfg.mini_batch_size * cfg.K));
       probs_.reset(new clcuda::Buffer<Float>(queue_.GetContext(),
                                              2 * cfg.mini_batch_size * cfg.K));
       break;
-    case NODE_PER_WORKGROUP: {
-//      src = kSourcePhiWg + kSourcePiWg;
-//      src = kSourcePhiWgLMem + kSourcePiWg;
+    case PHI_NODE_PER_WORKGROUP_NAIVE:
+      src = kSourcePhiWg + kSourcePiWg;
+      break;
+    case PHI_NODE_PER_WORKGROUP_SHARED:
+      src = kSourcePhiWgLMem + kSourcePiWg;
+      break;
+    case PHI_NODE_PER_WORKGROUP_CODE_GEN: {
       src = kSourcePhiWgLMemReg + kSourcePiWg;
       uint32_t k_per_thread = (k_ / cfg.phi_vector_width) / local_ + ((k_/cfg.phi_vector_width) % local_ ? 1 : 0);
       for (auto s : std::vector<std::string>{"INIT_ARRAYS", "CALC_PROBS",
@@ -644,7 +648,7 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
       << "RowPartitionedMatrix_Row\n" << src << std::endl;
   prog_.reset(new clcuda::Program(queue_.GetContext(), out.str()));
   std::vector<std::string> opts =
-      ::mcmc::GetClFlags(mode != NODE_PER_THREAD ? local_ : 0);
+      ::mcmc::GetClFlags(mode_ != PHI_NODE_PER_THREAD ? local_ : 0);
   opts.insert(opts.end(), compileFlags.begin(), compileFlags.end());
   if (cfg.phi_probs_shared) opts.push_back("-DPROBS_IS_SHARED");
   if (cfg.phi_grads_shared) opts.push_back("-DGRADS_IS_SHARED");
@@ -673,7 +677,7 @@ PhiUpdater::PhiUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
   phi_kernel_->SetArgument(arg++, phi_vec);
   phi_kernel_->SetArgument(arg++, trainingSet->Get()());
   arg += 4;
-  if (mode == NODE_PER_THREAD) {
+  if (mode_ == PHI_NODE_PER_THREAD) {
     phi_kernel_->SetArgument(arg++, *grads_);
     phi_kernel_->SetArgument(arg++, *probs_);
   }
@@ -698,7 +702,7 @@ void PhiUpdater::operator()(
   }
   ++count_calls_;
   uint32_t global;
-  if (mode_ == NODE_PER_THREAD) {
+  if (mode_ == PHI_NODE_PER_THREAD) {
     global = (num_mini_batch_nodes / local_ +
               (num_mini_batch_nodes % local_ ? 1 : 0));
   } else {

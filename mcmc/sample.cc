@@ -155,7 +155,7 @@ std::istream& operator>>(std::istream& in, SampleStrategy& strategy) {
   return in;
 }
 
-std::string to_string(SampleStrategy s) {
+std::string to_string(const SampleStrategy& s) {
   switch (s) {
     case NodeLink:
       return "NodeLink";
