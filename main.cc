@@ -68,6 +68,7 @@ int main(int argc, char **argv) {
     ("phi-grads-shared", po::value(&cfg.phi_grads_shared)->default_value(true))
     ("phi-pi-shared", po::value(&cfg.phi_pi_shared)->default_value(true))
     ("phi-vwidth", po::value(&cfg.phi_vector_width)->default_value(1))
+    ("beta-sum-grads-vwidth", po::value(&cfg.sum_grads_vector_width)->default_value(1))
   ;
   po::variables_map options_vm;
   po::store(po::parse_command_line(argc, argv, options), options_vm);

@@ -9,6 +9,24 @@
 namespace mcmc {
 
 const std::string kSourceBetaBase = random::GetRandomHeader() + R"%%(
+        #ifdef VECTOR_WIDTH
+          #define Kn (K/VECTOR_WIDTH)
+          #if VECTOR_WIDTH == 2
+            #define Floatn Float2
+          #elif VECTOR_WIDTH == 4
+            #define Floatn Float4
+          #elif VECTOR_WIDTH == 8
+            #define Floatn Float8
+          #elif VECTOR_WIDTH == 16
+            #define Floatn Float16
+          #else
+            #error "VECTOR_WIDTH can be any of 1, 2, 4, 8, 16"
+          #endif
+        #else
+          #define Kn K
+          #define Floatn Float
+        #endif
+
         KERNEL void sum_theta(GLOBAL Float* g_theta,     // [K, 2]
                               GLOBAL Float* g_theta_sum  // [K]
                               ) {
@@ -16,13 +34,15 @@ const std::string kSourceBetaBase = random::GetRandomHeader() + R"%%(
           for (uint i = GET_GLOBAL_ID(); i < K; i += gsize) {
             g_theta_sum[i] = Theta0(g_theta, i) + Theta1(g_theta, i);
           }
-        } KERNEL void sum_grads(GLOBAL Float* grads, uint num_partial_sums) {
+        }
+
+        KERNEL void sum_grads(GLOBAL Floatn* grads, uint num_partial_sums) {
           uint i = GET_GLOBAL_ID();
           uint gsize = GET_GLOBAL_SIZE();
-          for (; i < 2 * K; i += gsize) {
-            Float sum = grads[i];
+          for (; i < 2 * Kn; i += gsize) {
+            Floatn sum = grads[i];
             for (uint p = 1; p < num_partial_sums; ++p) {
-              sum += grads[i + p * 2 * K];
+              sum += grads[i + p * 2 * Kn];
             }
             grads[i] = sum;
           }
@@ -271,6 +291,9 @@ BetaUpdater::BetaUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
   std::vector<std::string> opts =
       ::mcmc::GetClFlags(mode_ == EDGE_PER_WORKGROUP ? local_ : 0);
   opts.insert(opts.end(), compileFlags.begin(), compileFlags.end());
+  if (cfg.sum_grads_vector_width > 1) {
+    opts.push_back(std::string("-DVECTOR_WIDTH=") + std::to_string(cfg.sum_grads_vector_width));
+  }
   clcuda::BuildStatus status = prog_->Build(queue_.GetDevice(), opts);
   LOG_IF(FATAL, status != clcuda::BuildStatus::kSuccess)
       << prog_->GetBuildInfo(queue_.GetDevice());

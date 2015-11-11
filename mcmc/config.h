@@ -64,6 +64,8 @@ struct Config {
   bool phi_grads_shared;
   bool phi_pi_shared;
   uint32_t phi_vector_width;
+  
+  uint32_t sum_grads_vector_width;
 
   Config() {
 #ifdef MCMC_CALC_TRAIN_PPX
@@ -95,6 +97,7 @@ struct Config {
     phi_grads_shared = true;
     phi_pi_shared = true;
     phi_vector_width = 1;
+    sum_grads_vector_width = 1;
   }
 };
 
