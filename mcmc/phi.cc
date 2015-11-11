@@ -10,49 +10,108 @@
 
 namespace mcmc {
 
-const std::string kSourcePhi = random::GetRandomHeader() + R"%%(
+const std::string kSourceVec = R"%%(
+        #ifdef VECTOR_WIDTH
+          #define Kn (K/VECTOR_WIDTH) 
+          #if VECTOR_WIDTH == 2
+            #define Floatn Float2
+            #define VFABSn vfabs2
+            #define VSQRTn vsqrt2
+            #define Vn(X) MAKEV2(X)
+            #define VLn(X) VL2(X)
+            #ifdef __OPENCL_VERSION__
+              #define VBeta() (Float2)(Beta(beta, 2 * k), Beta(beta, 2 * k + 1))
+            #else
+              #define VBeta() MAKE_FLOAT2(Beta(beta, 2 * k), Beta(beta, 2 * k + 1))
+            #endif
+            inline Float v_accn(Float2 a) { return a.x + a.y; }
+          #elif VECTOR_WIDTH == 4
+            #define Floatn Float4
+            #define VFABSn vfabs4
+            #define VSQRTn vsqrt4
+            #define Vn(X) MAKEV4(X)
+            #define VLn(X) VL4(X)
+            #ifdef __OPENCL_VERSION__
+              #define VBeta() (Float4)(Beta(beta, 4 * k), Beta(beta, 4 * k + 1), Beta(beta, 4 * k + 2), Beta(beta, 4 * k + 3))
+            #else
+              #define VBeta() MAKE_FLOAT4(Beta(beta, 4 * k), Beta(beta, 4 * k + 1), Beta(beta, 4 * k + 2), Beta(beta, 4 * k + 3))
+            #endif
+            inline Float v_accn(Float4 a) { return a.x + a.y + a.z + a.w; }
+          #elif VECTOR_WIDTH == 8
+            #define Floatn Float8
+            #define VFABSn vfabs8
+            #define VSQRTn vsqrt8
+            #define Vn(X) MAKEV8(X)
+            #define VLn(X) VL8(X)
+            #define VBeta() (Float8)(Beta(beta, 8 * k), Beta(beta, 8 * k + 1), Beta(beta, 8 * k + 2), Beta(beta, 8 * k + 3), Beta(beta, 8 * k + 4), Beta(beta, 8 * k + 5), Beta(beta, 8 * k + 6), Beta(beta, 8 * k + 7))
+            inline Float v_accn(Float8 a) { return a.lo.x + a.lo.y + a.lo.z + a.lo.w + a.hi.x + a.hi.y + a.hi.z + a.hi.w; }
+          #elif VECTOR_WIDTH == 16
+            #define Floatn Float16
+            #define VFABSn vfabs16
+            #define VSQRTn vsqrt16
+            #define Vn(X) MAKEV16(X)
+            #define VLn(X) VL16(X)
+            #define VBeta() (Float16)(Beta(beta, 16 * k), Beta(beta, 16 * k + 1), Beta(beta, 16 * k + 2), Beta(beta, 16 * k + 3), Beta(beta, 16 * k + 4), Beta(beta, 16 * k + 5), Beta(beta, 16 * k + 6), Beta(beta, 16 * k + 7), Beta(beta, 16 * k + 8), Beta(beta, 16 * k + 9), Beta(beta, 16 * k + 10), Beta(beta, 16 * k + 11), Beta(beta, 16 * k + 12), Beta(beta, 16 * k + 13), Beta(beta, 16 * k + 14), Beta(beta, 16 * k + 15))
+            inline Float v_accn(Float16 a) { return a.s0 + a.s1 + a.s2 + a.s3 + a.s4 + a.s5 + a.s6 + a.s7 + a.s8 + a.s9 + a.sa + a.sb + a.sc + a.sd + a.se + a.sf; }
+          #else
+            #error "VECTOR_WIDTH MUST BE 2, 4, 8 or 16"
+          #endif
+        #else
+          #define Kn K
+          #define Floatn Float
+          #define VFABSn FABS
+          #define VSQRTn SQRT
+          #define Vn(X) (X)
+          #define VLn(X) (X)
+          #define VBeta() (Beta(beta, k))
+          inline Float v_accn(Float a) { return a; }
+        #endif
+        #define K_PER_THREAD ((Kn/WG_SIZE) + (Kn % WG_SIZE? 1 : 0))
+    )%%";
+const std::string kSourcePhi = random::GetRandomHeader() + kSourceVec + R"%%(
 
         void update_phi_for_node(GLOBAL Float* beta, GLOBAL void* g_pi,
-                                 GLOBAL Float* g_phi, GLOBAL Float* phi_vec,
+                                 GLOBAL Float* g_phi, GLOBAL Floatn* phi_vec,
                                  GLOBAL Set* edge_set, Vertex node,
                                  GLOBAL Vertex* neighbors, uint step_count,
-                                 GLOBAL Float* grads,  // K
-                                 GLOBAL Float* probs,  // K
+                                 GLOBAL Floatn* grads,  // K
+                                 GLOBAL Floatn* probs,  // K
                                  random_seed_t* rseed) {
-          GLOBAL Float* pi = FloatRowPartitionedMatrix_Row((GLOBAL FloatRowPartitionedMatrix*)g_pi, node);
+          GLOBAL Floatn* pi = (GLOBAL Floatn*) FloatRowPartitionedMatrix_Row((GLOBAL FloatRowPartitionedMatrix*)g_pi, node);
           Float eps_t = get_eps_t(step_count);
           Float phi_sum = g_phi[node];
-          for (uint k = 0; k < K; ++k) {
+          for (uint k = 0; k < Kn; ++k) {
             // reset grads
-            grads[k] = 0;
+            grads[k] = Vn(0);
           }
           for (uint i = 0; i < NUM_NEIGHBORS; ++i) {
             Vertex neighbor = neighbors[i];
-            GLOBAL Float* pi_neighbor =
+            GLOBAL Floatn* pi_neighbor = (GLOBAL Floatn*)
                 FloatRowPartitionedMatrix_Row((GLOBAL FloatRowPartitionedMatrix*)g_pi, neighbor);
             Edge edge = MakeEdge(min(node, neighbor), max(node, neighbor));
             bool y = Set_HasEdge(edge_set, edge);
             Float e = (y == 1 ? EPSILON : FL(1.0) - EPSILON);
             Float probs_sum = 0;
-            for (uint k = 0; k < K; ++k) {
-              Float f = (y == 1) ? (Beta(beta, k) - EPSILON)
-                                 : (EPSILON - Beta(beta, k));
-              Float probs_k = pi[k] * (pi_neighbor[k] * f + e);
-              probs_sum += probs_k;
+            for (uint k = 0; k < Kn; ++k) {
+              Floatn beta_k = VBeta();
+              Floatn f = (y == 1) ? (beta_k - EPSILON)
+                                 : (EPSILON - beta_k);
+              Floatn probs_k = pi[k] * (pi_neighbor[k] * f + e);
+              probs_sum += v_accn(probs_k);
               probs[k] = probs_k;
             }
-            for (uint k = 0; k < K; ++k) {
+            for (uint k = 0; k < Kn; ++k) {
               grads[k] +=
                   (probs[k] / probs_sum) / (pi[k] * phi_sum) - FL(1.0) / phi_sum;
             }
           }
           Float Nn = (FL(1.0) * N) / NUM_NEIGHBORS;
-          for (uint k = 0; k < K; ++k) {
-            Float noise = PHI_RANDN(rseed);
-            Float phi_k = pi[k] * phi_sum;
+          for (uint k = 0; k < Kn; ++k) {
+            Floatn noise = VLn(PHI_RANDN(rseed));
+            Floatn phi_k = pi[k] * phi_sum;
             phi_vec[k] =
-                FABS(phi_k + eps_t / 2 * (ALPHA - phi_k + Nn * grads[k]) +
-                     SQRT(eps_t * phi_k) * noise);
+                VFABSn(phi_k + eps_t / 2 * (ALPHA - phi_k + Nn * grads[k]) +
+                     VSQRTn(eps_t * phi_k) * noise);
           }
         }
 
@@ -78,9 +137,9 @@ const std::string kSourcePhi = random::GetRandomHeader() + R"%%(
               Vertex node = mini_batch_nodes[i];
               GLOBAL Vertex* node_neighbors = neighbors + i * NUM_NEIGHBORS;
               GLOBAL Float* phi_vec = g_phi_vec + i * K;
-              update_phi_for_node(g_beta, g_pi, g_phi, phi_vec,
+              update_phi_for_node(g_beta, g_pi, g_phi, (GLOBAL Floatn*)phi_vec,
                                   (GLOBAL Set*)training_edge_set, node, node_neighbors,
-                                  step_count, grads, probs, &rseed);
+                                  step_count, (GLOBAL Floatn*)grads, (GLOBAL Floatn*)probs, &rseed);
             }
             rand->base_[GET_GLOBAL_ID()] = rseed;
           }
@@ -109,8 +168,7 @@ const std::string kSourcePhi = random::GetRandomHeader() + R"%%(
 
         )%%";
 
-  const std::string kSourcePiWg =
-    R"%%(
+const std::string kSourcePiWg = R"%%(
         KERNEL void update_pi(GLOBAL void* g_pi, GLOBAL Float* g_phi_vec,
                               GLOBAL Float* g_phi,
                               GLOBAL Vertex* mini_batch_nodes,
@@ -133,50 +191,8 @@ const std::string kSourcePhi = random::GetRandomHeader() + R"%%(
         }
 
     )%%";
-  const std::string kSourceVec = R"%%(
-        #ifdef VECTOR_WIDTH
-          #define Kn (K/VECTOR_WIDTH) 
-          #if VECTOR_WIDTH == 2
-            #define Floatn Float2
-            #define VFABSn vfabs2
-            #define VSQRTn vsqrt2
-            #define Vn(X) MAKEV2(X)
-            #define VLn(X) VL2(X)
-            #ifdef __OPENCL_VERSION__
-              #define VBeta() (Float2)(Beta(beta, 2 * k), Beta(beta, 2 * k + 1))
-            #else
-              #define VBeta() MAKE_FLOAT2(Beta(beta, 2 * k), Beta(beta, 2 * k + 1))
-            #endif
-            inline Float v_accn(Float2 a) { return a.x + a.y; }
-          #elif VECTOR_WIDTH == 4
-            #define Floatn Float4
-            #define VFABSn vfabs4
-            #define VSQRTn vsqrt4
-            #define Vn(X) MAKEV4(X)
-            #define VLn(X) VL4(X)
-            #ifdef __OPENCL_VERSION__
-              #define VBeta() (Float4)(Beta(beta, 4 * k), Beta(beta, 4 * k + 1), Beta(beta, 4 * k + 2), Beta(beta, 4 * k + 3))
-            #else
-              #define VBeta() MAKE_FLOAT4(Beta(beta, 4 * k), Beta(beta, 4 * k + 1), Beta(beta, 4 * k + 2), Beta(beta, 4 * k + 3))
-            #endif
-            inline Float v_accn(Float4 a) { return a.x + a.y + a.z + a.w; }
-          #else
-            #error "VECTOR_WIDTH MUST BE 2 OR 4"
-          #endif
-        #else
-          #define Kn K
-          #define Floatn Float
-          #define VFABSn FABS
-          #define VSQRTn SQRT
-          #define Vn(X) (X)
-          #define VLn(X) (X)
-          #define VBeta() (Beta(beta, k))
-          inline Float v_accn(Float a) { return a; }
-        #endif
-        #define K_PER_THREAD ((Kn/WG_SIZE) + (Kn % WG_SIZE? 1 : 0))
-    )%%";
 // pi_a/probs/grads in thread local memory. Not enough registers, spills.
- const std::string kSourcePhiWg =
+const std::string kSourcePhiWg =
     mcmc::algorithm::WorkGroupNormalizeProgram(type_name<Float>()) + "\n" +
     "#define WG_SUM_Float WG_SUM_" + type_name<Float>() +
     "\n"
@@ -591,11 +607,15 @@ PhiUpdater::PhiUpdater(const Config& cfg, clcuda::Queue queue,
       beta_(beta),
       pi_(pi),
       phi_(phi),
-      phi_vec(queue_.GetContext(), 2 * cfg.mini_batch_size * cfg.K),
+      phi_vec(queue_.GetContext(),
+              std::max(2 * cfg.mini_batch_size,
+                       1 + cfg.trainingGraph->MaxFanOut()) *
+                  cfg.K),
       trainingSet_(trainingSet),
       randFactory_(random::OpenClRandomFactory::New(queue_)),
       rand_(randFactory_->CreateRandom(
-          2 * cfg.mini_batch_size *
+          std::max(2 * cfg.mini_batch_size,
+                   1 + cfg.trainingGraph->MaxFanOut()) *
               (mode_ == PHI_NODE_PER_THREAD ? 1 : cfg.phi_wg_size),
           random::random_seed_t{cfg.phi_seed[0], cfg.phi_seed[1]})),
       count_calls_(0),
@@ -607,10 +627,14 @@ PhiUpdater::PhiUpdater(const Config& cfg, clcuda::Queue queue,
   switch (mode_) {
     case PHI_NODE_PER_THREAD:
       src = kSourcePhi;
-      grads_.reset(new clcuda::Buffer<Float>(queue_.GetContext(),
-                                             2 * cfg.mini_batch_size * cfg.K));
-      probs_.reset(new clcuda::Buffer<Float>(queue_.GetContext(),
-                                             2 * cfg.mini_batch_size * cfg.K));
+      grads_.reset(new clcuda::Buffer<Float>(
+          queue_.GetContext(), std::max(2 * cfg.mini_batch_size,
+                                        1 + cfg.trainingGraph->MaxFanOut()) *
+                                   cfg.K));
+      probs_.reset(new clcuda::Buffer<Float>(
+          queue_.GetContext(), std::max(2 * cfg.mini_batch_size,
+                                        1 + cfg.trainingGraph->MaxFanOut()) *
+                                   cfg.K));
       break;
     case PHI_NODE_PER_WORKGROUP_NAIVE:
       src = kSourcePhiWg + kSourcePiWg;
@@ -620,7 +644,8 @@ PhiUpdater::PhiUpdater(const Config& cfg, clcuda::Queue queue,
       break;
     case PHI_NODE_PER_WORKGROUP_CODE_GEN: {
       src = kSourcePhiWgLMemReg + kSourcePiWg;
-      uint32_t k_per_thread = (k_ / cfg.phi_vector_width) / local_ + ((k_/cfg.phi_vector_width) % local_ ? 1 : 0);
+      uint32_t k_per_thread = (k_ / cfg.phi_vector_width) / local_ +
+                              ((k_ / cfg.phi_vector_width) % local_ ? 1 : 0);
       for (auto s : std::vector<std::string>{"INIT_ARRAYS", "CALC_PROBS",
                                              "CALC_GRADS",  "CALC_PHI"}) {
         std::ostringstream out;
@@ -628,8 +653,8 @@ PhiUpdater::PhiUpdater(const Config& cfg, clcuda::Queue queue,
           // INIT_ARRAYS(0, lid + 0 * WG_SIZE);
           out << s << "(" << i << ", lid + " << i << " * WG_SIZE);\n";
         }
-        src = boost::replace_all_copy(
-            src, std::string("GENERATE_") + s, out.str());
+        src = boost::replace_all_copy(src, std::string("GENERATE_") + s,
+                                      out.str());
       }
     } break;
     default:
@@ -653,7 +678,9 @@ PhiUpdater::PhiUpdater(const Config& cfg, clcuda::Queue queue,
   if (cfg.phi_probs_shared) opts.push_back("-DPROBS_IS_SHARED");
   if (cfg.phi_grads_shared) opts.push_back("-DGRADS_IS_SHARED");
   if (cfg.phi_pi_shared) opts.push_back("-DPI_A_IS_SHARED");
-  if (cfg.phi_vector_width > 1) opts.push_back(std::string("-DVECTOR_WIDTH=") + std::to_string(cfg.phi_vector_width));
+  if (cfg.phi_vector_width > 1)
+    opts.push_back(std::string("-DVECTOR_WIDTH=") +
+                   std::to_string(cfg.phi_vector_width));
 #if 0
   {
     std::vector<std::string> strs;

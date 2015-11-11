@@ -28,6 +28,44 @@ std::string apply_tuple4(const std::string& arg, const std::string& prefix,
   return out.str();
 }
 
+std::string apply_tuple8(const std::string& arg, const std::string& prefix,
+                         const std::string& suffix) {
+  std::ostringstream out;
+  out << "("
+      << "(" << prefix << " " << arg << ".lo.x " << suffix << "),"
+      << "(" << prefix << " " << arg << ".lo.y " << suffix << "),"
+      << "(" << prefix << " " << arg << ".lo.z " << suffix << "),"
+      << "(" << prefix << " " << arg << ".lo.w " << suffix << "),"
+      << "(" << prefix << " " << arg << ".hi.x " << suffix << "),"
+      << "(" << prefix << " " << arg << ".hi.y " << suffix << "),"
+      << "(" << prefix << " " << arg << ".hi.z " << suffix << "),"
+      << "(" << prefix << " " << arg << ".hi.w " << suffix << ")" << ")";
+  return out.str();
+}
+
+std::string apply_tuple16(const std::string& arg, const std::string& prefix,
+                         const std::string& suffix) {
+  std::ostringstream out;
+  out << "("
+      << "(" << prefix << " " << arg << ".s0 " << suffix << "),"
+      << "(" << prefix << " " << arg << ".s1 " << suffix << "),"
+      << "(" << prefix << " " << arg << ".s2 " << suffix << "),"
+      << "(" << prefix << " " << arg << ".s3 " << suffix << "),"
+      << "(" << prefix << " " << arg << ".s4 " << suffix << "),"
+      << "(" << prefix << " " << arg << ".s5 " << suffix << "),"
+      << "(" << prefix << " " << arg << ".s6 " << suffix << "),"
+      << "(" << prefix << " " << arg << ".s7 " << suffix << "),"
+      << "(" << prefix << " " << arg << ".s8 " << suffix << "),"
+      << "(" << prefix << " " << arg << ".s9 " << suffix << "),"
+      << "(" << prefix << " " << arg << ".sa " << suffix << "),"
+      << "(" << prefix << " " << arg << ".sb " << suffix << "),"
+      << "(" << prefix << " " << arg << ".sc " << suffix << "),"
+      << "(" << prefix << " " << arg << ".sd " << suffix << "),"
+      << "(" << prefix << " " << arg << ".se " << suffix << "),"
+      << "(" << prefix << " " << arg << ".sf " << suffix << ")" << ")";
+  return out.str();
+}
+
 std::string apply_tuple(const std::string& arg, const std::string& prefix,
                          const std::string& suffix, uint32_t vlen) {
   switch (vlen) {
@@ -35,6 +73,10 @@ std::string apply_tuple(const std::string& arg, const std::string& prefix,
       return apply_tuple2(arg, prefix, suffix);
     case 4:
       return apply_tuple4(arg, prefix, suffix);
+    case 8:
+      return apply_tuple8(arg, prefix, suffix);
+    case 16:
+      return apply_tuple16(arg, prefix, suffix);
     default:
       LOG(FATAL) << "NOT IMPLEMENTED: " << vlen;
   }
@@ -67,6 +109,50 @@ std::string apply_tuple_tuple4(
   return out.str();
 }
 
+std::string apply_tuple_tuple8(
+    const std::string& arg0, const std::string& arg1,
+    const std::string& prefix, const std::string join,
+    const std::string& suffix) {
+  std::ostringstream out;
+  out << "("
+      << "(" << prefix << " " << arg0 << ".lo.x " << join << " " << arg1 << ".lo.x" << suffix << "),"
+      << "(" << prefix << " " << arg0 << ".lo.y " << join << " " << arg1 << ".lo.y" << suffix << "),"
+      << "(" << prefix << " " << arg0 << ".lo.z " << join << " " << arg1 << ".lo.z" << suffix << "),"
+      << "(" << prefix << " " << arg0 << ".lo.w " << join << " " << arg1 << ".lo.w" << suffix << "),"
+      << "(" << prefix << " " << arg0 << ".hi.x " << join << " " << arg1 << ".hi.x" << suffix << "),"
+      << "(" << prefix << " " << arg0 << ".hi.y " << join << " " << arg1 << ".hi.y" << suffix << "),"
+      << "(" << prefix << " " << arg0 << ".hi.z " << join << " " << arg1 << ".hi.z" << suffix << "),"
+      << "(" << prefix << " " << arg0 << ".hi.w " << join << " " << arg1 << ".hi.w" << suffix << ")"
+      << ")";
+  return out.str();
+}
+
+std::string apply_tuple_tuple16(
+    const std::string& arg0, const std::string& arg1,
+    const std::string& prefix, const std::string join,
+    const std::string& suffix) {
+  std::ostringstream out;
+  out << "("
+      << "(" << prefix << " " << arg0 << ".s0 " << join << " " << arg1 << ".s0" << suffix << "),"
+      << "(" << prefix << " " << arg0 << ".s1 " << join << " " << arg1 << ".s1`" << suffix << "),"
+      << "(" << prefix << " " << arg0 << ".s2 " << join << " " << arg1 << ".s2" << suffix << "),"
+      << "(" << prefix << " " << arg0 << ".s3 " << join << " " << arg1 << ".s3" << suffix << "),"
+      << "(" << prefix << " " << arg0 << ".s4 " << join << " " << arg1 << ".s4" << suffix << "),"
+      << "(" << prefix << " " << arg0 << ".s5 " << join << " " << arg1 << ".s5" << suffix << "),"
+      << "(" << prefix << " " << arg0 << ".s6 " << join << " " << arg1 << ".s6" << suffix << "),"
+      << "(" << prefix << " " << arg0 << ".s7 " << join << " " << arg1 << ".s7" << suffix << "),"
+      << "(" << prefix << " " << arg0 << ".s8 " << join << " " << arg1 << ".s8" << suffix << "),"
+      << "(" << prefix << " " << arg0 << ".s9 " << join << " " << arg1 << ".s9" << suffix << "),"
+      << "(" << prefix << " " << arg0 << ".sa " << join << " " << arg1 << ".sa" << suffix << "),"
+      << "(" << prefix << " " << arg0 << ".sb " << join << " " << arg1 << ".sb" << suffix << "),"
+      << "(" << prefix << " " << arg0 << ".sc " << join << " " << arg1 << ".sc" << suffix << "),"
+      << "(" << prefix << " " << arg0 << ".sd " << join << " " << arg1 << ".sd" << suffix << "),"
+      << "(" << prefix << " " << arg0 << ".se " << join << " " << arg1 << ".se" << suffix << "),"
+      << "(" << prefix << " " << arg0 << ".sf " << join << " " << arg1 << ".sf" << suffix << ")"
+      << ")";
+  return out.str();
+}
+
 std::string apply_tuple_tuple(
     const std::string& arg0, const std::string& arg1,
     const std::string& prefix, const std::string join,
@@ -76,6 +162,10 @@ std::string apply_tuple_tuple(
       return apply_tuple_tuple2(arg0, arg1, prefix, join, suffix);
     case 4:
       return apply_tuple_tuple4(arg0, arg1, prefix, join, suffix);
+    case 8:
+      return apply_tuple_tuple8(arg0, arg1, prefix, join, suffix);
+    case 16:
+      return apply_tuple_tuple16(arg0, arg1, prefix, join, suffix);
     default:
       LOG(FATAL) << "NOT IMPLEMENTED: " << vlen;
   }
@@ -102,6 +192,44 @@ std::string apply_tuple_scalar4(const std::string& arg, const std::string& prefi
   return out.str();
 }
 
+std::string apply_tuple_scalar8(const std::string& arg, const std::string& prefix,
+                         const std::string& suffix) {
+  std::ostringstream out;
+  out << "("
+      << "(" << prefix << arg << suffix << "),"
+      << "(" << prefix << arg << suffix << "),"
+      << "(" << prefix << arg << suffix << "),"
+      << "(" << prefix << arg << suffix << "),"
+      << "(" << prefix << arg << suffix << "),"
+      << "(" << prefix << arg << suffix << "),"
+      << "(" << prefix << arg << suffix << "),"
+      << "(" << prefix << arg << suffix << ")" << ")";
+  return out.str();
+}
+
+std::string apply_tuple_scalar16(const std::string& arg, const std::string& prefix,
+                         const std::string& suffix) {
+  std::ostringstream out;
+  out << "("
+      << "(" << prefix << arg << suffix << "),"
+      << "(" << prefix << arg << suffix << "),"
+      << "(" << prefix << arg << suffix << "),"
+      << "(" << prefix << arg << suffix << "),"
+      << "(" << prefix << arg << suffix << "),"
+      << "(" << prefix << arg << suffix << "),"
+      << "(" << prefix << arg << suffix << "),"
+      << "(" << prefix << arg << suffix << "),"
+      << "(" << prefix << arg << suffix << "),"
+      << "(" << prefix << arg << suffix << "),"
+      << "(" << prefix << arg << suffix << "),"
+      << "(" << prefix << arg << suffix << "),"
+      << "(" << prefix << arg << suffix << "),"
+      << "(" << prefix << arg << suffix << "),"
+      << "(" << prefix << arg << suffix << "),"
+      << "(" << prefix << arg << suffix << ")" << ")";
+  return out.str();
+}
+
 std::string apply_tuple_scalar(
     const std::string& arg, const std::string& prefix, const std::string& suffix,
     uint32_t vlen) {
@@ -110,6 +238,10 @@ std::string apply_tuple_scalar(
       return apply_tuple_scalar2(arg, prefix, suffix);
     case 4:
       return apply_tuple_scalar4(arg, prefix, suffix);
+    case 8:
+      return apply_tuple_scalar8(arg, prefix, suffix);
+    case 16:
+      return apply_tuple_scalar16(arg, prefix, suffix);
     default:
       LOG(FATAL) << "NOT IMPLEMENTED: " << vlen;
   }
@@ -134,6 +266,42 @@ std::string apply_func_tuple4(const std::string& func, const std::string& arg) {
   return out.str();
 }
 
+std::string apply_func_tuple8(const std::string& func, const std::string& arg) {
+  std::ostringstream out;
+  out << "("
+      << func << "(" << arg << ".lo.x),"
+      << func << "(" << arg << ".lo.y),"
+      << func << "(" << arg << ".lo.z),"
+      << func << "(" << arg << ".lo.w),"
+      << func << "(" << arg << ".hi.x),"
+      << func << "(" << arg << ".hi.y),"
+      << func << "(" << arg << ".hi.z),"
+      << func << "(" << arg << ".hi.w)" << ")";
+  return out.str();
+}
+
+std::string apply_func_tuple16(const std::string& func, const std::string& arg) {
+  std::ostringstream out;
+  out << "("
+      << func << "(" << arg << ".s0),"
+      << func << "(" << arg << ".s1),"
+      << func << "(" << arg << ".s2),"
+      << func << "(" << arg << ".s3),"
+      << func << "(" << arg << ".s4),"
+      << func << "(" << arg << ".s5),"
+      << func << "(" << arg << ".s6),"
+      << func << "(" << arg << ".s7),"
+      << func << "(" << arg << ".s8),"
+      << func << "(" << arg << ".s9),"
+      << func << "(" << arg << ".sa),"
+      << func << "(" << arg << ".sb),"
+      << func << "(" << arg << ".sc),"
+      << func << "(" << arg << ".sd),"
+      << func << "(" << arg << ".se),"
+      << func << "(" << arg << ".sf)" << ")";
+  return out.str();
+}
+
 std::string apply_func_tuple(const std::string& func, const std::string& arg,
                         uint32_t vlen) {
   switch (vlen) {
@@ -141,6 +309,10 @@ std::string apply_func_tuple(const std::string& func, const std::string& arg,
       return apply_func_tuple2(func, arg);
     case 4:
       return apply_func_tuple4(func, arg);
+    case 8:
+      return apply_func_tuple8(func, arg);
+    case 16:
+      return apply_func_tuple16(func, arg);
     default:
       LOG(FATAL) << "NOT IMPLEMENTED: " << vlen;
   }
@@ -314,6 +486,10 @@ std::string GetClTypes() {
   out << "#define Float " << type_name<Float>() << "" << std::endl;
   out << "#define Float2 " << type_name<Float>() << "2" << std::endl;
   out << "#define Float4 " << type_name<Float>() << "4" << std::endl;
+#ifdef MCMC_USE_CL
+  out << "#define Float8 " << type_name<Float>() << "8" << std::endl;
+  out << "#define Float16 " << type_name<Float>() << "16" << std::endl;
+#endif
   if (type_name<Float>() == std::string("double")) {
     out << "#define FL(X) (X)" << std::endl;
   } else {
@@ -329,6 +505,9 @@ std::string GetClTypes() {
 #ifndef MCMC_USE_CL
   out << make_leaf_v_macros(2);
   out << make_leaf_v_macros(4);
+#else
+  out << make_v_macros(8);
+  out << make_v_macros(16);
 #endif
   return gen::MakeHeader("CL_TYPES", out.str());
 }

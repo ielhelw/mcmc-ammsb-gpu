@@ -232,7 +232,9 @@ BetaUpdater::BetaUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
       k_(cfg.K),
       local_(cfg.beta_wg_size),
       theta_sum_(queue_.GetContext(), cfg.K),
-      grads_(queue_.GetContext(), cfg.mini_batch_size * 2 * cfg.K),
+      grads_(queue_.GetContext(),
+             std::max(cfg.mini_batch_size, cfg.trainingGraph->MaxFanOut()) * 2 *
+                 cfg.K),
       t_theta_sum_(0),
       t_grads_partial_(0),
       t_grads_sum_(0),
@@ -286,8 +288,9 @@ BetaUpdater::BetaUpdater(Mode mode, const Config& cfg, clcuda::Queue queue,
   grads_partial_kernel_->SetArgument(3, pi_->Get());
   grads_partial_kernel_->SetArgument(4, trainingSet->Get()());
   if (mode == EDGE_PER_THREAD) {
-    probs_.reset(new clcuda::Buffer<Float>(queue_.GetContext(),
-                                           cfg.mini_batch_size * cfg.K));
+    probs_.reset(new clcuda::Buffer<Float>(
+        queue_.GetContext(),
+        std::max(cfg.mini_batch_size, cfg.trainingGraph->MaxFanOut()) * cfg.K));
     grads_partial_kernel_->SetArgument(7, *probs_);
     grads_partial_kernel_->SetArgument(8, grads_);
   } else {
@@ -307,7 +310,7 @@ void BetaUpdater::operator()(clcuda::Buffer<Edge>* edges, uint32_t num_edges,
                              Float scale) {
   ++count_calls_;
   uint32_t wg = 32;
-  uint32_t kwg = (k_ / wg + (k_ % wg? 1 : 0)) * wg;
+  uint32_t kwg = (k_ / wg + (k_ % wg ? 1 : 0)) * wg;
   {
     clcuda::Event theta_sum_event;
     theta_sum_kernel_->Launch(queue_, {kwg}, {wg}, theta_sum_event);
