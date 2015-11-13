@@ -54,8 +54,16 @@ const std::string& GetSourceGuard() {
   return kSourceGuards;
 }
 
+std::string float_to_string(Float f) {
+  std::ostringstream out;
+  out << std::scientific << f;
+  if (type_name<Float>() == "float") {
+    out << "f";
+  }
+  return out.str();
+}
+
 std::vector<std::string> MakeCompileFlags(const Config& cfg) {
-  std::string float_suffix = (type_name<Float>() == "float" ? "f" : "");
   std::vector<std::string> ret;
   ret.push_back(std::string("-DFLOAT_TYPE=") + type_name<Float>());
   ret.push_back("-DVERTEX_TYPE=uint");
@@ -63,13 +71,13 @@ std::vector<std::string> MakeCompileFlags(const Config& cfg) {
   ret.push_back(std::string("-DK=") + std::to_string(cfg.K));
   ret.push_back(std::string("-DN=") + std::to_string(cfg.N));
   ret.push_back(std::string("-DE=") + std::to_string(cfg.E));
-  ret.push_back(std::string("-DALPHA=") + std::to_string(cfg.alpha) + float_suffix);
-  ret.push_back(std::string("-DEPS_A=") + std::to_string(cfg.a) + float_suffix);
-  ret.push_back(std::string("-DEPS_B=") + std::to_string(cfg.b) + float_suffix);
-  ret.push_back(std::string("-DEPS_C=") + std::to_string(cfg.c) + float_suffix);
-  ret.push_back(std::string("-DEPSILON=") + std::to_string(cfg.epsilon) + float_suffix);
-  ret.push_back(std::string("-DETA0=") + std::to_string(cfg.eta0) + float_suffix);
-  ret.push_back(std::string("-DETA1=") + std::to_string(cfg.eta1) + float_suffix);
+  ret.push_back(std::string("-DALPHA=") + float_to_string(cfg.alpha));
+  ret.push_back(std::string("-DEPS_A=") + float_to_string(cfg.a));
+  ret.push_back(std::string("-DEPS_B=") + float_to_string(cfg.b));
+  ret.push_back(std::string("-DEPS_C=") + float_to_string(cfg.c));
+  ret.push_back(std::string("-DEPSILON=") + float_to_string(cfg.epsilon));
+  ret.push_back(std::string("-DETA0=") + float_to_string(cfg.eta0));
+  ret.push_back(std::string("-DETA1=") + float_to_string(cfg.eta1));
   ret.push_back(std::string("-DNUM_NEIGHBORS=") + std::to_string(cfg.num_node_sample));
   return ret;
 }
