@@ -19,6 +19,7 @@ const std::string kSourceVec = R"%%(
             #define VSQRTn vsqrt2
             #define Vn(X) MAKEV2(X)
             #define VLn(X) VL2(X)
+            #define VMAXn(X, Y) vmax2(X, Y)
             #ifdef __OPENCL_VERSION__
               #define VBeta() (Float2)(Beta(beta, 2 * k), Beta(beta, 2 * k + 1))
             #else
@@ -31,6 +32,7 @@ const std::string kSourceVec = R"%%(
             #define VSQRTn vsqrt4
             #define Vn(X) MAKEV4(X)
             #define VLn(X) VL4(X)
+            #define VMAXn(X, Y) vmax4(X, Y)
             #ifdef __OPENCL_VERSION__
               #define VBeta() (Float4)(Beta(beta, 4 * k), Beta(beta, 4 * k + 1), Beta(beta, 4 * k + 2), Beta(beta, 4 * k + 3))
             #else
@@ -43,6 +45,7 @@ const std::string kSourceVec = R"%%(
             #define VSQRTn vsqrt8
             #define Vn(X) MAKEV8(X)
             #define VLn(X) VL8(X)
+            #define VMAXn(X, Y) vmax8(X, Y)
             #define VBeta() (Float8)(Beta(beta, 8 * k), Beta(beta, 8 * k + 1), Beta(beta, 8 * k + 2), Beta(beta, 8 * k + 3), Beta(beta, 8 * k + 4), Beta(beta, 8 * k + 5), Beta(beta, 8 * k + 6), Beta(beta, 8 * k + 7))
             inline Float v_accn(Float8 a) { return a.lo.x + a.lo.y + a.lo.z + a.lo.w + a.hi.x + a.hi.y + a.hi.z + a.hi.w; }
           #elif VECTOR_WIDTH == 16
@@ -51,6 +54,7 @@ const std::string kSourceVec = R"%%(
             #define VSQRTn vsqrt16
             #define Vn(X) MAKEV16(X)
             #define VLn(X) VL16(X)
+            #define VMAXn(X, Y) vmax16(X, Y)
             #define VBeta() (Float16)(Beta(beta, 16 * k), Beta(beta, 16 * k + 1), Beta(beta, 16 * k + 2), Beta(beta, 16 * k + 3), Beta(beta, 16 * k + 4), Beta(beta, 16 * k + 5), Beta(beta, 16 * k + 6), Beta(beta, 16 * k + 7), Beta(beta, 16 * k + 8), Beta(beta, 16 * k + 9), Beta(beta, 16 * k + 10), Beta(beta, 16 * k + 11), Beta(beta, 16 * k + 12), Beta(beta, 16 * k + 13), Beta(beta, 16 * k + 14), Beta(beta, 16 * k + 15))
             inline Float v_accn(Float16 a) { return a.s0 + a.s1 + a.s2 + a.s3 + a.s4 + a.s5 + a.s6 + a.s7 + a.s8 + a.s9 + a.sa + a.sb + a.sc + a.sd + a.se + a.sf; }
           #else
@@ -61,6 +65,7 @@ const std::string kSourceVec = R"%%(
           #define Floatn Float
           #define VFABSn FABS
           #define VSQRTn SQRT
+          #define VMAXn(X, Y) MAX(X, Y)
           #define Vn(X) (X)
           #define VLn(X) (X)
           #define VBeta() (Beta(beta, k))
@@ -109,9 +114,10 @@ const std::string kSourcePhi = random::GetRandomHeader() + kSourceVec + R"%%(
           for (uint k = 0; k < Kn; ++k) {
             Floatn noise = VLn(PHI_RANDN(rseed));
             Floatn phi_k = pi[k] * phi_sum;
-            phi_vec[k] =
+            Floatn phi_vec_k = 
                 VFABSn(phi_k + eps_t / 2 * (ALPHA - phi_k + Nn * grads[k]) +
                      VSQRTn(eps_t * phi_k) * noise);
+            phi_vec[k] = VMAXn(phi_vec_k, FL(1e-24));
           }
         }
 
@@ -261,9 +267,10 @@ const std::string kSourcePhiWg =
               // create "n" different noise elements
               Floatn noise = VLn(PHI_RANDN(rseed));
               Floatn phi_k = pi_a[i] * phi_sum;
-              phi_vec[k] =
+              Floatn phi_vec_k =
                   VFABSn(phi_k + eps_t / 2 * (ALPHA - phi_k + Nn * grads[i]) +
                        VSQRTn(eps_t * phi_k) * noise);
+              phi_vec[k] = VMAXn(phi_vec_k, FL(1e-24));
           }
         }
 
@@ -366,9 +373,10 @@ const std::string kSourcePhiWgLMem =
               // create "n" different noise elements
               Floatn noise = VLn(PHI_RANDN(rseed));
               Floatn phi_k = pi_a[k] * phi_sum;
-              phi_vec[k] =
+              Floatn phi_vec_k =
                   VFABSn(phi_k + eps_t / 2 * (ALPHA - phi_k + Nn * grads[k]) +
                        VSQRTn(eps_t * phi_k) * noise);
+              phi_vec[k] = VMAXn(phi_vec_k, FL(1e-24));
           }
         }
 
@@ -470,9 +478,10 @@ const std::string kSourcePhiWgLMemReg =
             /* create "n" different noise elements */ \
             Floatn noise = VLn(PHI_RANDN(rseed)); \
             Floatn phi_k = (PI_A(i, k) * phi_sum); \
-            phi_vec[k] = \
+            Floatn phi_vec_k = \
                 VFABSn(phi_k + eps_t / 2 * (ALPHA - phi_k + Nn * GRADS(i, k)) + \
                      VSQRTn(eps_t * phi_k) * noise); \
+            phi_vec[k] = VMAXn(phi_vec_k, FL(1e-24)); \
           }\
         }
 

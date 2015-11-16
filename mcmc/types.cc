@@ -336,6 +336,8 @@ std::string make_v_macros(uint32_t vlen) {
       << apply_func_tuple("EXP", "a", vlen) << "; }" << std::endl;
   out << "inline Float" << vlen << " vlog" << vlen << "(const Float" << vlen << " a) { return (Float" << vlen << ")"
       << apply_func_tuple("LOG", "a", vlen) << "; }" << std::endl;
+  out << "inline Float" << vlen << " vmax" << vlen << "(const Float" << vlen << " a, const Float b) { return (Float" << vlen << ")"
+      << apply_func_tuple("MAX", "b, a", vlen) << "; }" << std::endl;
   return out.str();
 }
 #else
@@ -366,6 +368,8 @@ std::string make_v_macros(uint32_t vlen) {
       << apply_func_tuple("EXP", "a", vlen) << "; }" << std::endl;
   out << "inline Float" << vlen << " vlog" << vlen << "(const Float" << vlen << " a) { return MAKE_FLOAT" << vlen
       << apply_func_tuple("LOG", "a", vlen)  << "; }" << std::endl;
+  out << "inline Float" << vlen << " vmax" << vlen << "(const Float" << vlen << " a, const Float b) { return MAKE_FLOAT" << vlen
+      << apply_func_tuple("MAX", "b, a", vlen) << "; }" << std::endl;
   return out.str();
 }
 #endif
@@ -396,6 +400,7 @@ std::string make_base_macros() {
   out << "#define SQRT sqrt" << std::endl;
   out << "#define LOG log" << std::endl;
   out << "#define POW pow" << std::endl;
+  out << "#define MAX max" << std::endl;
   return out.str();
 }
 #else
@@ -428,12 +433,14 @@ std::string make_base_macros() {
     out << "#define SQRT sqrt" << std::endl;
     out << "#define LOG log" << std::endl;
     out << "#define POW pow" << std::endl;
+    out << "#define MAX fmax" << std::endl;
   } else {
     out << "#define FABS fabsf" << std::endl;
     out << "#define EXP expf" << std::endl;
     out << "#define SQRT sqrtf" << std::endl;
     out << "#define LOG logf" << std::endl;
     out << "#define POW powf" << std::endl;
+    out << "#define MAX fmaxf" << std::endl;
   }
   return out.str();
 }
