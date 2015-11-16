@@ -62,18 +62,20 @@ const std::string kSourceBetaBase = random::GetRandomHeader() + R"%%(
               Float grads_k = grads[2 * k];
               Float theta_k = Theta0(theta, k);
               Float f0 = SQRT(eps_t * theta_k);
-              SetTheta0(theta, k,
+              theta_k =
                         FABS(theta_k +
                              eps_t / FL(2.0) * (ETA0 - theta_k + scale * grads_k) +
-                             f0 * r0));
+                             f0 * r0);
+              SetTheta0(theta, k, MAX(theta_k, FL(1e-24)));
               Float r1 = randn(&rseed);
               Float grads_2k = grads[2 * k + 1];
               Float theta_2k = Theta1(theta, k);
               Float f1 = SQRT(eps_t * theta_2k);
-              SetTheta1(theta, k, FABS(theta_2k +
+              theta_2k = FABS(theta_2k +
                                        eps_t / FL(2.0) * (ETA1 - theta_2k +
                                                       scale * grads_2k) +
-                                       f1 * r1));
+                                       f1 * r1);
+              SetTheta1(theta, k, MAX(theta_2k, FL(1e-24)));
             }
             random->base_[gid] = rseed;
           }
