@@ -73,12 +73,13 @@ class WgBetaTest : public ContextTest,
   }
 
   void Run(BetaUpdater::Mode mode) {
+    std::vector<Edge> random_edges = GenerateRandomEdges(1024);
+    cfg_.trainingGraph.reset(new mcmc::Graph(cfg_.N, random_edges));
     std::vector<Float> host_theta(theta_->GetSize() / sizeof(Float));
     std::vector<Float> host_theta_sum(cfg_.K);
     updater_.reset(new BetaUpdater(
         mode, cfg_, *queue_, *theta_, *beta_, pi_.get(), dev_set_.get(),
         MakeCompileFlags(cfg_), Learner::GetBaseFuncs()));
-    std::vector<Edge> random_edges = GenerateRandomEdges(1024);
     clcuda::Buffer<Edge> edges(*context_, *queue_, random_edges.begin(),
                                random_edges.end());
     for (uint32_t i = 0; i < num_tries_; ++i) {

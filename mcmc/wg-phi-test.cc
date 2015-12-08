@@ -26,7 +26,7 @@ class WgPhiTest : public ContextTest,
   std::vector<Edge> GenerateRandomEdges(uint32_t num_edges) {
     std::vector<Edge> edges(num_edges);
     std::default_random_engine generator;
-    std::uniform_int_distribution<Vertex> distribution(0, cfg_.N);
+    std::uniform_int_distribution<Vertex> distribution(0, cfg_.N - 1);
     for (auto& e : edges) {
       Vertex u = distribution(generator);
       Vertex v = distribution(generator);
@@ -52,6 +52,7 @@ class WgPhiTest : public ContextTest,
   void SetUp() override {
     ContextTest::SetUp();
     std::vector<Edge> edges = GenerateRandomEdges(32 * cfg_.N);
+    cfg_.trainingGraph.reset(new mcmc::Graph(cfg_.N, edges));
     Set set(edges.size());
     ASSERT_TRUE(set.SetContents(edges.begin(), edges.end()));
     factory_ = OpenClSetFactory::New(*queue_);
