@@ -177,14 +177,16 @@ Float Learner::DoSample(Sample* sample) {
   Float weight = SampleMiniBatch(&sample->edges, &sample->seed);
   ExtractNodesFromMiniBatch(sample->edges, &sample->nodes_vec);
   LOG_IF(FATAL, sample->nodes_vec.size() == 0) << "mini-batch size = 0!";
-  LOG_IF(FATAL, sample->nodes_vec.size() > 2 * cfg_.mini_batch_size)
-      << "mini-batch too big";
 #ifndef MCMC_USE_CL
   // CUDA NEEDS TO KNOW CURRENT CONTEXT PER THREAD
   cuCtxSetCurrent(sample->queue.GetContext()());
 #endif
+  LOG_IF(FATAL, sample->edges.size() > sample->dev_edges.GetSize() / sizeof(Edge))
+      << sample->edges.size() << " | " << sample->dev_edges.GetSize() / sizeof(Edge);
   sample->dev_edges.Write(sample->queue, sample->edges.size(),
                           sample->edges.data());
+  LOG_IF(FATAL, sample->nodes_vec.size() > sample->dev_nodes.GetSize() / sizeof(Vertex))
+      << sample->nodes_vec.size() << " | " << sample->dev_nodes.GetSize() / sizeof(Vertex);
   sample->dev_nodes.Write(sample->queue, sample->nodes_vec.size(),
                           sample->nodes_vec.data());
   sample->neighbor_sampler(sample->nodes_vec.size(), &(sample->dev_nodes));

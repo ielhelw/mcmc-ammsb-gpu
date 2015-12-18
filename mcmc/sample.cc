@@ -93,7 +93,7 @@ NeighborSampler::NeighborSampler(const Config& cfg, clcuda::Queue queue)
             ::mcmc::random::GetRandomHeader() + GetNeighborSamplerSource()),
       randFactory_(random::OpenClRandomFactory::New(queue_)),
       rand_(randFactory_->CreateRandom(
-          2 * cfg.mini_batch_size * cfg.num_node_sample,
+          std::max(2 * cfg.mini_batch_size, 1 + cfg.trainingGraph->MaxFanOut()) * capacity_,
           random::random_seed_t{cfg.neighbor_seed[0], cfg.neighbor_seed[1]})) {
   std::vector<std::string> opts = ::mcmc::GetClFlags();
   clcuda::BuildStatus status = prog_.Build(queue.GetDevice(), opts);
@@ -126,7 +126,7 @@ uint32_t NeighborSampler::DataSizePerSample() { return cfg_.num_node_sample; }
 
 Sample::Sample(const Config& cfg, clcuda::Queue q)
     : queue(q.GetContext(), q.GetDevice()),
-      dev_edges(q.GetContext(), cfg.mini_batch_size),
+      dev_edges(q.GetContext(), std::max(cfg.mini_batch_size, cfg.trainingGraph->MaxFanOut())),
       dev_nodes(q.GetContext(), std::max(2 * cfg.mini_batch_size,
                                          1 + cfg.trainingGraph->MaxFanOut())),
       seed(rand()),
@@ -255,17 +255,12 @@ Float sampleNodeLink(const Config& cfg, std::vector<Edge>* edges,
   std::unordered_set<Vertex> Us;
   std::unordered_set<Edge> set;
   while (set.empty()) {
-    //  while (set.size() < cfg.mini_batch_size) {
     Vertex u = rand_r(seed) % cfg.N;
     if (Us.insert(u).second) {
       auto& neighbors = cfg.trainingGraph->NeighborsOf(u);
       for (auto& v : neighbors) {
-        if (set.size() < cfg.mini_batch_size) {
-          Edge e = MakeEdge(std::min(u, v), std::max(u, v));
-          set.insert(e);
-        } else {
-          break;
-        }
+        Edge e = MakeEdge(std::min(u, v), std::max(u, v));
+        set.insert(e);
       }
     }
   }
@@ -293,7 +288,7 @@ Float sampleNodeNonLink(const Config& cfg, std::vector<Edge>* edges,
     set.insert(e);
   }
   edges->insert(edges->begin(), set.begin(), set.end());
-  // return (cfg.N * cfg.N) / static_cast<Float>(cfg.mini_batch_size);
+  //return (cfg.N * cfg.N) / static_cast<Float>(cfg.mini_batch_size);
   return (2 * cfg.E) / static_cast<Float>(cfg.mini_batch_size);
 }
 

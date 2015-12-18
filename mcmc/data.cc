@@ -19,7 +19,8 @@ Graph::Graph(uint64_t num_nodes, const std::vector<Edge>& unique_edges)
     std::tie(u, v) = Vertices(e);
     adjacency_[u].push_back(v);
     adjacency_[v].push_back(u);
-    max_fan_out_ = std::max(adjacency_[u].size(), adjacency_[v].size());
+    max_fan_out_ = std::max(max_fan_out_, adjacency_[u].size());
+    max_fan_out_ = std::max(max_fan_out_, adjacency_[v].size());
   }
 }
 
