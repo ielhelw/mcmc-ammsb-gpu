@@ -10,6 +10,7 @@ find_package(Boost REQUIRED COMPONENTS
   program_options
   filesystem
   system
+  iostreams
 )
 find_package(Protobuf REQUIRED)
 

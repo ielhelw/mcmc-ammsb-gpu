@@ -3,6 +3,8 @@
 #include <glog/logging.h>
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/iostreams/filtering_streambuf.hpp>
+#include <boost/iostreams/filter/gzip.hpp>
 
 #include "mcmc/learner.h"
 #include "mcmc/data.h"
@@ -35,9 +37,12 @@ int main(int argc, char **argv) {
   mcmc::Config cfg;
   po::options_description options;
   uint32_t max_iters;
+  bool dumpDataset = false;
+  bool loadDataset = false;
+  std::string loadFile, dumpFile;
   options.add_options()
     ("help,h", "Show usage")
-    ("file,f", po::value(&filename)->required(),
+    ("file,f", po::value(&filename),
       "Graph data file")
 #ifdef MCMC_CALC_TRAIN_PPX
     ("train-ppx-ratio", po::value(&cfg.training_ppx_ratio)->default_value(0.01))
@@ -69,6 +74,10 @@ int main(int argc, char **argv) {
     ("phi-pi-shared", po::value(&cfg.phi_pi_shared)->default_value(true))
     ("phi-vwidth", po::value(&cfg.phi_vector_width)->default_value(1))
     ("beta-sum-grads-vwidth", po::value(&cfg.sum_grads_vector_width)->default_value(1))
+    ("dump-data", po::value(&dumpDataset)->default_value(false))
+    ("dump-file", po::value(&dumpFile))
+    ("load-data", po::value(&loadDataset)->default_value(false))
+    ("load-file", po::value(&loadFile))
   ;
   po::variables_map options_vm;
   po::store(po::parse_command_line(argc, argv, options), options_vm);
@@ -77,8 +86,11 @@ int main(int argc, char **argv) {
     return 1;
   }
   po::notify(options_vm);
-  LOG_IF(FATAL, !fs::exists(filename) || fs::is_directory(filename))
+  LOG_IF(FATAL,
+         !loadDataset && (!fs::exists(filename) || fs::is_directory(filename)))
       << "Failed to detect file: " << filename;
+  LOG_IF(FATAL, loadDataset && loadFile.empty()) << "load-file is required with load-data";
+  LOG_IF(FATAL, dumpDataset && dumpFile.empty()) << "dump-file is required with dump-data";
   clcuda::Device dev = ChooseDevice();
   clcuda::Context context(dev);
   clcuda::Queue queue(context, dev);
@@ -86,17 +98,61 @@ int main(int argc, char **argv) {
             << "  Device: " << dev.Name() << endl
             << "  Device Driver: " << dev.Version();
   std::vector<mcmc::Edge> unique_edges;
-  if (!mcmc::GetUniqueEdgesFromFile(filename, &cfg.N, &unique_edges) ||
-      !mcmc::GenerateSetsFromEdges(cfg.N, unique_edges, cfg.heldout_ratio,
-                                   &cfg.training_edges, &cfg.heldout_edges,
-                                   &cfg.training, &cfg.heldout)) {
-    LOG(FATAL) << "Failed to generate sets from file " << filename;
+  if (!loadDataset) {
+    if (!mcmc::GetUniqueEdgesFromFile(filename, &cfg.N, &unique_edges) ||
+        !mcmc::GenerateSetsFromEdges(cfg.N, unique_edges, cfg.heldout_ratio,
+                                     &cfg.training_edges, &cfg.heldout_edges,
+                                     &cfg.training, &cfg.heldout)) {
+      LOG(FATAL) << "Failed to generate sets from file " << filename;
+    }
+    size_t num_edges = unique_edges.size();
+    if (dumpDataset) {
+      std::ofstream out_file(dumpFile, std::ofstream::binary);
+      boost::iostreams::filtering_streambuf<boost::iostreams::output>
+          out_stream;
+      out_stream.push(boost::iostreams::gzip_compressor());
+      out_stream.push(out_file);
+      std::ostream out(&out_stream);
+      out.write((char*)&cfg.N, sizeof(cfg.N));
+      CHECK(out.good());
+      out.write((char*)&cfg.heldout_ratio, sizeof(cfg.heldout_ratio));
+      CHECK(out.good());
+      out.write((char*)&num_edges, sizeof(num_edges));
+      CHECK(out.good());
+      out.write((char *)unique_edges.data(),
+                unique_edges.size() * sizeof(mcmc::Edge));
+      CHECK(out.good());
+      return 0;
+    }
+  } else {
+    std::ifstream in_file(loadFile, std::ifstream::binary);
+    boost::iostreams::filtering_streambuf<boost::iostreams::input> in_stream;
+    in_stream.push(boost::iostreams::gzip_decompressor());
+    in_stream.push(in_file);
+    std::istream in(&in_stream);
+    in.read((char*)&cfg.N, sizeof(cfg.N));
+    CHECK(in.good());
+    in.read((char*)&cfg.heldout_ratio, sizeof(cfg.heldout_ratio));
+    CHECK(in.good());
+    size_t num_edges = 0;
+    in.read((char*)&num_edges, sizeof(num_edges));
+    CHECK(in.good());
+    unique_edges.resize(num_edges);
+    in.read((char*)unique_edges.data(),
+        unique_edges.size() * sizeof(mcmc::Edge));
+    CHECK(in.good());
+    if (!mcmc::GenerateSetsFromEdges(cfg.N, unique_edges, cfg.heldout_ratio,
+                                     &cfg.training_edges, &cfg.heldout_edges,
+                                     &cfg.training, &cfg.heldout)) {
+      LOG(FATAL) << "Failed to generate training/heldout sets";
+    }
   }
   cfg.trainingGraph.reset(new mcmc::Graph(cfg.N, cfg.training_edges));
   cfg.heldoutGraph.reset(new mcmc::Graph(cfg.N, cfg.heldout_edges));
+
   if (cfg.alpha == 0) cfg.alpha = static_cast<mcmc::Float>(1) / cfg.K;
   cfg.E = unique_edges.size();
-  LOG(INFO) << "Loaded file " << filename
+  LOG(INFO) << "Loaded file " << (loadDataset ? loadFile : filename)
             << " (training max fan out = " << cfg.trainingGraph->MaxFanOut()
             << ", heldout max fan out = " << cfg.heldoutGraph->MaxFanOut() << ")";
   LOG(INFO) << cfg;

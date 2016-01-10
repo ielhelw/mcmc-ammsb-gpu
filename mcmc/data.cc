@@ -35,7 +35,7 @@ Edge Graph::GetRandomEdge() const {
 
 bool GetUniqueEdgesFromFile(const std::string& filename,
                             uint64_t* count_vertices, std::vector<Edge>* vals) {
-  std::set<Vertex> unique_vertices;
+  std::unordered_set<Vertex> unique_vertices;
   std::vector<Edge> edges;
   std::ifstream in(filename);
   std::string line;
